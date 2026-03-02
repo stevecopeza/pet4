@@ -1374,6 +1374,183 @@
   font-weight: 700;
 }
 
+/* ============================================================
+   Timesheet tables + bars
+   ============================================================ */
+.pd-ts-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pd-ts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.pd-ts-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  border-bottom: 2px solid #e9ecef;
+  white-space: nowrap;
+}
+
+.pd-ts-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
+}
+
+.pd-ts-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.pd-ts-name-cell {
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.pd-ts-num-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pd-ts-hours {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.82rem;
+}
+
+.pd-ts-value {
+  font-size: 0.72rem;
+  color: #888;
+}
+
+.pd-ts-projection {
+  background: #f0f4ff;
+  font-style: italic;
+}
+
+/* --- Staff breakdown bars --- */
+.pd-ts-staff-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-ts-staff-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.pd-ts-staff-row:hover {
+  background: #f0f2f5;
+}
+
+.pd-ts-staff-info {
+  min-width: 220px;
+  flex-shrink: 0;
+}
+
+.pd-ts-staff-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: #1a1a2e;
+}
+
+.pd-ts-staff-meta {
+  font-size: 0.72rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+.pd-ts-bar-container {
+  flex: 1;
+  height: 20px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pd-ts-bar {
+  height: 100%;
+  display: flex;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: width 0.4s ease;
+}
+
+.pd-ts-bar-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.bar-locked {
+  background: #28a745;
+}
+
+.bar-submitted {
+  background: #f0ad4e;
+}
+
+.bar-draft {
+  background: #6f42c1;
+}
+
+/* Legend row */
+.pd-ts-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.pd-ts-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pd-ts-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* Week status pips */
+.pd-ts-week-status {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.pd-ts-status-pip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0 6px;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .pd-header { padding: 16px 20px; }
@@ -1384,4 +1561,6 @@
   .pd-attention-grid { grid-template-columns: 1fr; }
   .pd-ticket-grid { grid-template-columns: 1fr; }
   .pd-ticket-header { flex-direction: column; gap: 8px; }
+  .pd-ts-staff-row { flex-direction: column; gap: 8px; }
+  .pd-ts-staff-info { min-width: 0; }
 }

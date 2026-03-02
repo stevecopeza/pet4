@@ -106,6 +106,30 @@ Typical KPIs:
 
 ---
 
+### Timesheet & Billing Dashboard
+
+Audience:
+- Operations managers
+- Finance / billing staff
+- Team leads
+
+Focus:
+- Where time is being spent
+- Billable vs non-billable split
+- Revenue generation by customer and department
+
+Implemented KPIs:
+- Total Hours / Billable Hours / Billing Value
+- Non-billable hours / Active Staff / Avg Rate
+- Customer billing table (3 months + projection)
+- Department breakdown matrix
+- Staff breakdown with status bars (draft/submitted/locked)
+- Staff drill-down with weekly grid and entry list
+
+See: `06_dashboards/04_timesheet_dashboard.md`.
+
+---
+
 ### HR / People Dashboard
 
 Audience:

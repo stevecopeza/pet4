@@ -238,10 +238,20 @@ final class DemoSeedService
             ['first_name' => 'Ethan', 'last_name' => 'DevOps', 'email' => 'ethan@example.com'],
             ['first_name' => 'Isabella', 'last_name' => 'Analyst', 'email' => 'isabella@example.com'],
         ];
+        $isFirst = true;
         foreach ($rows as $r) {
-            // Create or find a WordPress user for this employee
+            // Map the first employee (Steve Admin) to the current WP admin user
             $wpUserId = 0;
-            if (function_exists('email_exists') && function_exists('wp_insert_user')) {
+            if ($isFirst && function_exists('get_current_user_id')) {
+                $adminId = get_current_user_id();
+                if ($adminId <= 0) {
+                    // CLI or REST context — use WP user 1 (site admin)
+                    $adminId = 1;
+                }
+                $wpUserId = $adminId;
+                $isFirst = false;
+            } elseif (function_exists('email_exists') && function_exists('wp_insert_user')) {
+                $isFirst = false;
                 $existingUserId = email_exists($r['email']);
                 if ($existingUserId) {
                     $wpUserId = (int)$existingUserId;
@@ -1705,25 +1715,43 @@ final class DemoSeedService
 
     private function seedTimeEntries(string $seedRunId, string $seedProfile, string $seededAt): array
     {
-        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
-        /** @var \Pet\Application\Time\Command\LogTimeHandler $log */
-        $log = $c->get(\Pet\Application\Time\Command\LogTimeHandler::class);
-        /** @var \Pet\Application\Time\Command\SubmitTimeEntryHandler $submit */
-        $submit = $c->get(\Pet\Application\Time\Command\SubmitTimeEntryHandler::class);
         $wpdb = $this->wpdb;
         $employeesTable = $wpdb->prefix . 'pet_employees';
         $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $entriesTable = $wpdb->prefix . 'pet_time_entries';
 
-        // Gather ALL employees and tickets for realistic distribution
-        $allEmpIds = $wpdb->get_col("SELECT id FROM $employeesTable ORDER BY id ASC");
-        $allTicketIds = $wpdb->get_col("SELECT id FROM $ticketsTable ORDER BY id ASC");
+        $allEmps = $wpdb->get_results("SELECT id, first_name, last_name FROM $employeesTable ORDER BY id ASC");
+        $allTickets = $wpdb->get_results("SELECT id, customer_id, primary_container FROM $ticketsTable ORDER BY id ASC");
 
-        if (empty($allEmpIds) || empty($allTicketIds)) {
+        if (empty($allEmps) || empty($allTickets)) {
             return ['time_entries' => 0];
         }
 
-        // Realistic support work descriptions — varied tasks that reflect actual helpdesk work
+        // Employee → billing rate mapping (from catalog)
+        $empRates = [];
+        foreach ($allEmps as $emp) {
+            $name = $emp->first_name . ' ' . $emp->last_name;
+            $empRates[(int)$emp->id] = match (true) {
+                str_contains($name, 'DevOps') => 195.0,
+                str_contains($name, 'Support') => 150.0,
+                str_contains($name, 'Finance') || str_contains($name, 'Analyst') => 170.0,
+                default => 180.0, // Consulting rate
+            };
+        }
+        $empNames = [];
+        foreach ($allEmps as $emp) {
+            $empNames[(int)$emp->id] = $emp->first_name . ' ' . $emp->last_name;
+        }
+        $empIds = array_keys($empRates);
+
+        // Group tickets by customer for distribution
+        $ticketsByCustomer = [];
+        foreach ($allTickets as $t) {
+            $ticketsByCustomer[(int)$t->customer_id][] = (int)$t->id;
+        }
+        $allTicketIds = array_map(fn($t) => (int)$t->id, $allTickets);
+
+        // Descriptions — mixed project and support work
         $descriptions = [
             'Initial triage and issue classification',
             'Remote session — reproduced issue on client environment',
@@ -1740,115 +1768,127 @@ final class DemoSeedService
             'Deployed scheduled maintenance window changes',
             'Tested regression after platform update',
             'Coordinated with vendor on third-party integration issue',
-            'Performed capacity analysis on staging environment',
+            'Sprint planning and backlog refinement',
+            'Code review and merge — feature branch',
+            'Architecture design session — microservices split',
+            'Infrastructure provisioning — staging environment',
+            'CI/CD pipeline configuration and testing',
+            'Requirements workshop with stakeholders',
+            'Data migration script development and testing',
             'Security audit — reviewed access logs and permissions',
-            'Updated DNS records and verified propagation',
-            'Migrated legacy data to new schema format',
-            'Post-incident review and documentation',
-            'Configured automated backup schedule',
-            'Load testing and performance benchmarking',
-            'SSL certificate renewal and verification',
-            'User account provisioning and access setup',
-            'Network connectivity troubleshooting',
-            'Software licence compliance review',
-            'API integration debugging and trace analysis',
-            'System health check — all services nominal',
+            'Performance benchmarking and optimisation',
+            'User acceptance testing facilitation',
+            'Documentation update — API reference',
+            'Quote preparation and technical scoping',
             'Customer onboarding environment setup',
-            'Patch management — staged rollout verification',
+            'Training material preparation',
+            'Post-incident review and documentation',
+            'Capacity planning and resource forecasting',
+            'Governance review session — quarterly',
+            'SLA design workshop with customer',
+            'Cloud migration assessment and planning',
+            'Network connectivity troubleshooting',
+            'SSL certificate renewal and verification',
         ];
 
         // Duration options in minutes (realistic work chunks)
-        $durations = [15, 25, 30, 45, 60, 75, 90, 120, 150, 180];
+        $durations = [30, 45, 60, 60, 90, 90, 120, 120, 150, 180, 180, 240];
 
-        $startBase = new \DateTimeImmutable('-10 days 08:00');
+        // Build entries spanning 3 months back + current month
+        // Month offsets: -3 (Dec/lighter), -2 (Jan/growing), -1 (Feb/steady), 0 (Mar/current busiest)
+        $now = new \DateTimeImmutable();
+        $monthConfigs = [
+            ['offset' => -3, 'entries_per_emp' => 3, 'status' => 'locked'],      // 3 months ago — all locked
+            ['offset' => -2, 'entries_per_emp' => 4, 'status' => 'locked'],      // 2 months ago — all locked
+            ['offset' => -1, 'entries_per_emp' => 5, 'status' => 'submitted'],   // last month — all submitted
+            ['offset' =>  0, 'entries_per_emp' => 6, 'status' => 'mixed'],       // current — mixed statuses
+        ];
+
         $entryIdx = 0;
+        $allInsertedIds = [];
 
-        // Distribute entries across tickets: 2-5 entries per ticket for first 8 tickets,
-        // 0-1 for the rest — ensures several tickets have meaningful work logs
-        $ticketEntryPlan = [];
-        $ticketCount = count($allTicketIds);
-        for ($t = 0; $t < $ticketCount; $t++) {
-            if ($t < 3) {
-                $ticketEntryPlan[$t] = 4 + ($t % 2); // 4-5 entries for first 3
-            } elseif ($t < 8) {
-                $ticketEntryPlan[$t] = 2 + ($t % 3); // 2-4 entries for next 5
-            } else {
-                $ticketEntryPlan[$t] = ($t % 3 === 0) ? 1 : 0; // sparse for the rest
+        foreach ($monthConfigs as $mc) {
+            $monthStart = $now->modify("first day of {$mc['offset']} month")->setTime(8, 0);
+            $workDays = [];
+            // Build array of workdays (Mon-Fri) in this month
+            $day = $monthStart;
+            $monthEnd = $now->modify("last day of {$mc['offset']} month")->setTime(23, 59);
+            // For current month, stop at today
+            if ($mc['offset'] === 0) {
+                $monthEnd = $now;
             }
-        }
-
-        foreach ($ticketEntryPlan as $tIdx => $entryCount) {
-            if ($entryCount === 0) continue;
-            $ticketId = (int)$allTicketIds[$tIdx];
-
-            for ($e = 0; $e < $entryCount; $e++) {
-                // Rotate employees — different people work on different tickets
-                $empId = (int)$allEmpIds[($tIdx + $e) % count($allEmpIds)];
-                $desc = $descriptions[$entryIdx % count($descriptions)];
-                $dur = $durations[$entryIdx % count($durations)];
-                $billable = ($entryIdx % 3 !== 2); // ~67% billable
-
-                // Stagger start times across days and hours
-                $dayOffset = (int)floor($entryIdx / 3);
-                $hourOffset = ($entryIdx % 3) * 3; // 08:00, 11:00, 14:00
-                $start = $startBase->modify("+{$dayOffset} days +{$hourOffset} hours");
-                $end = $start->modify("+{$dur} minutes");
-
-                $log->handle(new \Pet\Application\Time\Command\LogTimeCommand(
-                    $empId,
-                    $ticketId,
-                    $start,
-                    $end,
-                    $billable,
-                    $desc,
-                    []
-                ));
-                $entryIdx++;
+            while ($day <= $monthEnd) {
+                $dow = (int)$day->format('N');
+                if ($dow <= 5) { // Mon-Fri
+                    $workDays[] = $day;
+                }
+                $day = $day->modify('+1 day');
             }
-        }
+            if (empty($workDays)) continue;
 
-        // Tag all entries with malleable_data for seed tracking
-        $rows = $wpdb->get_results("SELECT id, ticket_id FROM $entriesTable ORDER BY id DESC LIMIT {$entryIdx}");
-        $ids = [];
-        foreach ($rows as $row) {
-            $id = (int)$row->id;
-            $ids[] = $id;
-            $payload = ['seed_run_id' => $seedRunId];
-            if ((int)$row->ticket_id) {
-                $payload['ticket_id'] = (int)$row->ticket_id;
-            }
-            $wpdb->update(
-                $entriesTable,
-                ['malleable_data' => json_encode($payload)],
-                ['id' => $id],
-                ['%s'],
-                ['%d']
-            );
-            $this->registryAdd($seedRunId, $entriesTable, (string)$id);
-        }
+            foreach ($empIds as $empId) {
+                $rate = $empRates[$empId];
+                $entriesForThisEmp = $mc['entries_per_emp'];
+                // Add variance: some employees busier than others
+                $nameKey = $empNames[$empId] ?? '';
+                if (str_contains($nameKey, 'Lead Tech') || str_contains($nameKey, 'Consultant')) {
+                    $entriesForThisEmp += 2; // busiest staff
+                } elseif (str_contains($nameKey, 'Finance')) {
+                    $entriesForThisEmp = max(1, $entriesForThisEmp - 1); // lighter
+                }
 
-        // Submit ~40% of entries, lock ~15% — realistic status distribution
-        $toSubmit = array_slice($ids, 0, (int)ceil(count($ids) * 0.4));
-        foreach ($toSubmit as $id) {
-            try {
-                $submit->handle(new \Pet\Application\Time\Command\SubmitTimeEntryCommand($id));
-            } catch (\Exception $e) {
-                // Skip if already submitted
+                for ($e = 0; $e < $entriesForThisEmp; $e++) {
+                    $workDay = $workDays[($entryIdx + $e) % count($workDays)];
+                    $hourSlot = 8 + (($e * 2) % 8); // 08, 10, 12, 14, 08, 10...
+                    $start = $workDay->setTime($hourSlot, ($e % 2) * 30); // :00 or :30
+                    $dur = $durations[$entryIdx % count($durations)];
+                    $end = $start->modify("+{$dur} minutes");
+                    $desc = $descriptions[$entryIdx % count($descriptions)];
+                    $billable = ($entryIdx % 10 < 7); // ~70% billable
+
+                    // Distribute across customers/tickets
+                    $ticketId = $allTicketIds[$entryIdx % count($allTicketIds)];
+
+                    // Determine status based on month
+                    if ($mc['status'] === 'mixed') {
+                        $status = match (true) {
+                            $e < (int)ceil($entriesForThisEmp * 0.4) => 'submitted',
+                            $e < (int)ceil($entriesForThisEmp * 0.7) => 'draft',
+                            default => 'locked',
+                        };
+                    } else {
+                        $status = $mc['status'];
+                    }
+
+                    $malleable = json_encode([
+                        'seed_run_id' => $seedRunId,
+                        'billing_rate' => $rate,
+                        'department' => $this->resolveTicketDepartment($ticketId, $allTickets),
+                    ]);
+
+                    $wpdb->insert($entriesTable, [
+                        'employee_id' => $empId,
+                        'ticket_id' => $ticketId,
+                        'start_time' => $start->format('Y-m-d H:i:s'),
+                        'end_time' => $end->format('Y-m-d H:i:s'),
+                        'duration_minutes' => $dur,
+                        'is_billable' => $billable ? 1 : 0,
+                        'description' => $desc,
+                        'status' => $status,
+                        'malleable_data' => $malleable,
+                        'created_at' => $start->format('Y-m-d H:i:s'),
+                    ]);
+                    $insertId = (int)$wpdb->insert_id;
+                    if ($insertId) {
+                        $allInsertedIds[] = $insertId;
+                        $this->registryAdd($seedRunId, $entriesTable, (string)$insertId);
+                    }
+                    $entryIdx++;
+                }
             }
-        }
-        $toLock = array_slice($ids, (int)ceil(count($ids) * 0.4), (int)ceil(count($ids) * 0.15));
-        foreach ($toLock as $id) {
-            $wpdb->update(
-                $entriesTable,
-                ['status' => 'locked'],
-                ['id' => $id],
-                ['%s'],
-                ['%d']
-            );
         }
 
         // Seed correction entries (B2 feature demo)
-        // Pick a submitted entry and create a reversal + corrected re-log
         $correctionSource = $wpdb->get_row(
             "SELECT id, employee_id, ticket_id, start_time, end_time, duration_minutes, is_billable, description FROM $entriesTable WHERE status = 'submitted' ORDER BY id ASC LIMIT 1"
         );
@@ -1859,7 +1899,6 @@ final class DemoSeedService
             $srcEnd = $correctionSource->end_time;
             $srcDuration = (int)$correctionSource->duration_minutes;
 
-            // Reversal entry (negates the original — negative duration)
             $wpdb->insert($entriesTable, [
                 'employee_id' => (int)$correctionSource->employee_id,
                 'ticket_id' => (int)$correctionSource->ticket_id,
@@ -1873,11 +1912,9 @@ final class DemoSeedService
                 'malleable_data' => json_encode(['seed_run_id' => $seedRunId, 'correction_type' => 'reversal']),
                 'created_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
             ]);
-            $reversalId = (int)$wpdb->insert_id;
-            $this->registryAdd($seedRunId, $entriesTable, (string)$reversalId);
+            $this->registryAdd($seedRunId, $entriesTable, (string)(int)$wpdb->insert_id);
             $correctionCount++;
 
-            // Corrected re-log (30 min shorter, flipped billable)
             $correctedEnd = (new \DateTimeImmutable($srcEnd))->modify('-30 minutes')->format('Y-m-d H:i:s');
             $correctedDuration = max(0, $srcDuration - 30);
             $wpdb->insert($entriesTable, [
@@ -1893,13 +1930,29 @@ final class DemoSeedService
                 'malleable_data' => json_encode(['seed_run_id' => $seedRunId, 'correction_type' => 'correction']),
                 'created_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
             ]);
-            $correctedId = (int)$wpdb->insert_id;
-            $this->registryAdd($seedRunId, $entriesTable, (string)$correctedId);
+            $this->registryAdd($seedRunId, $entriesTable, (string)(int)$wpdb->insert_id);
             $correctionCount++;
         }
 
         $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM $entriesTable");
         return ['time_entries' => $count, 'corrections' => $correctionCount];
+    }
+
+    /**
+     * Resolve a ticket's department from its primary_container field.
+     */
+    private function resolveTicketDepartment(int $ticketId, array $allTickets): string
+    {
+        foreach ($allTickets as $t) {
+            if ((int)$t->id === $ticketId) {
+                return match ($t->primary_container ?? 'support') {
+                    'project' => 'projects',
+                    'internal' => 'internal',
+                    default => 'support',
+                };
+            }
+        }
+        return 'support';
     }
 
     private function seedKnowledge(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -2145,6 +2198,8 @@ final class DemoSeedService
         // Conversations on quotes (all 7)
         $ethanId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ethan' LIMIT 1") ?: $currentUserId;
         $isabellaId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Isabella' LIMIT 1") ?: $currentUserId;
+        $liamId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Liam' LIMIT 1") ?: $currentUserId;
+        $zoeId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Zoe' LIMIT 1") ?: $currentUserId;
         $quotes = $wpdb->get_results("SELECT id, title FROM {$wpdb->prefix}pet_quotes ORDER BY id ASC LIMIT 7");
         $quoteMessages = [
             [
@@ -2209,44 +2264,134 @@ final class DemoSeedService
             }
         }
 
-        // Conversations on tickets (expanded)
-        $tickets = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed') ORDER BY id ASC LIMIT 8");
+        // Conversations on tickets — all non-closed tickets get a discussion thread
+        $tickets = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed') ORDER BY id ASC");
         $ticketMessages = [
+            // 1. Login issue (RPM)
             [
                 ['actor' => $noahId, 'body' => 'User reports intermittent login failures since this morning. Clearing cache didn\'t help.'],
                 ['actor' => $currentUserId, 'body' => 'Check if their AD password expired. We saw similar issues last month with the sync delay.'],
                 ['actor' => $noahId, 'body' => 'Confirmed — password sync was delayed. Forced a reset and user can log in now. Monitoring.'],
             ],
+            // 2. Email not syncing (RPM)
             [
                 ['actor' => $noahId, 'body' => 'Email sync stopped for 3 users on the Cape Town site. Exchange Online connector shows healthy.'],
                 ['actor' => $miaId, 'body' => 'This might be related to the firewall change yesterday. Can you check the mail flow rules?'],
             ],
+            // 3. Server alert (RPM)
             [
                 ['actor' => $currentUserId, 'body' => 'Nagios alert: CPU at 92% on web-prod-02 for the last 30 minutes.'],
                 ['actor' => $noahId, 'body' => 'Investigating. Looks like a runaway cron job. Restarting the service now.'],
                 ['actor' => $noahId, 'body' => 'Resolved. The backup job was running during peak hours. Rescheduled to 02:00.'],
             ],
+            // 4. VPN access (RPM)
             [
                 ['actor' => $avaId, 'body' => 'New contractor needs VPN access for the RPM project. They start Monday.'],
                 ['actor' => $currentUserId, 'body' => 'Ticket escalated — SLA is tight on this one. @Noah can you provision today?'],
             ],
+            // 5. Printer offline (RPM)
             [
                 ['actor' => $noahId, 'body' => 'Printer on floor 2 showing offline. Already checked the network cable and power cycled.'],
+                ['actor' => $liamId, 'body' => 'Tried replacing the toner and resetting the print spooler. Still no luck — might be a hardware fault.'],
+                ['actor' => $noahId, 'body' => 'Swapped in the spare unit from storeroom. Old one tagged for vendor repair.'],
             ],
+            // 6. New user setup (RPM)
+            [
+                ['actor' => $noahId, 'body' => 'New hire starting next week — need full onboarding: AD account, email, VPN token, laptop provisioning.'],
+                ['actor' => $currentUserId, 'body' => 'Laptop is ready. AD account created. Just need VPN token from the Sophos portal.'],
+                ['actor' => $noahId, 'body' => 'VPN provisioned. Welcome pack email scheduled for Monday 08:00.'],
+            ],
+            // 7. Policy question (RPM)
+            [
+                ['actor' => $avaId, 'body' => 'Client asked about our data retention policy for backup archives. Need the latest version.'],
+                ['actor' => $miaId, 'body' => 'The updated policy is in SharePoint under Governance > Policies. Version 3.2 was approved last quarter.'],
+            ],
+            // 8. ERP module crashing (Acme)
             [
                 ['actor' => $noahId, 'body' => 'Acme reports ERP module crashing when generating monthly reports. Affects their Stellenbosch site.'],
                 ['actor' => $ethanId, 'body' => 'Looks like a memory issue on the report server. I\'ll increase the allocation and check the query optimization.'],
                 ['actor' => $noahId, 'body' => 'Temporary fix applied — increased memory to 16GB. Long-term fix needs a DB index on the reports table.'],
             ],
+            // 9. Slow network at Stellenbosch (Acme)
+            [
+                ['actor' => $noahId, 'body' => 'Acme Stellenbosch site reporting 300ms+ latency on internal apps. Started after the MPLS link maintenance window.'],
+                ['actor' => $ethanId, 'body' => 'Ran a traceroute — traffic is routing via the backup link instead of primary. Looks like the failback didn\'t trigger.'],
+                ['actor' => $noahId, 'body' => 'Forced failback to primary link. Latency back to 12ms. Adding monitoring alert for MPLS path changes.'],
+            ],
+            // 10. License renewal query (Acme)
+            [
+                ['actor' => $isabellaId, 'body' => 'Acme\'s Microsoft 365 E3 licenses expire end of month. 45 seats need renewal.'],
+                ['actor' => $zoeId, 'body' => 'PO received from Acme finance. I\'ll process the renewal through our CSP portal today.'],
+                ['actor' => $isabellaId, 'body' => 'Renewal confirmed. New expiry date is 12 months out. Sent confirmation to Sarah Jacobs at Acme.'],
+            ],
+            // 11. AWS console access (Nexus)
+            [
+                ['actor' => $ethanId, 'body' => 'Nexus dev team can\'t access the AWS console. IAM login page returns 403 Forbidden.'],
+                ['actor' => $currentUserId, 'body' => 'Checked CloudTrail — the IAM policy was updated by their automation pipeline. Reverting to last known good.'],
+                ['actor' => $ethanId, 'body' => 'Access restored. Added a policy version lock so their CI/CD can\'t overwrite IAM permissions again.'],
+            ],
+            // 12. CI/CD pipeline failure (Nexus)
             [
                 ['actor' => $ethanId, 'body' => 'Nexus CI/CD pipeline failed on the staging deployment. Build logs show a Docker image pull timeout.'],
                 ['actor' => $currentUserId, 'body' => 'Check the ECR credentials — they might have rotated. This happened before with their IAM policy.'],
             ],
+            // 13. DNS propagation delay (Nexus)
             [
                 ['actor' => $noahId, 'body' => 'Nexus DNS change propagating slowly. Some users still hitting the old IP.'],
                 ['actor' => $ethanId, 'body' => 'TTL was set to 86400. Lowering to 300 for the migration period. Should resolve within 5 minutes.'],
             ],
         ];
+
+        // Generic fallback conversations for tickets beyond the explicit list
+        $fallbackConversations = [
+            [
+                ['body' => 'Picked this up — reviewing the details now. Will update once I have a diagnosis.'],
+                ['body' => 'Initial assessment complete. Looks straightforward — working on the fix.'],
+            ],
+            [
+                ['body' => 'Reproduced the issue in our test environment. Isolating the root cause.'],
+                ['body' => 'Found it — configuration drift after the last maintenance window. Applying corrective config now.'],
+                ['body' => 'Fix deployed and verified. Monitoring for recurrence over the next 24 hours.'],
+            ],
+            [
+                ['body' => 'Customer reported this via email. I\'ve gathered the logs and screenshots they attached.'],
+                ['body' => 'Good — escalating to engineering. The logs show an intermittent timeout pattern that needs deeper investigation.'],
+            ],
+            [
+                ['body' => 'This is a known issue from the last release. Workaround documented in KB-2047.'],
+                ['body' => 'Applied the workaround for the customer. Permanent fix is scheduled for the next patch cycle.'],
+                ['body' => 'Customer confirmed the workaround resolved their immediate issue. Keeping the ticket open for tracking.'],
+            ],
+            [
+                ['body' => 'Ran diagnostics — all infrastructure checks pass. Suspect this is application-level.'],
+                ['body' => 'Confirmed. The application config had a stale connection string. Updated and tested — working now.'],
+            ],
+            [
+                ['body' => 'Scheduled a remote session with the customer for 14:00 to investigate live.'],
+                ['body' => 'Remote session complete. Identified a permissions issue on their end. Fixed during the call.'],
+                ['body' => 'Customer happy with the resolution. Closing after 24h observation period.'],
+            ],
+            [
+                ['body' => 'Third occurrence this month. Raising this with the team — we need a permanent resolution.'],
+                ['body' => 'Agreed. I\'ve added this to the next sprint backlog. In the meantime, automated restart script is in place.'],
+            ],
+            [
+                ['body' => 'Initial triage complete. This requires vendor involvement — opening a case with the supplier.'],
+                ['body' => 'Vendor confirmed the issue. Patch expected within 48 hours. Customer notified of timeline.'],
+            ],
+            [
+                ['body' => 'Checked the monitoring dashboards — no anomalies in the last 6 hours. Might be intermittent.'],
+                ['body' => 'Set up enhanced logging to capture the next occurrence. Customer asked to report immediately if it recurs.'],
+                ['body' => 'Captured the event — it\'s a race condition in the queue processor. Deploying the fix shortly.'],
+            ],
+            [
+                ['body' => 'Customer\'s security team flagged this. Reviewing access logs and audit trail now.'],
+                ['body' => 'No breach detected. The alert was triggered by a legitimate bulk import process. Updated the alert threshold.'],
+            ],
+        ];
+
+        // Actor rotation pool for fallback conversations
+        $actorPool = [$noahId, $currentUserId, $miaId, $ethanId, $avaId, $liamId, $isabellaId, $zoeId];
 
         foreach ($tickets as $ti => $t) {
             try {
@@ -2257,8 +2402,22 @@ final class DemoSeedService
                     'ticket-' . $t->id . '-general',
                     $currentUserId
                 ));
-                $messages = $ticketMessages[$ti] ?? [];
-                foreach ($messages as $msg) {
+
+                if ($ti < count($ticketMessages)) {
+                    // Use explicit conversation
+                    $msgs = $ticketMessages[$ti];
+                } else {
+                    // Use fallback with rotating actors
+                    $fbIdx = ($ti - count($ticketMessages)) % count($fallbackConversations);
+                    $fbTemplate = $fallbackConversations[$fbIdx];
+                    $msgs = [];
+                    foreach ($fbTemplate as $mi => $msg) {
+                        $actorIdx = ($ti + $mi) % count($actorPool);
+                        $msgs[] = ['actor' => $actorPool[$actorIdx], 'body' => $msg['body']];
+                    }
+                }
+
+                foreach ($msgs as $msg) {
                     $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
                         $convUuid,
                         $msg['body'],

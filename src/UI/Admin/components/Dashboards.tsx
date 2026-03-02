@@ -134,7 +134,7 @@ interface SalesData {
   quotesByState: Record<string, number>;
 }
 
-type Persona = 'manager' | 'support' | 'pm' | 'sales';
+type Persona = 'manager' | 'support' | 'pm' | 'sales' | 'timesheets';
 
 /* ============================================================
    API helpers
@@ -869,7 +869,18 @@ interface TimeEntryItem {
   status: string;
   correctsEntryId?: number | null;
   isCorrection?: boolean;
+  malleableData?: Record<string, any>;
   createdAt: string | null;
+}
+
+interface EmployeeItem {
+  id: number;
+  wpUserId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle?: string;
+  teamIds?: number[];
 }
 
 interface TicketDetailData {
@@ -1486,6 +1497,370 @@ const TicketDetailPanel: React.FC<{
 };
 
 /* ============================================================
+   TIMESHEET VIEW — "Where is the time going?"
+   ============================================================ */
+const TimesheetView: React.FC<{
+  timeEntries: TimeEntryItem[];
+  employees: EmployeeItem[];
+  tickets: TicketItem[];
+  customers: Map<number, string>;
+  onStaffClick: (employeeId: number) => void;
+}> = ({ timeEntries, employees, tickets, customers, onStaffClick }) => {
+  const now = new Date();
+
+  // Month boundaries for last 3 months + current
+  const getMonthBounds = (offset: number) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+    return { start: d, end, label: d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) };
+  };
+  const months = [-3, -2, -1, 0].map(getMonthBounds);
+
+  // Build lookup maps
+  const ticketCustomerMap = new Map<number, number>();
+  tickets.forEach(t => ticketCustomerMap.set(t.id, t.customerId));
+  const empNameMap = new Map<number, string>();
+  employees.forEach(e => empNameMap.set(e.id, `${e.firstName} ${e.lastName}`));
+
+  const getDept = (e: TimeEntryItem) => e.malleableData?.department || 'support';
+  const getRate = (e: TimeEntryItem) => e.malleableData?.billing_rate || 0;
+
+  // Filter out negative-duration reversal rows for KPI display
+  const positiveEntries = timeEntries.filter(e => e.duration > 0);
+
+  // --- KPIs ---
+  const totalHours = positiveEntries.reduce((s, e) => s + e.duration, 0) / 60;
+  const billableEntries = positiveEntries.filter(e => e.billable);
+  const billableHours = billableEntries.reduce((s, e) => s + e.duration, 0) / 60;
+  const billingValue = billableEntries.reduce((s, e) => s + (e.duration / 60) * getRate(e), 0);
+  const nonBillableHours = totalHours - billableHours;
+  const activeStaff = new Set(positiveEntries.map(e => e.employeeId)).size;
+  const avgRate = billableHours > 0 ? billingValue / billableHours : 0;
+
+  // --- Customer billing table ---
+  const custEntries = new Map<number, TimeEntryItem[]>();
+  positiveEntries.forEach(e => {
+    const cid = ticketCustomerMap.get(e.ticketId) || 0;
+    if (!custEntries.has(cid)) custEntries.set(cid, []);
+    custEntries.get(cid)!.push(e);
+  });
+
+  const customerBilling = Array.from(custEntries.entries()).map(([custId, entries]) => ({
+    custId,
+    name: customers.get(custId) || `Customer #${custId}`,
+    months: months.map(m => {
+      const me = entries.filter(e => { const d = new Date(e.start); return d >= m.start && d <= m.end; });
+      return {
+        hours: me.filter(e => e.billable).reduce((s, e) => s + e.duration, 0) / 60,
+        value: me.filter(e => e.billable).reduce((s, e) => s + (e.duration / 60) * getRate(e), 0),
+      };
+    }),
+  })).sort((a, b) => b.months.reduce((s, m) => s + m.value, 0) - a.months.reduce((s, m) => s + m.value, 0));
+
+  const daysElapsed = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const projMul = daysElapsed > 0 ? daysInMonth / daysElapsed : 1;
+
+  // --- Department matrix ---
+  const deptData = new Map<string, { hours: number; billableHours: number; value: number; staff: Set<number> }>();
+  positiveEntries.forEach(e => {
+    const dept = getDept(e);
+    if (!deptData.has(dept)) deptData.set(dept, { hours: 0, billableHours: 0, value: 0, staff: new Set() });
+    const d = deptData.get(dept)!;
+    d.hours += e.duration / 60;
+    if (e.billable) { d.billableHours += e.duration / 60; d.value += (e.duration / 60) * getRate(e); }
+    d.staff.add(e.employeeId);
+  });
+
+  // --- Staff breakdown ---
+  const empEntries = new Map<number, TimeEntryItem[]>();
+  positiveEntries.forEach(e => {
+    if (!empEntries.has(e.employeeId)) empEntries.set(e.employeeId, []);
+    empEntries.get(e.employeeId)!.push(e);
+  });
+
+  const staffData = Array.from(empEntries.entries()).map(([empId, entries]) => ({
+    empId,
+    name: empNameMap.get(empId) || `Employee #${empId}`,
+    totalHours: entries.reduce((s, e) => s + e.duration, 0) / 60,
+    billableHours: entries.filter(e => e.billable).reduce((s, e) => s + e.duration, 0) / 60,
+    value: entries.filter(e => e.billable).reduce((s, e) => s + (e.duration / 60) * getRate(e), 0),
+    draftHours: entries.filter(e => e.status === 'draft').reduce((s, e) => s + e.duration, 0) / 60,
+    submittedHours: entries.filter(e => e.status === 'submitted').reduce((s, e) => s + e.duration, 0) / 60,
+    lockedHours: entries.filter(e => e.status === 'locked').reduce((s, e) => s + e.duration, 0) / 60,
+  })).sort((a, b) => b.totalHours - a.totalHours);
+
+  const maxStaffHours = Math.max(...staffData.map(x => x.totalHours), 1);
+
+  return (
+    <>
+      <div className="pd-kpi-strip">
+        <KpiCard value={`${totalHours.toFixed(0)}h`} label="Total Hours" color="blue" />
+        <KpiCard value={`${billableHours.toFixed(0)}h`} label="Billable Hours" color="green" />
+        <KpiCard value={`$${Math.round(billingValue).toLocaleString()}`} label="Billing Value" color="teal" />
+        <KpiCard value={`${nonBillableHours.toFixed(0)}h`} label="Non-billable" color="amber" />
+        <KpiCard value={activeStaff} label="Active Staff" color="purple" />
+        <KpiCard value={`$${avgRate.toFixed(0)}/h`} label="Avg Rate" color="blue" />
+      </div>
+
+      {/* Customer Billing */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Customer Billing</h3>
+        <div className="pd-ts-table-wrap">
+          <table className="pd-ts-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                {months.map((m, i) => <th key={i}>{m.label}</th>)}
+                <th>Projection</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customerBilling.map(c => {
+                const cur = c.months[3];
+                return (
+                  <tr key={c.custId}>
+                    <td className="pd-ts-name-cell">{c.name}</td>
+                    {c.months.map((m, i) => (
+                      <td key={i} className="pd-ts-num-cell">
+                        <div className="pd-ts-hours">{m.hours.toFixed(1)}h</div>
+                        <div className="pd-ts-value">${Math.round(m.value).toLocaleString()}</div>
+                      </td>
+                    ))}
+                    <td className="pd-ts-num-cell pd-ts-projection">
+                      <div className="pd-ts-hours">{(cur.hours * projMul).toFixed(1)}h</div>
+                      <div className="pd-ts-value">${Math.round(cur.value * projMul).toLocaleString()}</div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Department Matrix */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Department Breakdown</h3>
+        <div className="pd-ts-table-wrap">
+          <table className="pd-ts-table">
+            <thead>
+              <tr><th>Department</th><th>Total Hours</th><th>Billable</th><th>Value</th><th>Staff</th><th>Avg Rate</th></tr>
+            </thead>
+            <tbody>
+              {Array.from(deptData.entries()).map(([dept, d]) => (
+                <tr key={dept}>
+                  <td className="pd-ts-name-cell">{dept.charAt(0).toUpperCase() + dept.slice(1)}</td>
+                  <td className="pd-ts-num-cell">{d.hours.toFixed(1)}h</td>
+                  <td className="pd-ts-num-cell">{d.billableHours.toFixed(1)}h</td>
+                  <td className="pd-ts-num-cell">${Math.round(d.value).toLocaleString()}</td>
+                  <td className="pd-ts-num-cell">{d.staff.size}</td>
+                  <td className="pd-ts-num-cell">${d.billableHours > 0 ? (d.value / d.billableHours).toFixed(0) : '0'}/h</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Staff Breakdown */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Staff Breakdown</h3>
+        <div className="pd-ts-staff-grid">
+          {staffData.map(s => {
+            const barW = (s.totalHours / maxStaffHours) * 100;
+            const draftPct = s.totalHours > 0 ? (s.draftHours / s.totalHours) * 100 : 0;
+            const submittedPct = s.totalHours > 0 ? (s.submittedHours / s.totalHours) * 100 : 0;
+            const lockedPct = s.totalHours > 0 ? (s.lockedHours / s.totalHours) * 100 : 0;
+            return (
+              <div key={s.empId} className="pd-ts-staff-row pd-clickable" onClick={() => onStaffClick(s.empId)}>
+                <div className="pd-ts-staff-info">
+                  <div className="pd-ts-staff-name">{s.name}</div>
+                  <div className="pd-ts-staff-meta">
+                    {s.totalHours.toFixed(1)}h total &middot; {s.billableHours.toFixed(1)}h billable &middot; ${Math.round(s.value).toLocaleString()}
+                  </div>
+                </div>
+                <div className="pd-ts-bar-container">
+                  <div className="pd-ts-bar" style={{ width: `${barW}%` }}>
+                    <div className="pd-ts-bar-seg bar-locked" style={{ width: `${lockedPct}%` }} title={`Locked: ${s.lockedHours.toFixed(1)}h`} />
+                    <div className="pd-ts-bar-seg bar-submitted" style={{ width: `${submittedPct}%` }} title={`Submitted: ${s.submittedHours.toFixed(1)}h`} />
+                    <div className="pd-ts-bar-seg bar-draft" style={{ width: `${draftPct}%` }} title={`Draft: ${s.draftHours.toFixed(1)}h`} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="pd-ts-legend">
+          <span className="pd-ts-legend-item"><span className="pd-ts-legend-dot bar-locked" /> Locked</span>
+          <span className="pd-ts-legend-item"><span className="pd-ts-legend-dot bar-submitted" /> Submitted</span>
+          <span className="pd-ts-legend-item"><span className="pd-ts-legend-dot bar-draft" /> Draft</span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+/* ============================================================
+   STAFF TIMESHEET DRILL-DOWN
+   ============================================================ */
+const StaffTimesheetView: React.FC<{
+  employeeId: number;
+  timeEntries: TimeEntryItem[];
+  employees: EmployeeItem[];
+  tickets: TicketItem[];
+  customers: Map<number, string>;
+  onBack: () => void;
+}> = ({ employeeId, timeEntries, employees, tickets, customers, onBack }) => {
+  const emp = employees.find(e => e.id === employeeId);
+  const empName = emp ? `${emp.firstName} ${emp.lastName}` : `Employee #${employeeId}`;
+  const myEntries = timeEntries.filter(e => e.employeeId === employeeId && e.duration > 0);
+
+  const getRate = (e: TimeEntryItem) => e.malleableData?.billing_rate || 0;
+  const totalHours = myEntries.reduce((s, e) => s + e.duration, 0) / 60;
+  const billableHours = myEntries.filter(e => e.billable).reduce((s, e) => s + e.duration, 0) / 60;
+  const billingValue = myEntries.filter(e => e.billable).reduce((s, e) => s + (e.duration / 60) * getRate(e), 0);
+  const billablePct = totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
+
+  // Weekly summary — last 4 weeks
+  const now = new Date();
+  const weeks = Array.from({ length: 4 }, (_, i) => {
+    const off = 3 - i;
+    const ws = new Date(now); ws.setDate(now.getDate() - now.getDay() - off * 7); ws.setHours(0, 0, 0, 0);
+    const we = new Date(ws); we.setDate(ws.getDate() + 6); we.setHours(23, 59, 59);
+    return {
+      start: ws, end: we,
+      label: `${ws.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} \u2013 ${we.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+    };
+  });
+
+  const ticketCustMap = new Map<number, number>();
+  tickets.forEach(t => ticketCustMap.set(t.id, t.customerId));
+
+  const sorted = [...myEntries].sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
+
+  return (
+    <div className="pd-ticket-detail">
+      <button className="pd-ticket-back" onClick={onBack}>\u2190 Back to Timesheets</button>
+      <div className="pd-ticket-header"><h2 className="pd-ticket-title">{empName}\u2019s Timesheet</h2></div>
+
+      <div className="pd-kpi-strip">
+        <KpiCard value={`${totalHours.toFixed(1)}h`} label="Total Hours" color="blue" />
+        <KpiCard value={`${billableHours.toFixed(1)}h`} label="Billable" color="green" />
+        <KpiCard value={`$${Math.round(billingValue).toLocaleString()}`} label="Value" color="teal" />
+        <KpiCard value={`${billablePct}%`} label="Billable %" color={billablePct >= 70 ? 'green' : billablePct >= 50 ? 'amber' : 'red'} />
+      </div>
+
+      {/* Weekly grid */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Weekly Summary</h3>
+        <div className="pd-ts-table-wrap">
+          <table className="pd-ts-table">
+            <thead><tr><th>Week</th><th>Hours</th><th>Billable</th><th>Value</th><th>Status</th></tr></thead>
+            <tbody>
+              {weeks.map((w, i) => {
+                const we = myEntries.filter(e => { const d = new Date(e.start); return d >= w.start && d <= w.end; });
+                const hrs = we.reduce((s, e) => s + e.duration, 0) / 60;
+                const bill = we.filter(e => e.billable).reduce((s, e) => s + e.duration, 0) / 60;
+                const val = we.filter(e => e.billable).reduce((s, e) => s + (e.duration / 60) * getRate(e), 0);
+                const sc: Record<string, number> = { draft: 0, submitted: 0, locked: 0 };
+                we.forEach(e => { if (e.status in sc) sc[e.status]++; });
+                return (
+                  <tr key={i}>
+                    <td>{w.label}</td>
+                    <td className="pd-ts-num-cell">{hrs.toFixed(1)}h</td>
+                    <td className="pd-ts-num-cell">{bill.toFixed(1)}h</td>
+                    <td className="pd-ts-num-cell">${Math.round(val).toLocaleString()}</td>
+                    <td className="pd-ts-week-status">
+                      {sc.locked > 0 && <span className="pd-ts-status-pip bar-locked">{sc.locked}</span>}
+                      {sc.submitted > 0 && <span className="pd-ts-status-pip bar-submitted">{sc.submitted}</span>}
+                      {sc.draft > 0 && <span className="pd-ts-status-pip bar-draft">{sc.draft}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Customer billing breakdown */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Customer Billing</h3>
+        {(() => {
+          const custAgg = new Map<number, { hours: number; billable: number; value: number; entries: number }>();
+          myEntries.forEach(e => {
+            const cid = ticketCustMap.get(e.ticketId) || 0;
+            const cur = custAgg.get(cid) || { hours: 0, billable: 0, value: 0, entries: 0 };
+            cur.hours += e.duration;
+            cur.entries++;
+            if (e.billable) { cur.billable += e.duration; cur.value += (e.duration / 60) * getRate(e); }
+            custAgg.set(cid, cur);
+          });
+          const custRows = [...custAgg.entries()]
+            .map(([cid, d]) => ({ name: customers.get(cid) || 'Unassigned', ...d }))
+            .sort((a, b) => b.value - a.value);
+          return (
+            <div className="pd-ts-table-wrap">
+              <table className="pd-ts-table">
+                <thead><tr><th>Customer</th><th>Entries</th><th>Hours</th><th>Billable</th><th>Value</th><th>Util %</th></tr></thead>
+                <tbody>
+                  {custRows.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.name}</td>
+                      <td className="pd-ts-num-cell">{r.entries}</td>
+                      <td className="pd-ts-num-cell">{(r.hours / 60).toFixed(1)}h</td>
+                      <td className="pd-ts-num-cell">{(r.billable / 60).toFixed(1)}h</td>
+                      <td className="pd-ts-num-cell">${Math.round(r.value).toLocaleString()}</td>
+                      <td className="pd-ts-num-cell">{r.hours > 0 ? Math.round((r.billable / r.hours) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Entry list */}
+      <div className="pd-attention-panel">
+        <h3 className="pd-section-title">Time Entries <span className="pd-badge">{sorted.length}</span></h3>
+        <div className="pd-worklog-list">
+          {sorted.map(entry => {
+            const cid = ticketCustMap.get(entry.ticketId) || 0;
+            const cn = customers.get(cid) || '';
+            return (
+              <div key={entry.id} className="pd-worklog-entry">
+                <div className="pd-worklog-body">
+                  <div className="pd-worklog-header">
+                    <span className="pd-worklog-author">{cn}</span>
+                    <div className="pd-worklog-tags">
+                      <span className={`pd-worklog-status status-${entry.status}`}>{entry.status}</span>
+                      {entry.billable && <span className="pd-worklog-billable">billable</span>}
+                    </div>
+                  </div>
+                  <div className="pd-worklog-desc">{entry.description}</div>
+                  <div className="pd-worklog-meta">
+                    <span className="pd-worklog-duration">{formatMinutes(entry.duration)}</span>
+                    <span className="pd-worklog-date">
+                      {new Date(entry.start).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {' \u2022 '}
+                      {new Date(entry.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {' \u2013 '}
+                      {new Date(entry.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
    MAIN DASHBOARDS COMPONENT
    ============================================================ */
 const Dashboards: React.FC = () => {
@@ -1494,6 +1869,7 @@ const Dashboards: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
 
   // Data stores
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
@@ -1506,6 +1882,8 @@ const Dashboards: React.FC = () => {
   const [customers, setCustomers] = useState<Map<number, string>>(new Map());
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
+  const [allTimeEntries, setAllTimeEntries] = useState<TimeEntryItem[]>([]);
+  const [allEmployees, setAllEmployees] = useState<EmployeeItem[]>([]);
 
   const currentUserId = window.petSettings?.currentUserId || 0;
 
@@ -1514,7 +1892,7 @@ const Dashboards: React.FC = () => {
     setError(null);
 
     try {
-      const [dashRes, ticketsRes, workRes, projRes, actRes, custRes, leadsRes, quotesRes] = await Promise.all([
+      const [dashRes, ticketsRes, workRes, projRes, actRes, custRes, leadsRes, quotesRes, timeRes, empRes] = await Promise.all([
         api('dashboard'),
         api('tickets').catch(() => []),
         api('work-items').catch(() => []),
@@ -1523,6 +1901,8 @@ const Dashboards: React.FC = () => {
         api('customers').catch(() => []),
         api('leads').catch(() => []),
         api('quotes').catch(() => []),
+        api('time-entries').catch(() => []),
+        api('employees').catch(() => []),
       ]);
 
       setOverview(dashRes.overview);
@@ -1535,6 +1915,8 @@ const Dashboards: React.FC = () => {
       setCustomers(new Map((Array.isArray(custRes) ? custRes : []).map((c: CustomerItem) => [c.id, c.name])));
       setLeads(Array.isArray(leadsRes) ? leadsRes : []);
       setQuotes(Array.isArray(quotesRes) ? quotesRes : []);
+      setAllTimeEntries(Array.isArray(timeRes) ? timeRes : []);
+      setAllEmployees(Array.isArray(empRes) ? empRes : []);
       setLastUpdated(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -1580,6 +1962,7 @@ const Dashboards: React.FC = () => {
     { key: 'sales', label: 'Sales', icon: '\uD83D\uDCB0', subtitle: 'What do I need to focus on today?' },
     { key: 'support', label: 'Support', icon: '\uD83C\uDFA7', subtitle: 'What should I do next?' },
     { key: 'pm', label: 'Project Manager', icon: '\uD83D\uDCCA', subtitle: 'Are we on track?' },
+    { key: 'timesheets', label: 'Timesheets', icon: '\u23F1', subtitle: 'Where is the time going?' },
   ];
 
   const activeTab = TABS.find(t => t.key === persona)!;
@@ -1610,7 +1993,7 @@ const Dashboards: React.FC = () => {
           <button
             key={tab.key}
             className={`pd-tab ${persona === tab.key ? 'active' : ''}`}
-            onClick={() => setPersona(tab.key)}
+            onClick={() => { setPersona(tab.key); setSelectedTicketId(null); setSelectedStaffId(null); }}
           >
             <span className="pd-tab-icon">{tab.icon}</span>
             {tab.label}
@@ -1677,6 +2060,27 @@ const Dashboards: React.FC = () => {
             workItems={workItems}
             activity={activity}
             customers={customers}
+          />
+        )}
+
+        {persona === 'timesheets' && !selectedStaffId && (
+          <TimesheetView
+            timeEntries={allTimeEntries}
+            employees={allEmployees}
+            tickets={tickets}
+            customers={customers}
+            onStaffClick={(id) => setSelectedStaffId(id)}
+          />
+        )}
+
+        {persona === 'timesheets' && selectedStaffId && (
+          <StaffTimesheetView
+            employeeId={selectedStaffId}
+            timeEntries={allTimeEntries}
+            employees={allEmployees}
+            tickets={tickets}
+            customers={customers}
+            onBack={() => setSelectedStaffId(null)}
           />
         )}
       </div>
