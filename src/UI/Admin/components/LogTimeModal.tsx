@@ -12,7 +12,7 @@ const LogTimeModal: React.FC<LogTimeModalProps> = ({ ticket, onSuccess, onClose 
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [description, setDescription] = useState('');
-  const [isBillable, setIsBillable] = useState(true);
+  const [isBillable, setIsBillable] = useState(ticket.isBillableDefault ?? true);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);

@@ -172,7 +172,7 @@ class Project
         $this->name = $name;
         // Note: soldHours and soldValue are immutable as they come from a quote or initial agreement
         // State transition should ideally be handled via specific methods, but for generic update we allow it if valid
-        $this->state = new ProjectState($status); 
+        $this->state = ProjectState::fromString($status); 
         $this->startDate = $startDate;
         $this->endDate = $endDate;
         $this->malleableData = $malleableData;

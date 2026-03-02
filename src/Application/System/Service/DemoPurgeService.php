@@ -18,9 +18,17 @@ final class DemoPurgeService
         $summary = [];
         $tables = [
             // children first (schema-aligned)
+            $this->wpdb->prefix . 'pet_conversation_events',
+            $this->wpdb->prefix . 'pet_conversation_participants',
+            $this->wpdb->prefix . 'pet_conversation_read_state',
+            $this->wpdb->prefix . 'pet_decision_events',
+            $this->wpdb->prefix . 'pet_decisions',
+            $this->wpdb->prefix . 'pet_conversations',
+            $this->wpdb->prefix . 'pet_project_tasks',
             $this->wpdb->prefix . 'pet_department_queues',
             $this->wpdb->prefix . 'pet_work_items',
             $this->wpdb->prefix . 'pet_sla_clock_state',
+            $this->wpdb->prefix . 'pet_ticket_links',
             $this->wpdb->prefix . 'pet_tickets',
             $this->wpdb->prefix . 'pet_tasks',
             $this->wpdb->prefix . 'pet_projects',

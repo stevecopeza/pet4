@@ -88,6 +88,12 @@ class WorkItem
         $this->updatedAt = new DateTimeImmutable();
     }
 
+    public function updateDepartment(string $departmentId): void
+    {
+        $this->departmentId = $departmentId;
+        $this->updatedAt = new DateTimeImmutable();
+    }
+
     public function updateStatus(string $status): void
     {
         $this->validateStatus($status);
@@ -151,7 +157,7 @@ class WorkItem
     // Validation
     private function validateSourceType(string $type): void
     {
-        $allowed = ['ticket', 'escalation', 'admin'];
+        $allowed = ['ticket', 'project_task', 'escalation', 'admin'];
         if (!in_array($type, $allowed)) {
             throw new InvalidArgumentException("Invalid source type: $type");
         }

@@ -166,12 +166,12 @@ class ContainerFactory
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlForecastRepository($wpdb);
             },
-            \Pet\Domain\Commercial\Repository\QuoteRepository::class => function () {
+            \Pet\Domain\Commercial\Repository\QuoteRepository::class => function (\Psr\Container\ContainerInterface $c) {
                 global $wpdb;
-                $costAdjustmentRepository = new \Pet\Infrastructure\Persistence\Repository\SqlCostAdjustmentRepository(); // It uses global $wpdb internally in constructor if no arg passed, or pass $wpdb if updated.
-                // Wait, I didn't update SqlCostAdjustmentRepository constructor yet.
-                // Let's check SqlCostAdjustmentRepository constructor.
-                return new \Pet\Infrastructure\Persistence\Repository\SqlQuoteRepository($wpdb, $costAdjustmentRepository);
+                return new \Pet\Infrastructure\Persistence\Repository\SqlQuoteRepository(
+                    $wpdb,
+                    $c->get(\Pet\Domain\Commercial\Repository\CostAdjustmentRepository::class)
+                );
             },
             \Pet\Domain\Commercial\Repository\CatalogItemRepository::class => function () {
                 global $wpdb;
@@ -208,22 +208,25 @@ class ContainerFactory
                 return new \Pet\Infrastructure\Persistence\Repository\SqlSlaClockStateRepository($wpdb);
             },
 
-            // Feed Repositories
+            // SLA: pure domain resolver + application-layer orchestrator
+            \Pet\Domain\Support\Service\SlaStateResolver::class => \DI\create(\Pet\Domain\Support\Service\SlaStateResolver::class),
+            \Pet\Application\Support\Service\SlaCheckService::class => \DI\autowire(\Pet\Application\Support\Service\SlaCheckService::class),
+            // Deprecated facade — delegates to SlaCheckService
+            \Pet\Domain\Support\Service\SlaAutomationService::class => \DI\autowire(\Pet\Domain\Support\Service\SlaAutomationService::class),
+
+            // Feed Repositories (constructors self-resolve global $wpdb)
             \Pet\Domain\Feed\Repository\FeedEventRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedEventRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedEventRepository();
             },
             \Pet\Domain\Feed\Repository\AnnouncementRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository();
             },
             \Pet\Domain\Feed\Repository\AnnouncementAcknowledgementRepository::class => function () {
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementAcknowledgementRepository($wpdb);
             },
             \Pet\Domain\Feed\Repository\FeedReactionRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedReactionRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedReactionRepository();
             },
 
             \Pet\Domain\Knowledge\Repository\ArticleRepository::class => function () {
@@ -246,6 +249,12 @@ class ContainerFactory
                     $c->get(\Pet\Domain\Configuration\Repository\SettingRepository::class)
                 );
             },
+
+            \Pet\Application\System\Service\AdminAuditLogger::class => function (\Psr\Container\ContainerInterface $c) {
+                return new \Pet\Application\System\Service\AdminAuditLogger(
+                    $c->get(\wpdb::class)
+                );
+            },
             
             \Pet\Infrastructure\System\Service\LogService::class => function () {
                 return new \Pet\Infrastructure\System\Service\LogService();
@@ -256,10 +265,7 @@ class ContainerFactory
                 return new \Pet\Infrastructure\Persistence\Repository\SqlSchemaDefinitionRepository($wpdb);
             },
 
-            \Pet\Domain\Team\Repository\TeamRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlTeamRepository($wpdb);
-            },
+            // DUPLICATE TeamRepository REMOVED (already defined above at line ~135)
 
             // Work Domain Repositories
             \Pet\Domain\Work\Repository\RoleRepository::class => function () {
@@ -340,16 +346,7 @@ class ContainerFactory
                 return new \Pet\Infrastructure\Persistence\Repository\SqlAdvisorySignalRepository($wpdb);
             },
 
-            // Feed Domain Repositories
-            \Pet\Domain\Feed\Repository\FeedEventRepository::class => function () {
-                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedEventRepository();
-            },
-            \Pet\Domain\Feed\Repository\AnnouncementRepository::class => function () {
-                return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository();
-            },
-            \Pet\Domain\Feed\Repository\FeedReactionRepository::class => function () {
-                return new \Pet\Infrastructure\Persistence\Repository\SqlFeedReactionRepository();
-            },
+            // DUPLICATE Feed repos REMOVED (already defined above at line ~211)
 
             // Work Domain Services
 
@@ -357,11 +354,7 @@ class ContainerFactory
                 return new \Pet\Domain\Work\Service\DepartmentResolver();
             },
 
-            // Calendar & SLA Repositories
-            \Pet\Domain\Calendar\Repository\CalendarRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlCalendarRepository($wpdb);
-            },
+            // DUPLICATE CalendarRepository REMOVED (already defined above at line ~109)
 
             // Conversation & Decision Repositories
             \Pet\Domain\Conversation\Repository\ConversationRepository::class => function () {
@@ -374,13 +367,7 @@ class ContainerFactory
             },
             \Pet\Application\Conversation\Service\ActionGatingService::class => \DI\autowire(\Pet\Application\Conversation\Service\ActionGatingService::class),
             \Pet\Domain\Conversation\Service\ConversationAccessControl::class => \DI\autowire(\Pet\Domain\Conversation\Service\ConversationAccessControl::class),
-            \Pet\Domain\Sla\Repository\SlaRepository::class => function (\DI\Container $c) {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlSlaRepository(
-                    $wpdb,
-                    $c->get(\Pet\Domain\Calendar\Repository\CalendarRepository::class)
-                );
-            },
+            // DUPLICATE SlaRepository REMOVED (already defined above at line ~102)
 
             \Pet\Domain\Commercial\Repository\QuoteBlockRepository::class => function () {
                 global $wpdb;
@@ -427,6 +414,7 @@ class ContainerFactory
             \Pet\Application\Commercial\Command\CreateLeadHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateLeadHandler::class),
             \Pet\Application\Commercial\Command\UpdateLeadHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateLeadHandler::class),
             \Pet\Application\Commercial\Command\DeleteLeadHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\DeleteLeadHandler::class),
+            \Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class),
             \Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class),
             \Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class),
 
@@ -436,6 +424,7 @@ class ContainerFactory
             
             \Pet\Application\Time\Command\LogTimeHandler::class => \DI\autowire(\Pet\Application\Time\Command\LogTimeHandler::class),
             \Pet\Application\Time\Command\SubmitTimeEntryHandler::class => \DI\autowire(\Pet\Application\Time\Command\SubmitTimeEntryHandler::class),
+            \Pet\Application\Time\Command\UpdateDraftTimeEntryHandler::class => \DI\autowire(\Pet\Application\Time\Command\UpdateDraftTimeEntryHandler::class),
             \Pet\Application\Identity\Command\CreateEmployeeHandler::class => \DI\autowire(\Pet\Application\Identity\Command\CreateEmployeeHandler::class),
             \Pet\Application\Identity\Command\UpdateEmployeeHandler::class => \DI\autowire(\Pet\Application\Identity\Command\UpdateEmployeeHandler::class),
             \Pet\Application\Identity\Command\ArchiveEmployeeHandler::class => \DI\autowire(\Pet\Application\Identity\Command\ArchiveEmployeeHandler::class),

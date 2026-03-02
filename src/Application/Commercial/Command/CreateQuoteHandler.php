@@ -49,7 +49,10 @@ class CreateQuoteHandler
             new \DateTimeImmutable(),
             null,
             [],
-            $command->malleableData()
+            $command->malleableData(),
+            [],
+            [],
+            $command->leadId()
         );
 
         $this->quoteRepository->save($quote);

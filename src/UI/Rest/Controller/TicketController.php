@@ -11,8 +11,10 @@ use Pet\Application\Support\Command\UpdateTicketHandler;
 use Pet\Application\Support\Command\DeleteTicketCommand;
 use Pet\Application\Support\Command\DeleteTicketHandler;
 use Pet\Domain\Support\Repository\TicketRepository;
+use Pet\Domain\Support\ValueObject\TicketStatus;
 use Pet\Domain\Work\Repository\WorkItemRepository;
 use Pet\Application\System\Service\FeatureFlagService;
+use Pet\UI\Rest\Validation\InputValidation as V;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -57,11 +59,36 @@ class TicketController implements RestController
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getTickets'],
                 'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'customer_id' => V::optionalIntArg(),
+                    'status' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
+                    'ticket_mode' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
+                    'assigned_user_id' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
+                ],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createTicket'],
                 'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'customerId' => V::requiredIntArg(),
+                    'subject' => V::requiredStringArg(),
+                    'description' => V::requiredTextareaArg(),
+                    'priority' => [
+                        'required' => false,
+                        'default' => 'medium',
+                        'sanitize_callback' => [V::class, 'sanitizeString'],
+                        'validate_callback' => [V::class, 'validatePriority'],
+                    ],
+                    'source' => [
+                        'required' => true,
+                        'sanitize_callback' => [V::class, 'sanitizeString'],
+                        'validate_callback' => [V::class, 'validateIntakeSource'],
+                    ],
+                    'siteId' => V::optionalIntArg(),
+                    'slaId' => V::optionalIntArg(),
+                    'contactId' => V::optionalIntArg(),
+                ],
             ],
         ]);
 
@@ -70,10 +97,67 @@ class TicketController implements RestController
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateTicket'],
                 'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'subject' => V::requiredStringArg(),
+                    'description' => V::requiredTextareaArg(),
+                    'priority' => [
+                        'required' => true,
+                        'sanitize_callback' => [V::class, 'sanitizeString'],
+                        'validate_callback' => [V::class, 'validatePriority'],
+                    ],
+                    'status' => V::requiredStringArg(),
+                    'siteId' => V::optionalIntArg(),
+                    'slaId' => V::optionalIntArg(),
+                ],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'deleteTicket'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/status-options', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'getStatusOptions'],
+                'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'lifecycle_owner' => [
+                        'required' => false,
+                        'default' => 'support',
+                        'sanitize_callback' => [V::class, 'sanitizeString'],
+                    ],
+                ],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/assign/team', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'assignToTeam'],
+                'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'queueId' => V::requiredStringArg(),
+                ],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/assign/employee', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'assignToEmployee'],
+                'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'employeeUserId' => V::requiredStringArg(),
+                ],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/pull', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'pullTicket'],
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
@@ -175,6 +259,9 @@ class TicketController implements RestController
                 'openedAt' => $ticket->openedAt() ? $ticket->openedAt()->format('Y-m-d H:i:s') : null,
                 'closedAt' => $ticket->closedAt() ? $ticket->closedAt()->format('Y-m-d H:i:s') : null,
                 'resolvedAt' => $ticket->resolvedAt() ? $ticket->resolvedAt()->format('Y-m-d H:i:s') : null,
+                'lifecycleOwner' => $ticket->lifecycleOwner(),
+                'isBillableDefault' => $ticket->isBillableDefault(),
+                'billingContextType' => $ticket->billingContextType(),
             ];
         }, $tickets);
 
@@ -275,6 +362,31 @@ class TicketController implements RestController
         }
     }
 
+    public function getStatusOptions(WP_REST_Request $request): WP_REST_Response
+    {
+        $lifecycleOwner = $request->get_param('lifecycle_owner') ?? 'support';
+
+        try {
+            $statuses = TicketStatus::allForContext($lifecycleOwner);
+
+            // Also provide transition info for each status
+            $options = [];
+            foreach ($statuses as $status) {
+                $vo = TicketStatus::fromString($status, $lifecycleOwner);
+                $options[] = [
+                    'value' => $status,
+                    'label' => ucfirst(str_replace('_', ' ', $status)),
+                    'allowedTransitions' => $vo->allowedTransitions($lifecycleOwner),
+                    'isTerminal' => $vo->isTerminal($lifecycleOwner),
+                ];
+            }
+
+            return new WP_REST_Response($options, 200);
+        } catch (\InvalidArgumentException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
     public function deleteTicket(WP_REST_Request $request): WP_REST_Response
     {
         $id = (int) $request->get_param('id');
@@ -284,6 +396,108 @@ class TicketController implements RestController
             $this->deleteTicketHandler->handle($command);
 
             return new WP_REST_Response(['message' => 'Ticket deleted'], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function assignToTeam(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+
+        if (empty($params['queueId'])) {
+            return new WP_REST_Response(['error' => 'queueId is required'], 400);
+        }
+
+        try {
+            $ticket = $this->ticketRepository->findById($id);
+            if (!$ticket) {
+                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
+            }
+
+            $ticket->assignToTeam($params['queueId']);
+            $this->ticketRepository->save($ticket);
+
+            // Sync work item projection
+            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
+            if ($workItem) {
+                $workItem->assignUser(null);
+                $workItem->updateDepartment($params['queueId']);
+                $this->workItemRepository->save($workItem);
+            }
+
+            return new WP_REST_Response([
+                'message' => 'Ticket assigned to team',
+                'queueId' => $ticket->queueId(),
+                'ownerUserId' => $ticket->ownerUserId(),
+            ], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function assignToEmployee(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+
+        if (empty($params['employeeUserId'])) {
+            return new WP_REST_Response(['error' => 'employeeUserId is required'], 400);
+        }
+
+        try {
+            $ticket = $this->ticketRepository->findById($id);
+            if (!$ticket) {
+                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
+            }
+
+            $ticket->assignToEmployee($params['employeeUserId']);
+            $this->ticketRepository->save($ticket);
+
+            // Sync work item projection
+            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
+            if ($workItem) {
+                $workItem->assignUser($params['employeeUserId']);
+                $this->workItemRepository->save($workItem);
+            }
+
+            return new WP_REST_Response([
+                'message' => 'Ticket assigned to employee',
+                'queueId' => $ticket->queueId(),
+                'ownerUserId' => $ticket->ownerUserId(),
+            ], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function pullTicket(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+
+        try {
+            $ticket = $this->ticketRepository->findById($id);
+            if (!$ticket) {
+                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
+            }
+
+            $currentUserId = (string) get_current_user_id();
+            $ticket->pull($currentUserId);
+            $this->ticketRepository->save($ticket);
+
+            // Sync work item projection
+            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
+            if ($workItem) {
+                $workItem->assignUser($currentUserId);
+                $this->workItemRepository->save($workItem);
+            }
+
+            return new WP_REST_Response([
+                'message' => 'Ticket pulled',
+                'queueId' => $ticket->queueId(),
+                'ownerUserId' => $ticket->ownerUserId(),
+            ], 200);
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }

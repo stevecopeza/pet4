@@ -20,6 +20,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateCostAdjustmentTable::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateDeliveryTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\DropTasksTable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\RecreateProjectTasksTable::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateTimeTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\UpdateTimeEntriesReplaceTaskWithTicket::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateSupportTables::class,
@@ -74,10 +75,16 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateLeaveCapacityTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateDemoSeedRegistryTable::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateAdminAuditLog::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateConversationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddReplyToMessageIdToConversationEvents::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddParticipantTypesToConversationParticipants::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddVersionToConversations::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\UpdateQuoteBlocksAddPayloadAndCreatedAt::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketBackboneColumns::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateTicketLinksTable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketIdToTasks::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddCorrectsEntryIdToTimeEntries::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddLeadIdToQuotes::class,
         ];
     }
 }

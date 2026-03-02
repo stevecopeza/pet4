@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Pet\Domain\Support\Entity;
 
+use Pet\Domain\Support\Event\TicketAssigned;
+use Pet\Domain\Support\Event\TicketStatusChanged;
+use Pet\Domain\Support\ValueObject\TicketStatus;
+
 class Ticket
 {
+    private array $domainEvents = [];
     private ?int $id;
     private int $customerId;
     private ?int $siteId;
@@ -32,6 +37,27 @@ class Ticket
     private ?\DateTimeImmutable $resolutionDueAt;
     private ?\DateTimeImmutable $respondedAt;
 
+    // Backbone fields (C1)
+    private string $primaryContainer = 'support';
+    private ?int $projectId = null;
+    private ?int $quoteId = null;
+    private ?int $phaseId = null;
+    private ?int $parentTicketId = null;
+    private ?int $rootTicketId = null;
+    private string $ticketKind = 'work';
+    private ?int $departmentIdExt = null;
+    private ?int $requiredRoleId = null;
+    private ?string $skillLevel = null;
+    private string $billingContextType = 'adhoc';
+    private ?int $agreementId = null;
+    private ?int $ratePlanId = null;
+    private bool $isBillableDefault = true;
+    private ?int $soldMinutes = null;
+    private ?int $estimatedMinutes = null;
+    private ?int $remainingMinutes = null;
+    private bool $isRollup = false;
+    private string $lifecycleOwner = 'support';
+
     public function __construct(
         int $customerId,
         string $subject,
@@ -56,7 +82,27 @@ class Ticket
         ?string $category = null,
         ?string $subcategory = null,
         ?string $intakeSource = null,
-        ?int $contactId = null
+        ?int $contactId = null,
+        // Backbone fields (C1) — all optional for backward compat
+        string $primaryContainer = 'support',
+        ?int $projectId = null,
+        ?int $quoteId = null,
+        ?int $phaseId = null,
+        ?int $parentTicketId = null,
+        ?int $rootTicketId = null,
+        string $ticketKind = 'work',
+        ?int $departmentIdExt = null,
+        ?int $requiredRoleId = null,
+        ?string $skillLevel = null,
+        string $billingContextType = 'adhoc',
+        ?int $agreementId = null,
+        ?int $ratePlanId = null,
+        bool $isBillableDefault = true,
+        ?int $soldMinutes = null,
+        ?int $estimatedMinutes = null,
+        ?int $remainingMinutes = null,
+        bool $isRollup = false,
+        string $lifecycleOwner = 'support'
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -82,6 +128,26 @@ class Ticket
         $this->responseDueAt = $responseDueAt;
         $this->resolutionDueAt = $resolutionDueAt;
         $this->respondedAt = $respondedAt;
+        // Backbone
+        $this->primaryContainer = $primaryContainer;
+        $this->projectId = $projectId;
+        $this->quoteId = $quoteId;
+        $this->phaseId = $phaseId;
+        $this->parentTicketId = $parentTicketId;
+        $this->rootTicketId = $rootTicketId;
+        $this->ticketKind = $ticketKind;
+        $this->departmentIdExt = $departmentIdExt;
+        $this->requiredRoleId = $requiredRoleId;
+        $this->skillLevel = $skillLevel;
+        $this->billingContextType = $billingContextType;
+        $this->agreementId = $agreementId;
+        $this->ratePlanId = $ratePlanId;
+        $this->isBillableDefault = $isBillableDefault;
+        $this->soldMinutes = $soldMinutes;
+        $this->estimatedMinutes = $estimatedMinutes;
+        $this->remainingMinutes = $remainingMinutes;
+        $this->isRollup = $isRollup;
+        $this->lifecycleOwner = $lifecycleOwner;
     }
 
     public function id(): ?int
@@ -221,6 +287,139 @@ class Ticket
         }
     }
 
+    /**
+     * Assign ticket to a team queue. Clears individual owner.
+     */
+    public function assignToTeam(string $queueId): void
+    {
+        $previousOwner = $this->ownerUserId;
+        $previousQueue = $this->queueId;
+        $this->queueId = $queueId;
+        $this->ownerUserId = null;
+        $this->recordEvent(new TicketAssigned($this, null, $previousOwner, $previousQueue, $queueId));
+    }
+
+    /**
+     * Assign ticket to a specific employee. Preserves queue context.
+     */
+    public function assignToEmployee(string $employeeUserId): void
+    {
+        $previousOwner = $this->ownerUserId;
+        $this->ownerUserId = $employeeUserId;
+        $this->recordEvent(new TicketAssigned($this, $employeeUserId, $previousOwner, $this->queueId, $this->queueId));
+    }
+
+    /**
+     * Pull ticket to self (self-assign). Alias for assignToEmployee with requesting user.
+     */
+    public function pull(string $requestingUserId): void
+    {
+        $this->assignToEmployee($requestingUserId);
+    }
+
+    private function recordEvent(object $event): void
+    {
+        $this->domainEvents[] = $event;
+    }
+
+    public function releaseEvents(): array
+    {
+        $events = $this->domainEvents;
+        $this->domainEvents = [];
+        return $events;
+    }
+
+    // Backbone getters
+    public function primaryContainer(): string { return $this->primaryContainer; }
+    public function projectId(): ?int { return $this->projectId; }
+    public function quoteId(): ?int { return $this->quoteId; }
+    public function phaseId(): ?int { return $this->phaseId; }
+    public function parentTicketId(): ?int { return $this->parentTicketId; }
+    public function rootTicketId(): ?int { return $this->rootTicketId; }
+    public function ticketKind(): string { return $this->ticketKind; }
+    public function departmentIdExt(): ?int { return $this->departmentIdExt; }
+    public function requiredRoleId(): ?int { return $this->requiredRoleId; }
+    public function skillLevel(): ?string { return $this->skillLevel; }
+    public function billingContextType(): string { return $this->billingContextType; }
+    public function agreementId(): ?int { return $this->agreementId; }
+    public function ratePlanId(): ?int { return $this->ratePlanId; }
+    public function isBillableDefault(): bool { return $this->isBillableDefault; }
+    public function soldMinutes(): ?int { return $this->soldMinutes; }
+    public function estimatedMinutes(): ?int { return $this->estimatedMinutes; }
+    public function remainingMinutes(): ?int { return $this->remainingMinutes; }
+    public function isRollup(): bool { return $this->isRollup; }
+    public function lifecycleOwner(): string { return $this->lifecycleOwner; }
+
+    /**
+     * Rollup tickets (WBS parents) cannot accept time entries directly.
+     * Only leaf tickets accept time logging.
+     */
+    public function canAcceptTimeEntries(): bool
+    {
+        return !$this->isRollup;
+    }
+
+    /**
+     * Derive the billable default from billing context type.
+     * Used when creating tickets or when billing context changes.
+     */
+    public static function deriveBillableDefault(string $billingContextType): bool
+    {
+        return match ($billingContextType) {
+            'agreement' => true,
+            'project' => true,
+            'adhoc' => true,
+            'internal' => false,
+            default => true,
+        };
+    }
+
+    /**
+     * Transition ticket status with lifecycle-governed validation.
+     * Validates the transition is allowed for this ticket's lifecycle_owner,
+     * sets timestamp side-effects, and records a TicketStatusChanged event.
+     *
+     * @throws \DomainException if the transition is not allowed
+     */
+    public function transitionStatus(string $newStatus): void
+    {
+        if ($newStatus === $this->status) {
+            return; // No-op for same status
+        }
+
+        $currentVO = TicketStatus::fromString($this->status, $this->lifecycleOwner);
+
+        if (!$currentVO->canTransitionTo($newStatus, $this->lifecycleOwner)) {
+            $allowed = $currentVO->allowedTransitions($this->lifecycleOwner);
+            throw new \DomainException(
+                "Cannot transition ticket from '{$this->status}' to '$newStatus' "
+                . "(lifecycle: {$this->lifecycleOwner}). "
+                . "Allowed transitions: " . ($allowed ? implode(', ', $allowed) : 'none (terminal state)')
+            );
+        }
+
+        $previousStatus = $this->status;
+        $this->status = $newStatus;
+
+        // Timestamp side-effects
+        if ($previousStatus === 'new' && $newStatus !== 'new' && !$this->openedAt) {
+            $this->openedAt = new \DateTimeImmutable();
+        }
+
+        if ($newStatus === 'resolved' && !$this->resolvedAt) {
+            $this->resolvedAt = new \DateTimeImmutable();
+        }
+
+        if ($newStatus === 'closed') {
+            $this->closedAt = new \DateTimeImmutable();
+        } elseif ($previousStatus === 'closed') {
+            // Reopening — clear closedAt (shouldn't happen per transition map, but defensive)
+            $this->closedAt = null;
+        }
+
+        $this->recordEvent(new TicketStatusChanged($this, $previousStatus, $newStatus, $this->lifecycleOwner));
+    }
+
     public function update(
         string $subject,
         string $description,
@@ -237,19 +436,8 @@ class Ticket
         $this->slaId = $slaId;
         $this->malleableData = $malleableData;
 
-        // Status transition logic could be here, but for now simple assignment
-        // If transitioning to closed, set closedAt
-        if ($status === 'closed' && $this->status !== 'closed') {
-            $this->closedAt = new \DateTimeImmutable();
-        } elseif ($status !== 'closed') {
-            $this->closedAt = null;
+        if ($status !== $this->status) {
+            $this->transitionStatus($status);
         }
-        
-        // If transitioning from new to something else, ensure openedAt is set
-        if ($this->status === 'new' && $status !== 'new' && !$this->openedAt) {
-            $this->openedAt = new \DateTimeImmutable();
-        }
-
-        $this->status = $status;
     }
 }

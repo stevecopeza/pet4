@@ -10,6 +10,8 @@ use Pet\Application\Commercial\Command\UpdateLeadCommand;
 use Pet\Application\Commercial\Command\UpdateLeadHandler;
 use Pet\Application\Commercial\Command\DeleteLeadCommand;
 use Pet\Application\Commercial\Command\DeleteLeadHandler;
+use Pet\Application\Commercial\Command\ConvertLeadToQuoteCommand;
+use Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler;
 use Pet\Domain\Commercial\Repository\LeadRepository;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -24,17 +26,20 @@ class LeadController implements RestController
     private CreateLeadHandler $createLeadHandler;
     private UpdateLeadHandler $updateLeadHandler;
     private DeleteLeadHandler $deleteLeadHandler;
+    private ConvertLeadToQuoteHandler $convertLeadToQuoteHandler;
 
     public function __construct(
         LeadRepository $leadRepository,
         CreateLeadHandler $createLeadHandler,
         UpdateLeadHandler $updateLeadHandler,
-        DeleteLeadHandler $deleteLeadHandler
+        DeleteLeadHandler $deleteLeadHandler,
+        ConvertLeadToQuoteHandler $convertLeadToQuoteHandler
     ) {
         $this->leadRepository = $leadRepository;
         $this->createLeadHandler = $createLeadHandler;
         $this->updateLeadHandler = $updateLeadHandler;
         $this->deleteLeadHandler = $deleteLeadHandler;
+        $this->convertLeadToQuoteHandler = $convertLeadToQuoteHandler;
     }
 
     public function registerRoutes(): void
@@ -61,6 +66,14 @@ class LeadController implements RestController
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'deleteLead'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/convert', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'convertLead'],
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
@@ -155,6 +168,30 @@ class LeadController implements RestController
             $this->deleteLeadHandler->handle($command);
 
             return new WP_REST_Response(['message' => 'Lead deleted'], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function convertLead(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+
+        try {
+            $command = new ConvertLeadToQuoteCommand(
+                $id,
+                $params['title'] ?? '',
+                $params['description'] ?? null,
+                $params['currency'] ?? 'USD'
+            );
+
+            $quoteId = $this->convertLeadToQuoteHandler->handle($command);
+
+            return new WP_REST_Response([
+                'message' => 'Lead converted to quote',
+                'quoteId' => $quoteId,
+            ], 201);
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }

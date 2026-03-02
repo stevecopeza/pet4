@@ -3,7 +3,7 @@
     "description": "PET (Plan. Execute. Track)",
     "type": "wordpress-plugin",
     "require": {
-        "php": "^7.4|^8.0",
+        "php": "^8.1",
         "php-di/php-di": "^6.0"
     },
     "require-dev": {

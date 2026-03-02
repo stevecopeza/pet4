@@ -67,7 +67,7 @@ const TeamView: React.FC<TeamViewProps> = ({ team, onClose, onEdit, allTeams }) 
   };
 
   const members = team.member_ids 
-    ? employees.filter(e => team.member_ids.includes(e.id))
+    ? employees.filter(e => team.member_ids!.includes(e.id))
     : [];
 
   return (
@@ -112,12 +112,12 @@ const TeamView: React.FC<TeamViewProps> = ({ team, onClose, onEdit, allTeams }) 
 
           <tr>
             <th scope="row" style={{ textAlign: 'left', padding: '10px 0' }}>Manager</th>
-            <td style={{ padding: '10px 0' }}>{loadingEmployees ? 'Loading...' : getEmployeeName(team.manager_id)}</td>
+            <td style={{ padding: '10px 0' }}>{loadingEmployees ? 'Loading...' : getEmployeeName(team.manager_id ?? null)}</td>
           </tr>
 
           <tr>
             <th scope="row" style={{ textAlign: 'left', padding: '10px 0' }}>Escalation Manager</th>
-            <td style={{ padding: '10px 0' }}>{loadingEmployees ? 'Loading...' : getEmployeeName(team.escalation_manager_id)}</td>
+            <td style={{ padding: '10px 0' }}>{loadingEmployees ? 'Loading...' : getEmployeeName(team.escalation_manager_id ?? null)}</td>
           </tr>
 
           <tr>

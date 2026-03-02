@@ -68,6 +68,27 @@ class SqlTicketRepository implements TicketRepository
         $this->conditionallyAddColumn($data, $formats, 'intake_source', $ticket->intakeSource(), '%s');
         $this->conditionallyAddColumn($data, $formats, 'contact_id', $ticket->contactId(), '%d');
 
+        // Backbone fields (C1)
+        $this->conditionallyAddColumn($data, $formats, 'primary_container', $ticket->primaryContainer(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'project_id', $ticket->projectId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'quote_id', $ticket->quoteId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'phase_id', $ticket->phaseId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'parent_ticket_id', $ticket->parentTicketId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'root_ticket_id', $ticket->rootTicketId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'ticket_kind', $ticket->ticketKind(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'department_id_ext', $ticket->departmentIdExt(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'required_role_id', $ticket->requiredRoleId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'skill_level', $ticket->skillLevel(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'billing_context_type', $ticket->billingContextType(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'agreement_id', $ticket->agreementId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'rate_plan_id', $ticket->ratePlanId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'is_billable_default', $ticket->isBillableDefault() ? 1 : 0, '%d');
+        $this->conditionallyAddColumn($data, $formats, 'sold_minutes', $ticket->soldMinutes(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'estimated_minutes', $ticket->estimatedMinutes(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'remaining_minutes', $ticket->remainingMinutes(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'is_rollup', $ticket->isRollup() ? 1 : 0, '%d');
+        $this->conditionallyAddColumn($data, $formats, 'lifecycle_owner', $ticket->lifecycleOwner(), '%s');
+
         if ($ticket->id()) {
             $this->wpdb->update($table, $data, ['id' => $ticket->id()], $formats, ['%d']);
         } else {
@@ -172,7 +193,27 @@ class SqlTicketRepository implements TicketRepository
             isset($row->category) ? (string) $row->category : null,
             isset($row->subcategory) ? (string) $row->subcategory : null,
             isset($row->intake_source) ? (string) $row->intake_source : null,
-            isset($row->contact_id) ? (int) $row->contact_id : null
+            isset($row->contact_id) ? (int) $row->contact_id : null,
+            // Backbone fields (C1)
+            isset($row->primary_container) ? (string) $row->primary_container : 'support',
+            isset($row->project_id) && $row->project_id ? (int) $row->project_id : null,
+            isset($row->quote_id) && $row->quote_id ? (int) $row->quote_id : null,
+            isset($row->phase_id) && $row->phase_id ? (int) $row->phase_id : null,
+            isset($row->parent_ticket_id) && $row->parent_ticket_id ? (int) $row->parent_ticket_id : null,
+            isset($row->root_ticket_id) && $row->root_ticket_id ? (int) $row->root_ticket_id : null,
+            isset($row->ticket_kind) ? (string) $row->ticket_kind : 'work',
+            isset($row->department_id_ext) && $row->department_id_ext ? (int) $row->department_id_ext : null,
+            isset($row->required_role_id) && $row->required_role_id ? (int) $row->required_role_id : null,
+            isset($row->skill_level) ? (string) $row->skill_level : null,
+            isset($row->billing_context_type) ? (string) $row->billing_context_type : 'adhoc',
+            isset($row->agreement_id) && $row->agreement_id ? (int) $row->agreement_id : null,
+            isset($row->rate_plan_id) && $row->rate_plan_id ? (int) $row->rate_plan_id : null,
+            isset($row->is_billable_default) ? (bool) $row->is_billable_default : true,
+            isset($row->sold_minutes) && $row->sold_minutes !== null ? (int) $row->sold_minutes : null,
+            isset($row->estimated_minutes) && $row->estimated_minutes !== null ? (int) $row->estimated_minutes : null,
+            isset($row->remaining_minutes) && $row->remaining_minutes !== null ? (int) $row->remaining_minutes : null,
+            isset($row->is_rollup) ? (bool) $row->is_rollup : false,
+            isset($row->lifecycle_owner) ? (string) $row->lifecycle_owner : 'support'
         );
     }
 

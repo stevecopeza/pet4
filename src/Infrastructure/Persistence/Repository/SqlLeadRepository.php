@@ -71,6 +71,18 @@ class SqlLeadRepository implements LeadRepository
         return array_map([$this, 'hydrate'], $rows);
     }
 
+    public function countActive(): int
+    {
+        $table = $this->wpdb->prefix . 'pet_leads';
+        return (int) $this->wpdb->get_var(
+            $this->wpdb->prepare(
+                "SELECT COUNT(*) FROM $table WHERE status IN (%s, %s)",
+                'new',
+                'qualified'
+            )
+        );
+    }
+
     public function delete(int $id): void
     {
         $table = $this->wpdb->prefix . 'pet_leads';

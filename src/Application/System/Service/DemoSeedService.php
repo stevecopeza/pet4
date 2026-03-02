@@ -22,6 +22,7 @@ final class DemoSeedService
         $now = new \DateTimeImmutable();
         $recentDate = $now->format('Y-m-d H:i:s');
 
+        $summary['feature_flags'] = $this->seedFeatureFlags($seedRunId);
         $summary['employees'] = $this->seedEmployees($seedRunId, $seedProfile, $recentDate);
         $summary['customers_sites_contacts'] = $this->seedCustomersSitesContacts($seedRunId, $seedProfile, $recentDate);
         $summary['teams'] = $this->seedTeams($seedRunId, $seedProfile, $recentDate);
@@ -30,12 +31,17 @@ final class DemoSeedService
         $summary['leave'] = $this->seedLeave($seedRunId, $seedProfile, $recentDate);
         $summary['catalog'] = $this->seedCatalog($seedRunId, $seedProfile, $recentDate);
         $summary['commercial'] = $this->seedCommercial($seedRunId, $seedProfile, $recentDate);
+        $summary['leads'] = $this->seedLeads($seedRunId, $seedProfile, $recentDate);
         $summary['delivery'] = $this->seedDelivery($seedRunId, $seedProfile, $recentDate);
         $summary['support'] = $this->seedSupport($seedRunId, $seedProfile, $recentDate);
+        $summary['backbone_tickets'] = $this->seedBackboneTickets($seedRunId, $seedProfile, $recentDate);
         $summary['work'] = $this->seedWorkOrchestration($seedRunId, $seedProfile, $recentDate);
         $summary['time'] = $this->seedTimeEntries($seedRunId, $seedProfile, $recentDate);
         $summary['knowledge'] = $this->seedKnowledge($seedRunId, $seedProfile, $recentDate);
         $summary['feed'] = $this->seedFeed($seedRunId, $seedProfile, $recentDate);
+        $summary['conversations'] = $this->seedConversations($seedRunId, $seedProfile, $recentDate);
+        $summary['project_tasks'] = $this->seedProjectTasks($seedRunId, $seedProfile, $recentDate);
+        $summary['project_enrichment'] = $this->seedProjectEnrichment($seedRunId, $seedProfile, $recentDate);
         $summary['billing'] = $this->seedBilling($seedRunId, $seedProfile, $recentDate);
         $summary['event_backbone'] = $this->seedEventBackboneExpectations($seedRunId, $seedProfile, $recentDate);
 
@@ -100,18 +106,16 @@ final class DemoSeedService
         $qm = $this->wpdb->prefix . 'pet_quote_milestones';
         $qci = $this->wpdb->prefix . 'pet_quote_catalog_items';
         $qrs = $this->wpdb->prefix . 'pet_quote_recurring_services';
-        $quoteIds = $this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $quotes WHERE title IN (%s,%s,%s,%s)", [
-            'Q1 Website Implementation & Advisory',
-            'Q2 Website Implementation',
-            'Q3 Advisory Retainer',
-            'Q4 Catalog Items'
-        ]));
+        $quoteIds = $this->wpdb->get_col("SELECT id FROM $quotes");
         foreach ($quoteIds as $qid) {
             $this->registryAdd($seedRunId, $quotes, (string)$qid);
             foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qc WHERE quote_id = %d", [(int)$qid])) as $id) $this->registryAdd($seedRunId, $qc, (string)$id);
-            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qm WHERE quote_id = %d", [(int)$qid])) as $id) $this->registryAdd($seedRunId, $qm, (string)$id);
-            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qci WHERE quote_id = %d", [(int)$qid])) as $id) $this->registryAdd($seedRunId, $qci, (string)$id);
-            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qrs WHERE quote_id = %d", [(int)$qid])) as $id) $this->registryAdd($seedRunId, $qrs, (string)$id);
+            $compIds = $this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qc WHERE quote_id = %d", [(int)$qid]));
+            foreach ($compIds as $cid) {
+                foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qm WHERE component_id = %d", [(int)$cid])) as $id) $this->registryAdd($seedRunId, $qm, (string)$id);
+                foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qci WHERE component_id = %d", [(int)$cid])) as $id) $this->registryAdd($seedRunId, $qci, (string)$id);
+                foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $qrs WHERE component_id = %d", [(int)$cid])) as $id) $this->registryAdd($seedRunId, $qrs, (string)$id);
+            }
         }
 
         // Contract, baseline, baseline components
@@ -139,16 +143,12 @@ final class DemoSeedService
         }
 
         // SLA snapshot, tickets, clock state
-        $cust = $this->wpdb->prefix . 'pet_customers';
-        $rpmId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $cust WHERE name=%s", 'RPM Resources (Pty) Ltd'));
-        if ($rpmId) {
-            $tickets = $this->wpdb->prefix . 'pet_tickets';
-            $clocks = $this->wpdb->prefix . 'pet_sla_clock_state';
-            $tIds = $this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $tickets WHERE customer_id = %d AND opened_at = %s", [$rpmId, $seededAt]));
-            foreach ($tIds as $tid) {
-                $this->registryAdd($seedRunId, $tickets, (string)$tid);
-                foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $clocks WHERE ticket_id = %d", [(int)$tid])) as $id) $this->registryAdd($seedRunId, $clocks, (string)$id);
-            }
+        $tickets = $this->wpdb->prefix . 'pet_tickets';
+        $clocks = $this->wpdb->prefix . 'pet_sla_clock_state';
+        $tIds = $this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $tickets WHERE opened_at = %s", [$seededAt]));
+        foreach ($tIds as $tid) {
+            $this->registryAdd($seedRunId, $tickets, (string)$tid);
+            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $clocks WHERE ticket_id = %d", [(int)$tid])) as $id) $this->registryAdd($seedRunId, $clocks, (string)$id);
         }
 
         // Work items and department queues
@@ -188,11 +188,46 @@ final class DemoSeedService
         }
     }
 
+    private function seedFeatureFlags(string $seedRunId): array
+    {
+        $table = $this->wpdb->prefix . 'pet_settings';
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+        $flags = [
+            'pet_helpdesk_enabled' => 'Enable the helpdesk / support ticket system',
+            'pet_helpdesk_shortcode_enabled' => 'Enable helpdesk shortcodes for front-end ticket portal',
+            'pet_sla_scheduler_enabled' => 'Enable the SLA clock and automation scheduler',
+            'pet_work_projection_enabled' => 'Enable work item projection and priority engine input',
+            'pet_queue_visibility_enabled' => 'Enable department queue visibility endpoints',
+            'pet_priority_engine_enabled' => 'Enable automatic priority scoring on work items',
+            'pet_escalation_engine_enabled' => 'Enable automatic escalation when SLA thresholds are breached',
+            'pet_advisory_enabled' => 'Enable advisory signals on work items',
+            'pet_advisory_reports_enabled' => 'Enable advisory report generation',
+            'pet_resilience_indicators_enabled' => 'Enable resilience / utilization indicators',
+        ];
+        $count = 0;
+        foreach ($flags as $key => $desc) {
+            $existing = $this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT setting_key FROM $table WHERE setting_key = %s", $key
+            ));
+            if (!$existing) {
+                $this->wpdb->insert($table, [
+                    'setting_key' => $key,
+                    'setting_value' => '1',
+                    'setting_type' => 'boolean',
+                    'description' => $desc,
+                    'updated_at' => $now,
+                ]);
+                $count++;
+            }
+        }
+        return ['enabled' => $count, 'total_flags' => count($flags)];
+    }
+
     private function seedEmployees(string $seedRunId, string $seedProfile, string $seededAt): array
     {
         $t = $this->wpdb->prefix . 'pet_employees';
         $existing = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $t");
-        if ($existing >= 6) return ['count' => $existing, 'skipped' => true];
+        if ($existing >= 8) return ['count' => $existing, 'skipped' => true];
         $rows = [
             ['first_name' => 'Steve', 'last_name' => 'Admin', 'email' => 'steve@example.com'],
             ['first_name' => 'Mia', 'last_name' => 'Manager', 'email' => 'mia@example.com'],
@@ -200,10 +235,38 @@ final class DemoSeedService
             ['first_name' => 'Ava', 'last_name' => 'Consultant', 'email' => 'ava@example.com'],
             ['first_name' => 'Noah', 'last_name' => 'Support', 'email' => 'noah@example.com'],
             ['first_name' => 'Zoe', 'last_name' => 'Finance', 'email' => 'zoe@example.com'],
+            ['first_name' => 'Ethan', 'last_name' => 'DevOps', 'email' => 'ethan@example.com'],
+            ['first_name' => 'Isabella', 'last_name' => 'Analyst', 'email' => 'isabella@example.com'],
         ];
         foreach ($rows as $r) {
+            // Create or find a WordPress user for this employee
+            $wpUserId = 0;
+            if (function_exists('email_exists') && function_exists('wp_insert_user')) {
+                $existingUserId = email_exists($r['email']);
+                if ($existingUserId) {
+                    $wpUserId = (int)$existingUserId;
+                } else {
+                    $login = strtolower($r['first_name']) . '.' . strtolower(str_replace(' ', '', $r['last_name']));
+                    // Ensure login is unique
+                    if (username_exists($login)) {
+                        $login .= '_' . wp_rand(100, 999);
+                    }
+                    $userId = wp_insert_user([
+                        'user_login'   => $login,
+                        'user_email'   => $r['email'],
+                        'display_name' => $r['first_name'] . ' ' . $r['last_name'],
+                        'first_name'   => $r['first_name'],
+                        'last_name'    => $r['last_name'],
+                        'user_pass'    => wp_generate_password(16, true, true),
+                        'role'         => 'editor',
+                    ]);
+                    if (!is_wp_error($userId)) {
+                        $wpUserId = (int)$userId;
+                    }
+                }
+            }
             $this->wpdb->insert($t, [
-                'wp_user_id' => 0,
+                'wp_user_id' => $wpUserId,
                 'first_name' => $r['first_name'],
                 'last_name' => $r['last_name'],
                 'email' => $r['email'],
@@ -219,10 +282,10 @@ final class DemoSeedService
         $c = $this->wpdb->prefix . 'pet_customers';
         $s = $this->wpdb->prefix . 'pet_sites';
         $p = $this->wpdb->prefix . 'pet_contacts';
-        $this->wpdb->insert($c, ['name' => 'RPM Resources (Pty) Ltd', 'contact_email' => 'info@rpm.example', 'created_at' => $seededAt]);
+        $this->wpdb->insert($c, ['name' => 'RPM Resources (Pty) Ltd', 'contact_email' => 'info@rpm.example', 'malleable_data' => json_encode(['logo_url' => 'https://ui-avatars.com/api/?name=RPM&background=1a56db&color=fff&size=64&bold=true&length=3', 'brand_color' => '#1a56db']), 'created_at' => $seededAt]);
         $rpmId = (int)$this->wpdb->insert_id;
         $this->registryAdd($seedRunId, $c, (string)$rpmId);
-        $this->wpdb->insert($c, ['name' => 'Acme Manufacturing SA (Pty) Ltd', 'contact_email' => 'info@acme.example', 'created_at' => $seededAt]);
+        $this->wpdb->insert($c, ['name' => 'Acme Manufacturing SA (Pty) Ltd', 'contact_email' => 'info@acme.example', 'malleable_data' => json_encode(['logo_url' => 'https://ui-avatars.com/api/?name=AM&background=dc3545&color=fff&size=64&bold=true', 'brand_color' => '#dc3545']), 'created_at' => $seededAt]);
         $acmeId = (int)$this->wpdb->insert_id;
         $this->registryAdd($seedRunId, $c, (string)$acmeId);
         $this->wpdb->insert($s, ['customer_id' => $rpmId, 'name' => 'RPM Cape Town', 'created_at' => $seededAt]);
@@ -239,7 +302,30 @@ final class DemoSeedService
         $this->registryAdd($seedRunId, $p, (string)$this->wpdb->insert_id);
         $this->wpdb->insert($p, ['customer_id' => $acmeId, 'first_name' => 'David', 'last_name' => 'Naidoo', 'email' => 'david@acme.example', 'created_at' => $seededAt]);
         $this->registryAdd($seedRunId, $p, (string)$this->wpdb->insert_id);
-        return ['customers' => 2, 'sites' => 3, 'contacts' => 4];
+
+        // Nexus Startup Labs
+        $this->wpdb->insert($c, ['name' => 'Nexus Startup Labs', 'contact_email' => 'hello@nexuslabs.example', 'malleable_data' => json_encode(['logo_url' => 'https://ui-avatars.com/api/?name=NL&background=28a745&color=fff&size=64&bold=true', 'brand_color' => '#28a745']), 'created_at' => $seededAt]);
+        $nexusId = (int)$this->wpdb->insert_id;
+        $this->registryAdd($seedRunId, $c, (string)$nexusId);
+        $this->wpdb->insert($s, ['customer_id' => $nexusId, 'name' => 'Nexus Cape Town', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $s, (string)$this->wpdb->insert_id);
+        $this->wpdb->insert($p, ['customer_id' => $nexusId, 'first_name' => 'Tariq', 'last_name' => 'Hendricks', 'email' => 'tariq@nexuslabs.example', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $p, (string)$this->wpdb->insert_id);
+        $this->wpdb->insert($p, ['customer_id' => $nexusId, 'first_name' => 'Lisa', 'last_name' => 'van Wyk', 'email' => 'lisa@nexuslabs.example', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $p, (string)$this->wpdb->insert_id);
+
+        // Government Digital Services
+        $this->wpdb->insert($c, ['name' => 'Government Digital Services', 'contact_email' => 'procurement@govdigital.example', 'malleable_data' => json_encode(['logo_url' => 'https://ui-avatars.com/api/?name=GDS&background=6f42c1&color=fff&size=64&bold=true&length=3', 'brand_color' => '#6f42c1']), 'created_at' => $seededAt]);
+        $govId = (int)$this->wpdb->insert_id;
+        $this->registryAdd($seedRunId, $c, (string)$govId);
+        $this->wpdb->insert($s, ['customer_id' => $govId, 'name' => 'GDS Pretoria HQ', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $s, (string)$this->wpdb->insert_id);
+        $this->wpdb->insert($s, ['customer_id' => $govId, 'name' => 'GDS Regional Office', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $s, (string)$this->wpdb->insert_id);
+        $this->wpdb->insert($p, ['customer_id' => $govId, 'first_name' => 'Thabo', 'last_name' => 'Dlamini', 'email' => 'thabo@govdigital.example', 'created_at' => $seededAt]);
+        $this->registryAdd($seedRunId, $p, (string)$this->wpdb->insert_id);
+
+        return ['customers' => 4, 'sites' => 6, 'contacts' => 7];
     }
 
     private function seedTeams(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -576,6 +662,12 @@ final class DemoSeedService
             new \Pet\Domain\Commercial\Entity\CatalogItem('Security Plugin', 90.0, 30.0, 'product', 'PROD-200', 'Security plugin license', 'Licenses', []),
             new \Pet\Domain\Commercial\Entity\CatalogItem('Governance Review', 200.0, 120.0, 'service', 'ADVIS-001', 'Governance review session', 'Advisory', []),
             new \Pet\Domain\Commercial\Entity\CatalogItem('SLA Design Session', 220.0, 140.0, 'service', 'ADVIS-002', 'SLA design workshop', 'Advisory', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('DevOps Hour', 195.0, 125.0, 'service', 'SERV-005', 'DevOps engineering and automation', 'Services', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('BA Consulting Hour', 170.0, 105.0, 'service', 'SERV-006', 'Business analysis and requirements', 'Services', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('Emergency Support Hour', 280.0, 150.0, 'service', 'SERV-007', 'After-hours emergency support (1.5x)', 'Services', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('Managed Backup Service', 120.0, 45.0, 'service', 'RECUR-001', 'Monthly managed backup and DR', 'Managed Services', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('SSL Certificate', 25.0, 10.0, 'product', 'PROD-300', 'Annual wildcard SSL certificate', 'Licenses', []),
+            new \Pet\Domain\Commercial\Entity\CatalogItem('Cloud Migration Assessment', 2500.0, 1400.0, 'service', 'SERV-008', 'Full cloud readiness assessment', 'Advisory', []),
         ];
         foreach ($items as $it) {
             $repo->save($it);
@@ -741,7 +833,7 @@ final class DemoSeedService
             $soldValue = $q1 ? $q1->totalValue() : 0.0;
             $createProject->handle(new \Pet\Application\Delivery\Command\CreateProjectCommand(
                 $rpmId,
-                'Project for Quote #' . $q1Id,
+                'RPM Website Implementation & Advisory',
                 0.0,
                 $q1Id,
                 $soldValue,
@@ -857,13 +949,296 @@ final class DemoSeedService
             $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q4Id));
             $acceptQuote->handle(new \Pet\Application\Commercial\Command\AcceptQuoteCommand($q4Id));
         }
+        // Project for Q4 (Acme Catalog Services)
+        $projQ4Check = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM {$this->wpdb->prefix}pet_projects WHERE source_quote_id = %d LIMIT 1", $q4Id));
+        if ($projQ4Check <= 0) {
+            $createProject = $c->get(\Pet\Application\Delivery\Command\CreateProjectHandler::class);
+            $q4e = $quoteRepo->findById($q4Id);
+            $createProject->handle(new \Pet\Application\Delivery\Command\CreateProjectCommand(
+                $acmeId, 'Acme Catalog Services Delivery', 0.0, $q4Id, $q4e ? $q4e->totalValue() : 0.0, null, null, []
+            ));
+        }
 
-        return ['quotes' => 4];
+        // Resolve new customer IDs
+        $nexusId = (int)$this->wpdb->get_var("SELECT id FROM {$this->wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
+        $govCustId = (int)$this->wpdb->get_var("SELECT id FROM {$this->wpdb->prefix}pet_customers WHERE name = 'Government Digital Services' LIMIT 1");
+        $supportRoleId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name=%s LIMIT 1", 'Support Technician'));
+        if ($supportRoleId <= 0) $supportRoleId = $consultRoleId;
+
+        // Resolve new catalog item IDs
+        $devopsId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'SERV-005'));
+        $baId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'SERV-006'));
+        $backupId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'RECUR-001'));
+        $sslId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'PROD-300'));
+        $cloudAssessId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'SERV-008'));
+        $emergId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'SERV-007'));
+        $supportHrId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $catTable WHERE sku = %s LIMIT 1", 'SERV-002'));
+
+        // Q5: Nexus Cloud Migration (Implementation + Recurring) — accepted → project
+        $q5Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q5 Cloud Migration & Managed Services'));
+        $q5New = $q5Existing <= 0;
+        $q5Id = $q5Existing > 0 ? $q5Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+            $nexusId, 'Q5 Cloud Migration & Managed Services', 'Implementation with ongoing managed services for cloud-first startup', 'USD'
+        ));
+        if ($q5New) {
+            $this->registryAdd($seedRunId, $quotesTable, (string)$q5Id);
+            $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q5Id, 'implementation', [
+                'section' => 'Delivery',
+                'description' => 'Cloud Migration',
+                'milestones' => [
+                    [
+                        'description' => 'Assessment & Planning',
+                        'tasks' => [
+                            ['description' => 'Cloud Readiness Assessment', 'duration_hours' => 16, 'complexity' => 3, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                            ['description' => 'Architecture Design', 'duration_hours' => 12, 'complexity' => 4, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                            ['description' => 'Migration Runbook', 'duration_hours' => 8, 'complexity' => 2, 'sell_rate' => 170.0, 'internal_cost' => 105.0],
+                        ]
+                    ],
+                    [
+                        'description' => 'Migration Execution',
+                        'tasks' => [
+                            ['description' => 'Infrastructure Provisioning', 'duration_hours' => 20, 'complexity' => 4, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                            ['description' => 'Data Migration', 'duration_hours' => 16, 'complexity' => 4, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                            ['description' => 'Application Deployment', 'duration_hours' => 12, 'complexity' => 3, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                        ]
+                    ],
+                    [
+                        'description' => 'Validation & Handover',
+                        'tasks' => [
+                            ['description' => 'Performance Testing', 'duration_hours' => 8, 'complexity' => 3, 'sell_rate' => 195.0, 'internal_cost' => 125.0],
+                            ['description' => 'Security Audit', 'duration_hours' => 6, 'complexity' => 3, 'sell_rate' => 200.0, 'internal_cost' => 130.0],
+                            ['description' => 'Handover & Training', 'duration_hours' => 8, 'complexity' => 2, 'sell_rate' => 170.0, 'internal_cost' => 105.0],
+                        ]
+                    ],
+                ]
+            ]));
+            $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q5Id, 'recurring', [
+                'section' => 'Managed Services',
+                'description' => 'Ongoing Cloud Management',
+                'service_name' => 'Managed Cloud & Backup',
+                'cadence' => 'monthly',
+                'term_months' => 24,
+                'renewal_model' => 'auto_renew',
+                'sell_price_per_period' => 2200.0,
+                'internal_cost_per_period' => 1100.0,
+                'sla_snapshot' => ['name' => 'Premium', 'response_minutes' => 60, 'resolution_minutes' => 480]
+            ]));
+        }
+        $q5e = $quoteRepo->findById($q5Id);
+        if ($q5e && !$q5e->state()->isTerminal()) {
+            $q5Total = $q5e->totalValue();
+            $setPayment->handle(new \Pet\Application\Commercial\Command\SetPaymentScheduleCommand($q5Id, [
+                ['title' => 'Upfront 30%', 'amount' => round($q5Total * 0.3, 2), 'dueDate' => null],
+                ['title' => 'Mid-project 40%', 'amount' => round($q5Total * 0.4, 2), 'dueDate' => null],
+                ['title' => 'Completion 30%', 'amount' => round($q5Total * 0.3, 2), 'dueDate' => null],
+            ]));
+        }
+        $accepted5 = $this->wpdb->get_var($this->wpdb->prepare("SELECT accepted_at FROM $quotesTable WHERE id = %d", $q5Id));
+        if (!$accepted5) {
+            $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q5Id));
+            $acceptQuote->handle(new \Pet\Application\Commercial\Command\AcceptQuoteCommand($q5Id));
+        }
+        $projQ5Check = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM {$this->wpdb->prefix}pet_projects WHERE source_quote_id = %d LIMIT 1", $q5Id));
+        if ($projQ5Check <= 0) {
+            $createProject = $c->get(\Pet\Application\Delivery\Command\CreateProjectHandler::class);
+            $q5e = $quoteRepo->findById($q5Id);
+            $createProject->handle(new \Pet\Application\Delivery\Command\CreateProjectCommand(
+                $nexusId, 'Nexus Cloud Migration & Managed Services', 0.0, $q5Id, $q5e ? $q5e->totalValue() : 0.0, null, null, []
+            ));
+        }
+
+        // Q6: Government IT Assessment (Catalog only) — draft
+        $q6Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q6 IT Infrastructure Assessment'));
+        $q6New = $q6Existing <= 0;
+        $q6Id = $q6Existing > 0 ? $q6Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+            $govCustId, 'Q6 IT Infrastructure Assessment', 'Government procurement — catalog-based assessment and advisory package', 'USD'
+        ));
+        if ($q6New) {
+            $this->registryAdd($seedRunId, $quotesTable, (string)$q6Id);
+            $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q6Id, 'catalog', [
+                'section' => 'Advisory',
+                'description' => 'Assessment Package',
+                'items' => [
+                    ['description' => 'Cloud Migration Assessment', 'quantity' => 1, 'unit_sell_price' => 2500.0, 'unit_internal_cost' => 1400.0, 'catalog_item_id' => $cloudAssessId, 'sku' => 'SERV-008', 'type' => 'service', 'role_id' => $consultRoleId],
+                    ['description' => 'Governance Review Sessions', 'quantity' => 6, 'unit_sell_price' => 200.0, 'unit_internal_cost' => 120.0, 'catalog_item_id' => $govId, 'sku' => 'ADVIS-001', 'type' => 'service', 'role_id' => $consultRoleId],
+                    ['description' => 'BA Consulting', 'quantity' => 10, 'unit_sell_price' => 170.0, 'unit_internal_cost' => 105.0, 'catalog_item_id' => $baId, 'sku' => 'SERV-006', 'type' => 'service', 'role_id' => $consultRoleId],
+                    ['description' => 'SSL Certificates', 'quantity' => 4, 'unit_sell_price' => 25.0, 'unit_internal_cost' => 10.0, 'catalog_item_id' => $sslId, 'sku' => 'PROD-300', 'type' => 'product', 'role_id' => null],
+                ]
+            ]));
+        }
+
+        // Q7: RPM Annual Support Renewal (Recurring + Catalog) — sent
+        $q7Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q7 Annual Support Renewal'));
+        $q7New = $q7Existing <= 0;
+        $q7Id = $q7Existing > 0 ? $q7Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+            $rpmId, 'Q7 Annual Support Renewal', 'Annual renewal for support retainer with supplementary catalog items', 'USD'
+        ));
+        if ($q7New) {
+            $this->registryAdd($seedRunId, $quotesTable, (string)$q7Id);
+            $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q7Id, 'recurring', [
+                'section' => 'Support',
+                'description' => 'Premium Support Retainer',
+                'service_name' => 'Premium Support',
+                'cadence' => 'monthly',
+                'term_months' => 12,
+                'renewal_model' => 'manual_review',
+                'sell_price_per_period' => 3200.0,
+                'internal_cost_per_period' => 1800.0,
+                'sla_snapshot' => ['name' => 'Premium', 'response_minutes' => 60, 'resolution_minutes' => 480]
+            ]));
+            $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q7Id, 'catalog', [
+                'section' => 'Supplementary',
+                'description' => 'Add-on Services',
+                'items' => [
+                    ['description' => 'Emergency Support Hours', 'quantity' => 10, 'unit_sell_price' => 280.0, 'unit_internal_cost' => 150.0, 'catalog_item_id' => $emergId, 'sku' => 'SERV-007', 'type' => 'service', 'role_id' => $supportRoleId],
+                    ['description' => 'Managed Backup', 'quantity' => 12, 'unit_sell_price' => 120.0, 'unit_internal_cost' => 45.0, 'catalog_item_id' => $backupId, 'sku' => 'RECUR-001', 'type' => 'service', 'role_id' => $supportRoleId],
+                    ['description' => 'Support Hours', 'quantity' => 20, 'unit_sell_price' => 150.0, 'unit_internal_cost' => 90.0, 'catalog_item_id' => $supportHrId, 'sku' => 'SERV-002', 'type' => 'service', 'role_id' => $supportRoleId],
+                ]
+            ]));
+        }
+        $q7e = $quoteRepo->findById($q7Id);
+        if ($q7e && !$q7e->state()->isTerminal()) {
+            $q7Total = $q7e->totalValue();
+            $setPayment->handle(new \Pet\Application\Commercial\Command\SetPaymentScheduleCommand($q7Id, [
+                ['title' => 'Monthly in arrears', 'amount' => round($q7Total, 2), 'dueDate' => null],
+            ]));
+        }
+        $q7e = $quoteRepo->findById($q7Id);
+        if ($q7e && $q7e->state()->toString() === 'draft') {
+            $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q7Id));
+        }
+
+        $totalQuotes = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $quotesTable");
+        return ['quotes' => $totalQuotes];
+    }
+
+    private function seedLeads(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $leadsTable = $wpdb->prefix . 'pet_leads';
+        $quotesTable = $wpdb->prefix . 'pet_quotes';
+
+        // Skip if leads already exist
+        $existingCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $leadsTable");
+        if ($existingCount > 0) {
+            return ['leads' => $existingCount, 'skipped' => true];
+        }
+
+        $rpmId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'RPM Resources (Pty) Ltd' LIMIT 1");
+        $acmeId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Acme Manufacturing SA (Pty) Ltd' LIMIT 1");
+        $nexusId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
+        $govId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Government Digital Services' LIMIT 1");
+
+        $q1Id = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q1 Website Implementation & Advisory'));
+        $q4Id = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q4 Catalog Services'));
+
+        $now = new \DateTimeImmutable();
+
+        $leads = [
+            // L1: Converted → linked to Q1 (RPM)
+            [
+                'customer_id' => $rpmId,
+                'subject' => 'Website Modernisation Enquiry',
+                'description' => 'RPM interested in full website rebuild with advisory retainer',
+                'status' => 'converted',
+                'source' => 'referral',
+                'estimated_value' => 15000.00,
+                'created_at' => $now->modify('-30 days')->format('Y-m-d H:i:s'),
+                'converted_at' => $now->modify('-25 days')->format('Y-m-d H:i:s'),
+            ],
+            // L2: Converted → linked to Q4 (Acme)
+            [
+                'customer_id' => $acmeId,
+                'subject' => 'Training & Consulting Package',
+                'description' => 'Acme needs onsite training and remote consulting hours',
+                'status' => 'converted',
+                'source' => 'inbound',
+                'estimated_value' => 2000.00,
+                'created_at' => $now->modify('-20 days')->format('Y-m-d H:i:s'),
+                'converted_at' => $now->modify('-15 days')->format('Y-m-d H:i:s'),
+            ],
+            // L3: Qualified (Nexus) — active, not yet converted
+            [
+                'customer_id' => $nexusId,
+                'subject' => 'Kubernetes Migration Assessment',
+                'description' => 'Nexus wants to migrate from Docker Compose to Kubernetes',
+                'status' => 'qualified',
+                'source' => 'outbound',
+                'estimated_value' => 8500.00,
+                'created_at' => $now->modify('-10 days')->format('Y-m-d H:i:s'),
+                'converted_at' => null,
+            ],
+            // L4: New (Government) — fresh inbound
+            [
+                'customer_id' => $govId,
+                'subject' => 'Security Audit RFP',
+                'description' => 'Government department enquiry about security audit services',
+                'status' => 'new',
+                'source' => 'tender',
+                'estimated_value' => 12000.00,
+                'created_at' => $now->modify('-3 days')->format('Y-m-d H:i:s'),
+                'converted_at' => null,
+            ],
+            // L5: New (RPM) — another enquiry, stale (>7d for attention card)
+            [
+                'customer_id' => $rpmId,
+                'subject' => 'Managed Backup Add-on',
+                'description' => 'RPM enquired about managed backup services',
+                'status' => 'new',
+                'source' => 'email',
+                'estimated_value' => 1500.00,
+                'created_at' => $now->modify('-12 days')->format('Y-m-d H:i:s'),
+                'converted_at' => null,
+            ],
+            // L6: Disqualified (Acme) — closed
+            [
+                'customer_id' => $acmeId,
+                'subject' => 'Budget Enquiry - On Hold',
+                'description' => 'Acme enquired but budget was not approved for this quarter',
+                'status' => 'disqualified',
+                'source' => 'inbound',
+                'estimated_value' => 3000.00,
+                'created_at' => $now->modify('-40 days')->format('Y-m-d H:i:s'),
+                'converted_at' => null,
+            ],
+        ];
+
+        $insertedCount = 0;
+        $leadIds = [];
+        foreach ($leads as $lead) {
+            $wpdb->insert($leadsTable, [
+                'customer_id' => $lead['customer_id'],
+                'subject' => $lead['subject'],
+                'description' => $lead['description'],
+                'status' => $lead['status'],
+                'source' => $lead['source'],
+                'estimated_value' => $lead['estimated_value'],
+                'malleable_schema_version' => 1,
+                'malleable_data' => $this->jsonMeta($seedRunId, $seedProfile, $seededAt),
+                'created_at' => $lead['created_at'],
+                'updated_at' => $lead['converted_at'] ?? $lead['created_at'],
+                'converted_at' => $lead['converted_at'],
+            ]);
+            $leadId = (int)$wpdb->insert_id;
+            $leadIds[] = $leadId;
+            $this->registryAdd($seedRunId, $leadsTable, (string)$leadId);
+            $insertedCount++;
+        }
+
+        // Link L1 → Q1 and L2 → Q4
+        if ($q1Id > 0 && isset($leadIds[0])) {
+            $wpdb->update($quotesTable, ['lead_id' => $leadIds[0]], ['id' => $q1Id]);
+        }
+        if ($q4Id > 0 && isset($leadIds[1])) {
+            $wpdb->update($quotesTable, ['lead_id' => $leadIds[1]], ['id' => $q4Id]);
+        }
+
+        return ['leads' => $insertedCount];
     }
 
     private function seedDelivery(string $seedRunId, string $seedProfile, string $seededAt): array
     {
-        global $wpdb;
+        $wpdb = $this->wpdb;
         $projectsTable = $wpdb->prefix . 'pet_projects';
         $projectsCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $projectsTable WHERE source_quote_id IS NOT NULL");
         return ['projects' => $projectsCount];
@@ -877,7 +1252,7 @@ final class DemoSeedService
         /** @var \Pet\Domain\Calendar\Repository\CalendarRepository $calRepo */
         $calRepo = $c->get(\Pet\Domain\Calendar\Repository\CalendarRepository::class);
         $createTicket = $c->get(\Pet\Application\Support\Command\CreateTicketHandler::class);
-        global $wpdb;
+        $wpdb = $this->wpdb;
         $projectsTable = $wpdb->prefix . 'pet_projects';
         $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $clockTable = $wpdb->prefix . 'pet_sla_clock_state';
@@ -897,33 +1272,57 @@ final class DemoSeedService
         $slaRepo->save($sla);
         $snapshot = $sla->createSnapshot((int)$projectRow->id);
         $snapshotId = $slaRepo->saveSnapshot($snapshot);
-        $subjects = [
-            'Login issue',
-            'Email not syncing',
-            'Server alert',
-            'VPN access',
-            'Printer offline',
-            'New user setup',
-            'Policy question'
+        // RPM tickets
+        $rpmSubjects = [
+            ['Login issue', 'critical'],
+            ['Email not syncing', 'high'],
+            ['Server alert', 'high'],
+            ['VPN access', 'medium'],
+            ['Printer offline', 'low'],
+            ['New user setup', 'medium'],
+            ['Policy question', 'low'],
         ];
-        foreach ($subjects as $s) {
+        foreach ($rpmSubjects as [$s, $pri]) {
             $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
-                $customerId,
-                null,
-                null,
-                $s,
-                'Auto-generated demo ticket',
-                'medium',
-                []
+                $customerId, null, null, $s, 'Auto-generated demo ticket for RPM Resources', $pri, []
             ));
+        }
+
+        // Acme tickets
+        $acmeCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Acme Manufacturing SA (Pty) Ltd' LIMIT 1");
+        if ($acmeCustId) {
+            $acmeSubjects = [
+                ['ERP module crashing on reports', 'critical'],
+                ['Slow network at Stellenbosch site', 'medium'],
+                ['License renewal query', 'low'],
+            ];
+            foreach ($acmeSubjects as [$s, $pri]) {
+                $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
+                    $acmeCustId, null, null, $s, 'Auto-generated demo ticket for Acme Manufacturing', $pri, []
+                ));
+            }
+        }
+
+        // Nexus tickets
+        $nexusCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
+        if ($nexusCustId) {
+            $nexusSubjects = [
+                ['AWS console access issue', 'high'],
+                ['CI/CD pipeline failure', 'critical'],
+                ['DNS propagation delay', 'medium'],
+            ];
+            foreach ($nexusSubjects as [$s, $pri]) {
+                $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
+                    $nexusCustId, null, null, $s, 'Auto-generated demo ticket for Nexus Labs', $pri, []
+                ));
+            }
         }
         $now = new \DateTimeImmutable();
         $responseDue = $now->modify('+' . $snapshot->responseTargetMinutes() . ' minutes')->format('Y-m-d H:i:s');
         $resolutionDue = $now->modify('+' . $snapshot->resolutionTargetMinutes() . ' minutes')->format('Y-m-d H:i:s');
-        $recentTickets = $wpdb->get_results($wpdb->prepare(
-            "SELECT id FROM $ticketsTable WHERE customer_id = %d ORDER BY id DESC LIMIT 7",
-            $customerId
-        ));
+        $recentTickets = $wpdb->get_results(
+            "SELECT id FROM $ticketsTable ORDER BY id DESC LIMIT 13"
+        );
         foreach ($recentTickets as $row) {
             $wpdb->update($ticketsTable, [
                 'sla_snapshot_id' => $snapshotId,
@@ -991,9 +1390,220 @@ final class DemoSeedService
             if ($breachedId) {
                 $wpdb->update($clockTable, ['breach_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')], ['ticket_id' => $breachedId]);
             }
+
+            // --- Ticket assignments: realistic mix of assigned / queued / unassigned ---
+            // Queue IDs use canonical string names matching frontend QUEUES constant
+            $empTable = $wpdb->prefix . 'pet_employees';
+            $liamId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Liam' LIMIT 1");
+            $noahId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Noah' LIMIT 1");
+            $ethanId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ethan' LIMIT 1");
+            $avaId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ava' LIMIT 1");
+
+            // Assign to employee + queue (most common: agent owns it within a queue)
+            foreach (array_slice($ticketIds, 0, 3) as $i => $tid) {
+                $owner = [$liamId, $noahId, $ethanId][$i % 3];
+                $wpdb->update($ticketsTable, [
+                    'owner_user_id' => $owner,
+                    'queue_id' => 'support',
+                ], ['id' => $tid]);
+            }
+            // Queue-only (in queue, unowned — waiting to be pulled)
+            foreach (array_slice($ticketIds, 3, 3) as $tid) {
+                $wpdb->update($ticketsTable, [
+                    'owner_user_id' => null,
+                    'queue_id' => 'support',
+                ], ['id' => $tid]);
+            }
+            // Assigned to Ava (consultant doing specialist investigation)
+            if (isset($ticketIds[6])) {
+                $wpdb->update($ticketsTable, [
+                    'owner_user_id' => $avaId,
+                    'queue_id' => 'support',
+                ], ['id' => $ticketIds[6]]);
+            }
+            // Remaining tickets (~6) left fully unassigned — demo shows "no assignment" state
         }
-        $ticketsCount = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $ticketsTable WHERE customer_id = %d", $customerId));
+        $ticketsCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $ticketsTable");
         return ['tickets' => $ticketsCount, 'sla' => 'ok'];
+    }
+
+    /**
+     * C4: Seed project and internal tickets using backbone fields.
+     * Creates WBS parent/child structure for project tickets and internal admin/R&D tickets.
+     */
+    private function seedBackboneTickets(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        // Get a project to attach tickets to
+        $project = $wpdb->get_row("SELECT id, customer_id FROM {$wpdb->prefix}pet_projects ORDER BY id ASC LIMIT 1");
+        if (!$project) {
+            return ['project_tickets' => 0, 'internal_tickets' => 0];
+        }
+        $projectId = (int)$project->id;
+        $customerId = (int)$project->customer_id;
+
+        // --- Project tickets with WBS (parent → children) ---
+        // Parent (rollup) ticket
+        $wpdb->insert($ticketsTable, [
+            'customer_id' => $customerId,
+            'subject' => 'Website Redesign — Full Delivery',
+            'description' => 'Rollup ticket for the full website redesign project scope.',
+            'status' => 'in_progress',
+            'priority' => 'high',
+            'primary_container' => 'project',
+            'lifecycle_owner' => 'project',
+            'project_id' => $projectId,
+            'ticket_kind' => 'deliverable',
+            'billing_context_type' => 'project',
+            'is_billable_default' => 1,
+            'is_rollup' => 1,
+            'estimated_minutes' => 2400,
+            'sold_minutes' => 2400,
+            'remaining_minutes' => 1200,
+            'created_at' => $now,
+            'opened_at' => $now,
+        ]);
+        $parentId = (int)$wpdb->insert_id;
+        $this->registryAdd($seedRunId, $ticketsTable, (string)$parentId);
+
+        // Update root_ticket_id to self
+        $wpdb->update($ticketsTable, ['root_ticket_id' => $parentId], ['id' => $parentId]);
+
+        // Child leaf tickets
+        $children = [
+            ['Discovery & Requirements', 'planned', 480, 480, 480, 'task'],
+            ['UI/UX Design', 'in_progress', 600, 600, 300, 'task'],
+            ['Frontend Development', 'planned', 720, 720, 720, 'task'],
+            ['Backend Integration', 'planned', 360, 360, 360, 'task'],
+            ['QA & Testing', 'planned', 240, 240, 240, 'task'],
+        ];
+        $childIds = [];
+        foreach ($children as [$subject, $status, $est, $sold, $remaining, $kind]) {
+            $wpdb->insert($ticketsTable, [
+                'customer_id' => $customerId,
+                'subject' => $subject,
+                'description' => "Project work package: $subject",
+                'status' => $status,
+                'priority' => 'medium',
+                'primary_container' => 'project',
+                'lifecycle_owner' => 'project',
+                'project_id' => $projectId,
+                'parent_ticket_id' => $parentId,
+                'root_ticket_id' => $parentId,
+                'ticket_kind' => $kind,
+                'billing_context_type' => 'project',
+                'is_billable_default' => 1,
+                'is_rollup' => 0,
+                'estimated_minutes' => $est,
+                'sold_minutes' => $sold,
+                'remaining_minutes' => $remaining,
+                'created_at' => $now,
+                'opened_at' => $now,
+            ]);
+            $childIds[] = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $ticketsTable, (string)$wpdb->insert_id);
+        }
+
+        // --- Internal tickets (no customer, no billing) ---
+        $internalTickets = [
+            ['Update internal wiki documentation', 'in_progress', 'admin'],
+            ['Quarterly security audit prep', 'planned', 'compliance'],
+            ['R&D: Evaluate new monitoring stack', 'in_progress', 'research'],
+            ['Office network switch upgrade', 'done', 'infrastructure'],
+        ];
+        $internalCount = 0;
+        foreach ($internalTickets as [$subject, $status, $kind]) {
+            $wpdb->insert($ticketsTable, [
+                'customer_id' => $customerId, // internal still needs a customer_id (NOT NULL)
+                'subject' => $subject,
+                'description' => "Internal task: $subject",
+                'status' => $status,
+                'priority' => 'low',
+                'primary_container' => 'internal',
+                'lifecycle_owner' => 'internal',
+                'ticket_kind' => $kind,
+                'billing_context_type' => 'internal',
+                'is_billable_default' => 0,
+                'is_rollup' => 0,
+                'created_at' => $now,
+                'opened_at' => $now,
+            ]);
+            $this->registryAdd($seedRunId, $ticketsTable, (string)$wpdb->insert_id);
+            $internalCount++;
+        }
+
+        // --- Assign backbone tickets ---
+        // Queue IDs use canonical string names matching frontend QUEUES constant
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $miaId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Mia' LIMIT 1");
+        $liamId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Liam' LIMIT 1");
+        $ethanId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ethan' LIMIT 1");
+        $steveId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Steve' LIMIT 1");
+
+        // Project parent — owned by Mia (PM) in Projects queue
+        $wpdb->update($ticketsTable, ['owner_user_id' => $miaId, 'queue_id' => 'projects'], ['id' => $parentId]);
+        // Project children — mix of assigned and queue-only
+        $projectAssignees = [$liamId, $ethanId, null, $liamId, null];
+        foreach ($childIds as $ci => $childId) {
+            $wpdb->update($ticketsTable, [
+                'owner_user_id' => $projectAssignees[$ci] ?? null,
+                'queue_id' => 'projects',
+            ], ['id' => $childId]);
+        }
+        // Internal tickets — assigned to Steve (admin) in Internal queue
+        $internalIds = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE primary_container = 'internal' AND created_at = '$now' ORDER BY id ASC");
+        foreach ($internalIds as $ii => $iid) {
+            $owner = ($ii % 2 === 0) ? $steveId : null; // half assigned, half queue-only
+            $wpdb->update($ticketsTable, [
+                'owner_user_id' => $owner,
+                'queue_id' => 'internal',
+            ], ['id' => (int)$iid]);
+        }
+
+        // --- Seed ticket_links: cross-context references ---
+        $linksTable = $wpdb->prefix . 'pet_ticket_links';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable) {
+            // Link project parent to the project entity
+            $wpdb->insert($linksTable, [
+                'ticket_id' => $parentId,
+                'link_type' => 'project',
+                'linked_id' => (string)$projectId,
+                'created_at' => $now,
+            ]);
+            $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
+            // Link a support ticket to the project (helpdesk assisting project)
+            $supportTicketForLink = (int)$wpdb->get_var("SELECT id FROM $ticketsTable WHERE primary_container = 'support' ORDER BY id ASC LIMIT 1");
+            if ($supportTicketForLink) {
+                $wpdb->insert($linksTable, [
+                    'ticket_id' => $supportTicketForLink,
+                    'link_type' => 'project',
+                    'linked_id' => (string)$projectId,
+                    'created_at' => $now,
+                ]);
+                $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
+            }
+            // Link a child ticket to the customer
+            if (!empty($childIds)) {
+                $wpdb->insert($linksTable, [
+                    'ticket_id' => $childIds[0],
+                    'link_type' => 'customer',
+                    'linked_id' => (string)$customerId,
+                    'created_at' => $now,
+                ]);
+                $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
+            }
+        }
+
+        return [
+            'project_tickets' => 1 + count($childIds), // parent + children
+            'internal_tickets' => $internalCount,
+            'ticket_links' => ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable)
+                ? (int)$wpdb->get_var("SELECT COUNT(*) FROM $linksTable")
+                : 0,
+        ];
     }
 
     private function seedWorkOrchestration(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -1003,30 +1613,93 @@ final class DemoSeedService
         $workRepo = $c->get(\Pet\Infrastructure\Persistence\Repository\SqlWorkItemRepository::class);
         /** @var \Pet\Infrastructure\Persistence\Repository\SqlDepartmentQueueRepository $queueRepo */
         $queueRepo = $c->get(\Pet\Infrastructure\Persistence\Repository\SqlDepartmentQueueRepository::class);
-        global $wpdb;
-        $tickets = $wpdb->get_results("SELECT id FROM {$wpdb->prefix}pet_tickets ORDER BY id DESC LIMIT 3");
-        $now = new \DateTimeImmutable();
-        foreach ($tickets as $t) {
-            $id = $this->uuid();
-            $item = \Pet\Domain\Work\Entity\WorkItem::create($id, 'ticket', (string)$t->id, 'support', 80.0, 'active', $now);
-            $workRepo->save($item);
-            $queueRepo->save(\Pet\Domain\Work\Entity\DepartmentQueue::enter($this->uuid(), 'support', $id));
-            $this->registryAdd($seedRunId, $wpdb->prefix . 'pet_work_items', $id);
-            $this->registryAdd($seedRunId, $wpdb->prefix . 'pet_department_queues', $id);
+        $wpdb = $this->wpdb;
+
+        // Get the current WP user ID for assignment.
+        // In CLI context (wp eval / WP-CLI) get_current_user_id() returns 0,
+        // so fall back to the wp_user_id of the first seeded employee (Steve Admin).
+        $currentUserId = get_current_user_id();
+        if ($currentUserId <= 0) {
+            $empTable = $wpdb->prefix . 'pet_employees';
+            $currentUserId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable ORDER BY id ASC LIMIT 1");
         }
+        $currentUserId = (string)$currentUserId;
+
+        // Create work items for ALL open tickets (not just 3)
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $tickets = $wpdb->get_results(
+            "SELECT id, status, priority, primary_container FROM $ticketsTable WHERE status NOT IN ('closed','resolved') ORDER BY id DESC"
+        );
+        $now = new \DateTimeImmutable();
         $wiTable = $wpdb->prefix . 'pet_work_items';
         $dqTable = $wpdb->prefix . 'pet_department_queues';
+
+        // SLA time remaining scenarios for demo variety
+        $slaScenarios = [-45, -12, 15, 30, 55, 120, 180, 240, 360, null];
+        $idx = 0;
+
+        // Map primary_container to department for work items
+        // Uses canonical queue names matching frontend QUEUES constant
+        $containerToDept = [
+            'support' => 'support',
+            'project' => 'projects',
+            'internal' => 'internal',
+        ];
+
+        foreach ($tickets as $t) {
+            $container = isset($t->primary_container) ? $t->primary_container : 'support';
+            $dept = $containerToDept[$container] ?? 'support';
+
+            // Check if work item already exists for this ticket (may be auto-created by WorkItemProjector)
+            $existingWi = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $wiTable WHERE source_type = 'ticket' AND source_id = %s LIMIT 1",
+                (string)$t->id
+            ));
+
+            if ($existingWi) {
+                $id = $existingWi;
+                // Update department if it was defaulted to 'support' by an earlier projector
+                $wpdb->update($wiTable, ['department_id' => $dept], ['id' => $id]);
+            } else {
+                $id = $this->uuid();
+                $priority = match ($t->priority) {
+                    'critical' => 95.0,
+                    'high' => 80.0,
+                    'medium' => 60.0,
+                    default => 40.0,
+                };
+                $item = \Pet\Domain\Work\Entity\WorkItem::create($id, 'ticket', (string)$t->id, $dept, $priority, 'active', $now);
+                $workRepo->save($item);
+                $queueRepo->save(\Pet\Domain\Work\Entity\DepartmentQueue::enter($this->uuid(), $dept, $id));
+                $this->registryAdd($seedRunId, $wiTable, $id);
+                $this->registryAdd($seedRunId, $dqTable, $id);
+            }
+
+            // Assign most tickets to current user so Support persona view is populated
+            $slaRemaining = $slaScenarios[$idx % count($slaScenarios)];
+            $assignedTo = ($idx < 5) ? $currentUserId : (($idx < 6) ? null : $currentUserId);
+
+            $updateData = [];
+            if ($assignedTo !== null && $assignedTo !== '' && $assignedTo !== '0') {
+                $updateData['assigned_user_id'] = $assignedTo;
+            }
+            if ($slaRemaining !== null) {
+                $updateData['sla_time_remaining_minutes'] = $slaRemaining;
+            }
+            if (!empty($updateData)) {
+                $wpdb->update($wiTable, $updateData, ['id' => $id]);
+            }
+
+            $idx++;
+        }
+
+        // Set escalation on the first item
         $oneItem = $wpdb->get_row("SELECT id FROM $wiTable ORDER BY created_at DESC LIMIT 1");
         if ($oneItem) {
             $wpdb->update($wiTable, ['escalation_level' => 1], ['id' => $oneItem->id]);
         }
-        $oneQueue = $wpdb->get_row("SELECT id, entered_queue_at FROM $dqTable ORDER BY entered_queue_at DESC LIMIT 1");
-        if ($oneQueue) {
-            $picked = (new \DateTimeImmutable($oneQueue->entered_queue_at))->modify('+30 minutes')->format('Y-m-d H:i:s');
-            $wpdb->update($dqTable, ['picked_up_at' => $picked], ['id' => $oneQueue->id]);
-        }
-        $items = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}pet_work_items");
-        $queues = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}pet_department_queues");
+        $items = (int)$wpdb->get_var("SELECT COUNT(*) FROM $wiTable");
+        $queues = (int)$wpdb->get_var("SELECT COUNT(*) FROM $dqTable");
         return ['work_items' => $items, 'queues' => $queues];
     }
 
@@ -1037,53 +1710,133 @@ final class DemoSeedService
         $log = $c->get(\Pet\Application\Time\Command\LogTimeHandler::class);
         /** @var \Pet\Application\Time\Command\SubmitTimeEntryHandler $submit */
         $submit = $c->get(\Pet\Application\Time\Command\SubmitTimeEntryHandler::class);
-        global $wpdb;
+        $wpdb = $this->wpdb;
         $employeesTable = $wpdb->prefix . 'pet_employees';
         $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $entriesTable = $wpdb->prefix . 'pet_time_entries';
-        $empId = (int)$wpdb->get_var("SELECT id FROM $employeesTable ORDER BY id ASC LIMIT 1");
-        $ticketId = (int)$wpdb->get_var("SELECT id FROM $ticketsTable ORDER BY id ASC LIMIT 1");
-        $startBase = new \DateTimeImmutable('today 09:00');
-        for ($i = 0; $i < 20; $i++) {
-            $start = $startBase->modify('+' . ($i % 5) . ' days');
-            $end = $start->modify('+90 minutes');
-            if ($ticketId) {
+
+        // Gather ALL employees and tickets for realistic distribution
+        $allEmpIds = $wpdb->get_col("SELECT id FROM $employeesTable ORDER BY id ASC");
+        $allTicketIds = $wpdb->get_col("SELECT id FROM $ticketsTable ORDER BY id ASC");
+
+        if (empty($allEmpIds) || empty($allTicketIds)) {
+            return ['time_entries' => 0];
+        }
+
+        // Realistic support work descriptions — varied tasks that reflect actual helpdesk work
+        $descriptions = [
+            'Initial triage and issue classification',
+            'Remote session — reproduced issue on client environment',
+            'Investigated root cause in application logs',
+            'Applied hotfix patch and verified resolution',
+            'Updated firewall rules per customer security policy',
+            'Configured monitoring alerts for recurring issue',
+            'Drafted knowledge base article for common resolution',
+            'Escalation review with senior engineer',
+            'Performed database health check and index optimisation',
+            'Restored backup and verified data integrity',
+            'Client call — walked through configuration changes',
+            'Reviewed SLA compliance and updated status notes',
+            'Deployed scheduled maintenance window changes',
+            'Tested regression after platform update',
+            'Coordinated with vendor on third-party integration issue',
+            'Performed capacity analysis on staging environment',
+            'Security audit — reviewed access logs and permissions',
+            'Updated DNS records and verified propagation',
+            'Migrated legacy data to new schema format',
+            'Post-incident review and documentation',
+            'Configured automated backup schedule',
+            'Load testing and performance benchmarking',
+            'SSL certificate renewal and verification',
+            'User account provisioning and access setup',
+            'Network connectivity troubleshooting',
+            'Software licence compliance review',
+            'API integration debugging and trace analysis',
+            'System health check — all services nominal',
+            'Customer onboarding environment setup',
+            'Patch management — staged rollout verification',
+        ];
+
+        // Duration options in minutes (realistic work chunks)
+        $durations = [15, 25, 30, 45, 60, 75, 90, 120, 150, 180];
+
+        $startBase = new \DateTimeImmutable('-10 days 08:00');
+        $entryIdx = 0;
+
+        // Distribute entries across tickets: 2-5 entries per ticket for first 8 tickets,
+        // 0-1 for the rest — ensures several tickets have meaningful work logs
+        $ticketEntryPlan = [];
+        $ticketCount = count($allTicketIds);
+        for ($t = 0; $t < $ticketCount; $t++) {
+            if ($t < 3) {
+                $ticketEntryPlan[$t] = 4 + ($t % 2); // 4-5 entries for first 3
+            } elseif ($t < 8) {
+                $ticketEntryPlan[$t] = 2 + ($t % 3); // 2-4 entries for next 5
+            } else {
+                $ticketEntryPlan[$t] = ($t % 3 === 0) ? 1 : 0; // sparse for the rest
+            }
+        }
+
+        foreach ($ticketEntryPlan as $tIdx => $entryCount) {
+            if ($entryCount === 0) continue;
+            $ticketId = (int)$allTicketIds[$tIdx];
+
+            for ($e = 0; $e < $entryCount; $e++) {
+                // Rotate employees — different people work on different tickets
+                $empId = (int)$allEmpIds[($tIdx + $e) % count($allEmpIds)];
+                $desc = $descriptions[$entryIdx % count($descriptions)];
+                $dur = $durations[$entryIdx % count($durations)];
+                $billable = ($entryIdx % 3 !== 2); // ~67% billable
+
+                // Stagger start times across days and hours
+                $dayOffset = (int)floor($entryIdx / 3);
+                $hourOffset = ($entryIdx % 3) * 3; // 08:00, 11:00, 14:00
+                $start = $startBase->modify("+{$dayOffset} days +{$hourOffset} hours");
+                $end = $start->modify("+{$dur} minutes");
+
                 $log->handle(new \Pet\Application\Time\Command\LogTimeCommand(
                     $empId,
                     $ticketId,
                     $start,
                     $end,
-                    $i % 2 === 0,
-                    'Demo work ' . ($i + 1),
+                    $billable,
+                    $desc,
                     []
                 ));
+                $entryIdx++;
             }
         }
-        $rows = $wpdb->get_results("SELECT id FROM $entriesTable ORDER BY id DESC LIMIT 20");
-        $ids = array_map(fn($r) => (int)$r->id, $rows);
-        foreach ($ids as $id) {
-            $cols = $wpdb->get_col("DESCRIBE $entriesTable", 0);
-            if (in_array('malleable_data', $cols, true)) {
-                $row = $wpdb->get_row($wpdb->prepare("SELECT ticket_id FROM $entriesTable WHERE id = %d", $id));
-                $payload = ['seed_run_id' => $seedRunId];
-                if ($row && (int)$row->ticket_id) {
-                    $payload['ticket_id'] = (int)$row->ticket_id;
-                }
-                $wpdb->update(
-                    $entriesTable,
-                    ['malleable_data' => json_encode($payload)],
-                    ['id' => $id],
-                    ['%s'],
-                    ['%d']
-                );
+
+        // Tag all entries with malleable_data for seed tracking
+        $rows = $wpdb->get_results("SELECT id, ticket_id FROM $entriesTable ORDER BY id DESC LIMIT {$entryIdx}");
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (int)$row->id;
+            $ids[] = $id;
+            $payload = ['seed_run_id' => $seedRunId];
+            if ((int)$row->ticket_id) {
+                $payload['ticket_id'] = (int)$row->ticket_id;
             }
+            $wpdb->update(
+                $entriesTable,
+                ['malleable_data' => json_encode($payload)],
+                ['id' => $id],
+                ['%s'],
+                ['%d']
+            );
             $this->registryAdd($seedRunId, $entriesTable, (string)$id);
         }
-        $toSubmit = array_slice($ids, 0, 8);
+
+        // Submit ~40% of entries, lock ~15% — realistic status distribution
+        $toSubmit = array_slice($ids, 0, (int)ceil(count($ids) * 0.4));
         foreach ($toSubmit as $id) {
-            $submit->handle(new \Pet\Application\Time\Command\SubmitTimeEntryCommand($id));
+            try {
+                $submit->handle(new \Pet\Application\Time\Command\SubmitTimeEntryCommand($id));
+            } catch (\Exception $e) {
+                // Skip if already submitted
+            }
         }
-        $toLock = array_slice($ids, 8, 2);
+        $toLock = array_slice($ids, (int)ceil(count($ids) * 0.4), (int)ceil(count($ids) * 0.15));
         foreach ($toLock as $id) {
             $wpdb->update(
                 $entriesTable,
@@ -1093,10 +1846,60 @@ final class DemoSeedService
                 ['%d']
             );
         }
-        $oneTicket = $wpdb->get_row("SELECT id FROM {$wpdb->prefix}pet_tickets ORDER BY id DESC LIMIT 1");
-        $oneEntry = $wpdb->get_row("SELECT id FROM $entriesTable ORDER BY id ASC LIMIT 1");
+
+        // Seed correction entries (B2 feature demo)
+        // Pick a submitted entry and create a reversal + corrected re-log
+        $correctionSource = $wpdb->get_row(
+            "SELECT id, employee_id, ticket_id, start_time, end_time, duration_minutes, is_billable, description FROM $entriesTable WHERE status = 'submitted' ORDER BY id ASC LIMIT 1"
+        );
+        $correctionCount = 0;
+        if ($correctionSource) {
+            $srcId = (int)$correctionSource->id;
+            $srcStart = $correctionSource->start_time;
+            $srcEnd = $correctionSource->end_time;
+            $srcDuration = (int)$correctionSource->duration_minutes;
+
+            // Reversal entry (negates the original — negative duration)
+            $wpdb->insert($entriesTable, [
+                'employee_id' => (int)$correctionSource->employee_id,
+                'ticket_id' => (int)$correctionSource->ticket_id,
+                'start_time' => $srcStart,
+                'end_time' => $srcEnd,
+                'duration_minutes' => -$srcDuration,
+                'is_billable' => (int)$correctionSource->is_billable,
+                'description' => 'REVERSAL: ' . $correctionSource->description,
+                'status' => 'submitted',
+                'corrects_entry_id' => $srcId,
+                'malleable_data' => json_encode(['seed_run_id' => $seedRunId, 'correction_type' => 'reversal']),
+                'created_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            ]);
+            $reversalId = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $entriesTable, (string)$reversalId);
+            $correctionCount++;
+
+            // Corrected re-log (30 min shorter, flipped billable)
+            $correctedEnd = (new \DateTimeImmutable($srcEnd))->modify('-30 minutes')->format('Y-m-d H:i:s');
+            $correctedDuration = max(0, $srcDuration - 30);
+            $wpdb->insert($entriesTable, [
+                'employee_id' => (int)$correctionSource->employee_id,
+                'ticket_id' => (int)$correctionSource->ticket_id,
+                'start_time' => $srcStart,
+                'end_time' => $correctedEnd,
+                'duration_minutes' => $correctedDuration,
+                'is_billable' => (int)$correctionSource->is_billable ? 0 : 1,
+                'description' => 'CORRECTION: ' . $correctionSource->description . ' (adjusted duration & billing)',
+                'status' => 'submitted',
+                'corrects_entry_id' => $srcId,
+                'malleable_data' => json_encode(['seed_run_id' => $seedRunId, 'correction_type' => 'correction']),
+                'created_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+            ]);
+            $correctedId = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $entriesTable, (string)$correctedId);
+            $correctionCount++;
+        }
+
         $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM $entriesTable");
-        return ['time_entries' => $count];
+        return ['time_entries' => $count, 'corrections' => $correctionCount];
     }
 
     private function seedKnowledge(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -1130,6 +1933,19 @@ final class DemoSeedService
         $feedRepo = $c->get(\Pet\Infrastructure\Persistence\Repository\SqlFeedEventRepository::class);
         /** @var \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository $annRepo */
         $annRepo = $c->get(\Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository::class);
+        $wpdb = $this->wpdb;
+
+        // Resolve real entity IDs for rich feed events
+        $rpmId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name=%s", 'RPM Resources (Pty) Ltd'));
+        $acmeId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name=%s", 'Acme Manufacturing SA (Pty) Ltd'));
+        $nexusId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name=%s", 'Nexus Startup Labs'));
+        $q1Id = (string)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_quotes ORDER BY id ASC LIMIT 1");
+        $projIds = $wpdb->get_col("SELECT id FROM {$wpdb->prefix}pet_projects WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3");
+        $projId = (string)($projIds[0] ?? 0);
+        $projAcmeId = (string)($projIds[1] ?? 0);
+        $projNexusId = (string)($projIds[2] ?? 0);
+        $ticketIds = $wpdb->get_col("SELECT id FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed','resolved') ORDER BY id ASC LIMIT 5");
+
         // Announcements
         $a1Id = $this->uuid();
         $a1 = \Pet\Domain\Feed\Entity\Announcement::create(
@@ -1165,21 +1981,131 @@ final class DemoSeedService
         $this->registryAdd($seedRunId, $this->wpdb->prefix . 'pet_announcements', $a1Id);
         $annRepo->save($a2);
         $this->registryAdd($seedRunId, $this->wpdb->prefix . 'pet_announcements', $a2Id);
-        // Feed events
-        $events = [
-            ['commercial', 'quote', 'accepted', 'operational', 'Quote Accepted', 'Q1 accepted and contract created', 'global', null],
-            ['delivery', 'project', 'created', 'operational', 'Project Created', 'Project initialized from accepted quote', 'department', 'delivery'],
-            ['support', 'ticket', 'opened', 'operational', 'Ticket Opened', 'New ticket logged', 'department', 'support'],
-            ['work', 'work_item', 'queued', 'informational', 'Item Queued', 'Work item entered department queue', 'department', 'support'],
-            ['finance', 'billing_export', 'queued', 'operational', 'Export Queued', 'Billing export queued for QB', 'global', null],
-            ['support', 'ticket', 'breached', 'critical', 'SLA Breach', 'Ticket breached SLA threshold', 'department', 'support'],
-            ['work', 'work_item', 'completed', 'informational', 'Item Completed', 'Work item completed by delivery', 'department', 'delivery'],
-            ['identity', 'employee', 'onboarded', 'informational', 'Employee Onboarded', 'New team member joined', 'global', null],
-            ['advisory', 'report', 'published', 'strategic', 'Advisory Published', 'Governance advisory report released', 'global', null],
-            ['time', 'time_entry', 'approved', 'operational', 'Time Approved', 'Manager approved submitted time', 'department', 'delivery'],
+
+        // --- Build avatar and logo lookup maps for rich feed events ---
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $empRows = $wpdb->get_results("SELECT id, wp_user_id, first_name, last_name FROM $empTable ORDER BY id ASC");
+        $actorAvatars = []; // 'First Last' => avatar URL
+        $actorIds = [];     // 'First Last' => employee id string
+        $actorColors = [
+            'Steve Admin' => '1a56db', 'Mia Manager' => '6f42c1', 'Liam Lead Tech' => '0d6efd',
+            'Ava Consultant' => 'e83e8c', 'Noah Support' => '17a2b8', 'Zoe Finance' => '28a745',
+            'Ethan DevOps' => 'fd7e14', 'Isabella Analyst' => '20c997',
         ];
-        foreach ($events as [$engine, $entity, $etype, $class, $title, $summary, $aud, $audRef]) {
+        foreach ($empRows as $emp) {
+            $fullName = $emp->first_name . ' ' . $emp->last_name;
+            $color = $actorColors[$fullName] ?? '6c757d';
+            $nameParam = urlencode($emp->first_name . ' ' . $emp->last_name);
+            $actorAvatars[$fullName] = "https://ui-avatars.com/api/?name={$nameParam}&background={$color}&color=fff&size=64&bold=true";
+            $actorIds[$fullName] = (string)$emp->id;
+        }
+        // External contacts (not employees)
+        $actorAvatars['Priya Patel'] = 'https://ui-avatars.com/api/?name=Priya+Patel&background=845ec2&color=fff&size=64&bold=true';
+        $actorAvatars['System'] = 'https://ui-avatars.com/api/?name=SYS&background=adb5bd&color=fff&size=64&bold=true';
+
+        // Company logo URLs — deterministic brand colors
+        $companyLogos = [
+            'RPM Resources' => 'https://ui-avatars.com/api/?name=RPM&background=1a56db&color=fff&size=64&bold=true&length=3',
+            'Acme Manufacturing' => 'https://ui-avatars.com/api/?name=AM&background=dc3545&color=fff&size=64&bold=true',
+            'Nexus Startup Labs' => 'https://ui-avatars.com/api/?name=NL&background=28a745&color=fff&size=64&bold=true',
+            'Government Digital Services' => 'https://ui-avatars.com/api/?name=GDS&background=6f42c1&color=fff&size=64&bold=true&length=3',
+        ];
+        $companyBrandColors = [
+            'RPM Resources' => '#1a56db',
+            'Acme Manufacturing' => '#dc3545',
+            'Nexus Startup Labs' => '#28a745',
+            'Government Digital Services' => '#6f42c1',
+        ];
+
+        // Rich feed events with real entity references and customer context
+        $events = [
+            // Commercial events
+            ['commercial', 'quote', 'quote_sent', 'operational', 'Quote Sent to RPM Resources', 'Q1 Website Implementation & Advisory sent for approval', 'global', null, ['quote_id' => $q1Id, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Steve Admin', 'total_value' => 15400]],
+            ['commercial', 'quote', 'quote_accepted', 'strategic', 'Quote Accepted — RPM Resources', 'RPM accepted Q1 Website Implementation & Advisory ($15,400)', 'global', null, ['quote_id' => $q1Id, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Priya Patel']],
+            ['commercial', 'contract', 'contract_created', 'strategic', 'Contract Created — RPM Resources', 'Contract auto-generated from accepted quote Q1', 'global', null, ['quote_id' => $q1Id, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'System']],
+            ['commercial', 'quote', 'quote_sent', 'operational', 'Quote Sent to Acme Manufacturing', 'Q4 Catalog Services sent for review', 'global', null, ['customer_id' => $acmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Steve Admin']],
+            ['commercial', 'quote', 'quote_accepted', 'strategic', 'Quote Accepted — Acme Manufacturing', 'Acme accepted Q4 Catalog Services', 'global', null, ['customer_id' => $acmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Mia Manager']],
+            // Delivery events
+            ['delivery', 'project', 'project_created', 'operational', 'Project Kicked Off — RPM Resources', 'Project created from accepted quote Q1', 'department', 'delivery', ['project_id' => $projId, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Mia Manager']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Kickoff Workshop', 'Discovery milestone progressing — RPM project', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Requirements Elicitation', 'Discovery milestone complete — moving to Build', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'milestone', 'milestone_completed', 'strategic', 'Milestone Completed: Discovery', 'RPM project Discovery phase delivered on time', 'global', null, ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Mia Manager']],
+            // Additional delivery events for richer PM view
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Theme Setup', 'Build phase progressing — RPM custom theme configured', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Custom Components', 'RPM custom component library delivered for review', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Onsite Training Day 1', 'Acme staff training day 1 delivered successfully', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Onsite Training Day 2', 'Acme staff training day 2 completed', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Remote Consulting Session 1', 'Acme follow-up consulting session delivered', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'project', 'project_status_changed', 'critical', 'Project At Risk: Acme Catalog Services', 'Deadline passed — project 4 days overdue with 38h logged against 35h budget', 'global', null, ['project_id' => $projAcmeId, 'customer_id' => $acmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'System', 'tags' => ['Overdue', 'Over Budget']]],
+            ['delivery', 'task', 'task_started', 'informational', 'Task Started: Cloud Readiness Assessment', 'Nexus cloud migration assessment underway', 'department', 'delivery', ['project_id' => $projNexusId, 'customer_id' => $nexusId, 'customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Ethan DevOps']],
+            ['time', 'time_entry', 'time_entry_logged', 'operational', 'Time Logged: RPM Website', 'Liam logged 6h against RPM Website — Custom Components', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['time', 'time_entry', 'time_entry_logged', 'operational', 'Time Logged: Acme Catalog', 'Ava logged 8h against Acme Catalog — Remote Consulting', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            // Support events
+            ['support', 'ticket', 'ticket_created', 'operational', 'Ticket: Login Issue', 'New support ticket from RPM Resources', 'department', 'support', ['ticket_id' => $ticketIds[0] ?? 0, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Noah Support']],
+            ['support', 'ticket', 'ticket_assigned', 'operational', 'Ticket Assigned to Support', 'Login Issue assigned via priority queue', 'department', 'support', ['ticket_id' => $ticketIds[0] ?? 0, 'customer_name' => 'RPM Resources', 'actor_name' => 'System', 'sla' => ['clock_state' => 'active', 'seconds_remaining' => 7200, 'kind' => 'response']]],
+            ['support', 'ticket', 'ticket_status_changed', 'operational', 'Ticket In Progress: Email Not Syncing', 'Support team investigating email sync issue', 'department', 'support', ['ticket_id' => $ticketIds[1] ?? 0, 'customer_name' => 'RPM Resources', 'actor_name' => 'Noah Support', 'sla' => ['clock_state' => 'active', 'seconds_remaining' => 3300, 'kind' => 'resolution']]],
+            ['support', 'ticket', 'sla_warning', 'critical', 'SLA Warning: Server Alert', 'Ticket approaching SLA breach — 15 minutes remaining', 'department', 'support', ['ticket_id' => $ticketIds[2] ?? 0, 'customer_name' => 'RPM Resources', 'actor_name' => 'System', 'sla' => ['clock_state' => 'active', 'seconds_remaining' => 900, 'kind' => 'resolution'], 'tags' => ['SLA Risk']]],
+            ['support', 'ticket', 'sla_breached', 'critical', 'SLA Breached: VPN Access', 'Resolution SLA breached — escalation triggered', 'global', null, ['ticket_id' => $ticketIds[3] ?? 0, 'customer_name' => 'RPM Resources', 'actor_name' => 'System', 'sla' => ['clock_state' => 'breached', 'seconds_remaining' => -2700, 'kind' => 'resolution'], 'tags' => ['SLA Breach']]],
+            ['support', 'ticket', 'ticket_resolved', 'informational', 'Ticket Resolved: Printer Offline', 'Issue resolved within SLA — printer driver updated', 'department', 'support', ['ticket_id' => $ticketIds[4] ?? 0, 'customer_name' => 'RPM Resources', 'actor_name' => 'Noah Support']],
+            // Escalation
+            ['support', 'escalation', 'escalation_triggered', 'critical', 'Escalation: VPN Access', 'SLA breach triggered automatic escalation to manager', 'global', null, ['customer_name' => 'RPM Resources', 'actor_name' => 'System', 'tags' => ['Escalation']]],
+            // Work events
+            ['work', 'work_item', 'work_item_queued', 'informational', 'Work Item Queued', 'Support ticket entered priority queue', 'department', 'support', ['actor_name' => 'System']],
+            // Time events
+            ['time', 'time_entry', 'time_entry_approved', 'operational', 'Time Entries Approved', 'Mia approved 8 submitted time entries', 'department', 'delivery', ['actor_name' => 'Mia Manager', 'entries_count' => 8]],
+            // Identity
+            ['identity', 'employee', 'employee_onboarded', 'informational', 'New Team Member: Zoe Finance', 'Zoe joined the team as Finance specialist', 'global', null, ['actor_name' => 'Zoe Finance']],
+            // Advisory
+            ['advisory', 'report', 'advisory_published', 'strategic', 'Advisory Report: Q1 Governance Review', 'Governance advisory completed for RPM Resources', 'global', null, ['customer_name' => 'RPM Resources', 'actor_name' => 'Ava Consultant']],
+            // New customer events
+            ['commercial', 'quote', 'quote_sent', 'operational', 'Quote Sent to Nexus Startup Labs', 'Q5 Cloud Migration & Managed Services sent for approval', 'global', null, ['customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Steve Admin']],
+            ['commercial', 'quote', 'quote_accepted', 'strategic', 'Quote Accepted — Nexus Startup Labs', 'Nexus accepted Q5 Cloud Migration & Managed Services', 'global', null, ['customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Mia Manager']],
+            ['delivery', 'project', 'project_created', 'operational', 'Project Kicked Off — Nexus Labs', 'Cloud migration project created for Nexus Startup Labs', 'department', 'delivery', ['customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Ethan DevOps']],
+            ['delivery', 'project', 'project_created', 'operational', 'Project Kicked Off — Acme Manufacturing', 'Catalog services delivery started for Acme', 'department', 'delivery', ['customer_name' => 'Acme Manufacturing', 'actor_name' => 'Mia Manager']],
+            ['commercial', 'quote', 'quote_drafted', 'informational', 'New Quote: Government IT Assessment', 'Q6 IT Infrastructure Assessment created for Government Digital Services', 'global', null, ['customer_name' => 'Government Digital Services', 'actor_name' => 'Isabella Analyst']],
+            // Lead events
+            ['commercial', 'lead', 'lead_created', 'informational', 'New Lead: Security Audit RFP', 'Government Digital Services submitted an enquiry for security audit', 'global', null, ['customer_name' => 'Government Digital Services', 'actor_name' => 'Isabella Analyst']],
+            ['commercial', 'lead', 'lead_created', 'informational', 'New Lead: Kubernetes Migration', 'Nexus Startup Labs interested in Kubernetes migration assessment', 'global', null, ['customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Ethan DevOps']],
+            ['commercial', 'lead', 'lead_converted', 'strategic', 'Lead Converted: Website Modernisation', 'RPM Resources lead converted to Quote Q1', 'global', null, ['customer_name' => 'RPM Resources', 'actor_name' => 'Steve Admin']],
+            ['commercial', 'lead', 'lead_converted', 'strategic', 'Lead Converted: Training Package', 'Acme Manufacturing lead converted to Quote Q4', 'global', null, ['customer_name' => 'Acme Manufacturing', 'actor_name' => 'Mia Manager']],
+            ['commercial', 'quote', 'quote_sent', 'operational', 'Quote Sent to RPM Resources', 'Q7 Annual Support Renewal sent for review', 'global', null, ['customer_name' => 'RPM Resources', 'actor_name' => 'Mia Manager']],
+            ['support', 'ticket', 'ticket_created', 'operational', 'Ticket: ERP Module Crashing', 'Critical ticket from Acme Manufacturing — ERP reports failing', 'department', 'support', ['customer_name' => 'Acme Manufacturing', 'actor_name' => 'Noah Support']],
+            ['support', 'ticket', 'ticket_created', 'operational', 'Ticket: CI/CD Pipeline Failure', 'Critical ticket from Nexus Labs — staging deployment blocked', 'department', 'support', ['customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Liam Lead Tech']],
+            ['identity', 'employee', 'employee_onboarded', 'informational', 'New Team Member: Ethan DevOps', 'Ethan joined the team as DevOps Engineer', 'global', null, ['actor_name' => 'Ethan DevOps']],
+            ['identity', 'employee', 'employee_onboarded', 'informational', 'New Team Member: Isabella Analyst', 'Isabella joined as Business Analyst', 'global', null, ['actor_name' => 'Isabella Analyst']],
+        ];
+
+        // Enrich each event with avatar URL, logo URL, actor_id, actor_type
+        foreach ($events as [$engine, $entity, $etype, $class, $title, $summaryText, $aud, $audRef, $meta]) {
             $eid = $this->uuid();
+
+            // Resolve actor avatar and ID from name
+            $actorName = $meta['actor_name'] ?? null;
+            if ($actorName && isset($actorAvatars[$actorName])) {
+                $meta['actor_avatar_url'] = $actorAvatars[$actorName];
+                $meta['actor_type'] = ($actorName === 'System') ? 'system' : 'employee';
+                if (isset($actorIds[$actorName])) {
+                    $meta['actor_id'] = $actorIds[$actorName];
+                }
+            }
+
+            // Resolve company logo from customer name
+            $custName = $meta['customer_name'] ?? null;
+            if ($custName) {
+                foreach ($companyLogos as $namePrefix => $logoUrl) {
+                    if (str_starts_with($custName, $namePrefix) || $custName === $namePrefix) {
+                        $meta['company_logo_url'] = $logoUrl;
+                        $meta['company_brand_color'] = $companyBrandColors[$namePrefix] ?? null;
+                        break;
+                    }
+                }
+            }
+
+            $metadata = array_merge($meta, [
+                'seed_run_id' => $seedRunId,
+                'seed_profile' => $seedProfile,
+                'seeded_at' => $seededAt,
+            ]);
             $feedRepo->save(\Pet\Domain\Feed\Entity\FeedEvent::create(
                 $eid,
                 $etype,
@@ -1187,12 +2113,8 @@ final class DemoSeedService
                 $entity,
                 $class,
                 $title,
-                $summary,
-                [
-                    'seed_run_id' => $seedRunId,
-                    'seed_profile' => $seedProfile,
-                    'seeded_at' => $seededAt,
-                ],
+                $summaryText,
+                $metadata,
                 $aud,
                 $audRef,
                 false,
@@ -1205,9 +2127,365 @@ final class DemoSeedService
         return ['events' => $eventsCount, 'announcements' => $annCount];
     }
 
+    private function seedConversations(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $createConversation = $c->get(\Pet\Application\Conversation\Command\CreateConversationHandler::class);
+        $postMessage = $c->get(\Pet\Application\Conversation\Command\PostMessageHandler::class);
+        $wpdb = $this->wpdb;
+
+        $currentUserId = get_current_user_id();
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $miaId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Mia' LIMIT 1") ?: $currentUserId;
+        $avaId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ava' LIMIT 1") ?: $currentUserId;
+        $noahId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Noah' LIMIT 1") ?: $currentUserId;
+
+        $created = 0;
+
+        // Conversations on quotes (all 7)
+        $ethanId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ethan' LIMIT 1") ?: $currentUserId;
+        $isabellaId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Isabella' LIMIT 1") ?: $currentUserId;
+        $quotes = $wpdb->get_results("SELECT id, title FROM {$wpdb->prefix}pet_quotes ORDER BY id ASC LIMIT 7");
+        $quoteMessages = [
+            [
+                ['actor' => $currentUserId, 'body' => 'I\'ve structured this as Implementation + Advisory to cover both delivery and governance. The 4 milestones follow our standard engagement model.'],
+                ['actor' => $miaId, 'body' => 'Looks good. The payment schedule split 50/50 works for RPM. Can we confirm the advisory pack pricing with Ava?'],
+                ['actor' => $avaId, 'body' => 'Advisory rates confirmed. 4x Governance Review + 3x SLA Design is the right mix for their maturity level.'],
+                ['actor' => $currentUserId, 'body' => 'Perfect. Sending to the client for approval.'],
+            ],
+            [
+                ['actor' => $currentUserId, 'body' => 'This is scoped as assessment-only for now. Acme wants to understand the migration risk before committing.'],
+                ['actor' => $miaId, 'body' => 'Understood. Keep it in draft until the steering committee meets next Thursday.'],
+            ],
+            [
+                ['actor' => $miaId, 'body' => 'Recurring support component looks right. The 12-month auto-renew gives RPM the continuity they asked for.'],
+                ['actor' => $currentUserId, 'body' => 'Agreed. Response time at 4 hours and resolution at 24 hours matches their SLA tier.'],
+            ],
+            [
+                ['actor' => $avaId, 'body' => 'Catalog items priced per standard rate card. Training days discounted to $500 as agreed.'],
+                ['actor' => $currentUserId, 'body' => 'Good. Acme confirmed the 2 onsite training + 6 remote consulting split.'],
+                ['actor' => $miaId, 'body' => 'Approved. Send it through.'],
+            ],
+            [
+                ['actor' => $ethanId, 'body' => 'Cloud readiness assessment will take about 2 weeks. I\'ve scoped the architecture design to cover multi-AZ deployment.'],
+                ['actor' => $currentUserId, 'body' => 'The 24-month managed services term is important — Nexus wants long-term stability.'],
+                ['actor' => $miaId, 'body' => 'Payment schedule is 30/40/30. This gives us cash flow coverage for the infrastructure provisioning phase.'],
+                ['actor' => $ethanId, 'body' => 'Confirmed. The recurring component at R2,200/month covers backup, monitoring, and 1h emergency response SLA.'],
+            ],
+            [
+                ['actor' => $isabellaId, 'body' => 'Government procurement requires detailed line items. I\'ve broken out the assessment, governance sessions, and BA hours separately.'],
+                ['actor' => $avaId, 'body' => 'The 6 governance reviews align with their quarterly audit cycle. SSL certs are a standard add-on for their compliance requirements.'],
+                ['actor' => $currentUserId, 'body' => 'Still in draft — waiting for the RFQ response deadline next month.'],
+            ],
+            [
+                ['actor' => $miaId, 'body' => 'RPM\'s annual renewal is due. I\'ve upgraded them to Premium tier with 60-minute response SLA.'],
+                ['actor' => $noahId, 'body' => 'The 10 emergency support hours are essential — they used 8 last year. Managed backup covers both sites.'],
+                ['actor' => $currentUserId, 'body' => 'Sent to Priya for approval. She\'s reviewing with their CFO this week.'],
+            ],
+        ];
+
+        foreach ($quotes as $qi => $q) {
+            try {
+                $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                    'quote',
+                    (string)$q->id,
+                    'Discussion: ' . $q->title,
+                    'quote-' . $q->id . '-general',
+                    $currentUserId
+                ));
+                $messages = $quoteMessages[$qi] ?? [];
+                foreach ($messages as $msg) {
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid,
+                        $msg['body'],
+                        [],
+                        [],
+                        $msg['actor']
+                    ));
+                }
+                $created++;
+            } catch (\Throwable $e) {
+                // Skip if conversation already exists
+            }
+        }
+
+        // Conversations on tickets (expanded)
+        $tickets = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed') ORDER BY id ASC LIMIT 8");
+        $ticketMessages = [
+            [
+                ['actor' => $noahId, 'body' => 'User reports intermittent login failures since this morning. Clearing cache didn\'t help.'],
+                ['actor' => $currentUserId, 'body' => 'Check if their AD password expired. We saw similar issues last month with the sync delay.'],
+                ['actor' => $noahId, 'body' => 'Confirmed — password sync was delayed. Forced a reset and user can log in now. Monitoring.'],
+            ],
+            [
+                ['actor' => $noahId, 'body' => 'Email sync stopped for 3 users on the Cape Town site. Exchange Online connector shows healthy.'],
+                ['actor' => $miaId, 'body' => 'This might be related to the firewall change yesterday. Can you check the mail flow rules?'],
+            ],
+            [
+                ['actor' => $currentUserId, 'body' => 'Nagios alert: CPU at 92% on web-prod-02 for the last 30 minutes.'],
+                ['actor' => $noahId, 'body' => 'Investigating. Looks like a runaway cron job. Restarting the service now.'],
+                ['actor' => $noahId, 'body' => 'Resolved. The backup job was running during peak hours. Rescheduled to 02:00.'],
+            ],
+            [
+                ['actor' => $avaId, 'body' => 'New contractor needs VPN access for the RPM project. They start Monday.'],
+                ['actor' => $currentUserId, 'body' => 'Ticket escalated — SLA is tight on this one. @Noah can you provision today?'],
+            ],
+            [
+                ['actor' => $noahId, 'body' => 'Printer on floor 2 showing offline. Already checked the network cable and power cycled.'],
+            ],
+            [
+                ['actor' => $noahId, 'body' => 'Acme reports ERP module crashing when generating monthly reports. Affects their Stellenbosch site.'],
+                ['actor' => $ethanId, 'body' => 'Looks like a memory issue on the report server. I\'ll increase the allocation and check the query optimization.'],
+                ['actor' => $noahId, 'body' => 'Temporary fix applied — increased memory to 16GB. Long-term fix needs a DB index on the reports table.'],
+            ],
+            [
+                ['actor' => $ethanId, 'body' => 'Nexus CI/CD pipeline failed on the staging deployment. Build logs show a Docker image pull timeout.'],
+                ['actor' => $currentUserId, 'body' => 'Check the ECR credentials — they might have rotated. This happened before with their IAM policy.'],
+            ],
+            [
+                ['actor' => $noahId, 'body' => 'Nexus DNS change propagating slowly. Some users still hitting the old IP.'],
+                ['actor' => $ethanId, 'body' => 'TTL was set to 86400. Lowering to 300 for the migration period. Should resolve within 5 minutes.'],
+            ],
+        ];
+
+        foreach ($tickets as $ti => $t) {
+            try {
+                $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                    'ticket',
+                    (string)$t->id,
+                    'Ticket #' . $t->id . ': ' . $t->subject,
+                    'ticket-' . $t->id . '-general',
+                    $currentUserId
+                ));
+                $messages = $ticketMessages[$ti] ?? [];
+                foreach ($messages as $msg) {
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid,
+                        $msg['body'],
+                        [],
+                        [],
+                        $msg['actor']
+                    ));
+                }
+                $created++;
+            } catch (\Throwable $e) {
+                // Skip on error
+            }
+        }
+
+        // Conversations on projects
+        $projects = $wpdb->get_results("SELECT id, name FROM {$wpdb->prefix}pet_projects ORDER BY id ASC LIMIT 3");
+        $projectMessages = [
+            [
+                ['actor' => $miaId, 'body' => 'Discovery phase complete. Kickoff and requirements both signed off. Moving to Build milestone.'],
+                ['actor' => $currentUserId, 'body' => 'Theme setup is underway. Liam estimates 2 days for custom components after that.'],
+                ['actor' => $avaId, 'body' => 'Advisory sessions running in parallel. First governance review scheduled for next Tuesday.'],
+            ],
+            [
+                ['actor' => $currentUserId, 'body' => 'Acme project kicked off. Training schedule confirmed with Sarah Jacobs.'],
+                ['actor' => $miaId, 'body' => 'Consulting hours are tracking well. 2 of 6 sessions complete.'],
+            ],
+            [
+                ['actor' => $ethanId, 'body' => 'Cloud migration project just kicked off. Assessment phase starts Monday.'],
+                ['actor' => $currentUserId, 'body' => 'Nexus team is eager to start. Tariq confirmed their AWS account access is ready.'],
+            ],
+        ];
+        foreach ($projects as $pi => $p) {
+            try {
+                $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                    'project', (string)$p->id, 'Project: ' . $p->name, 'project-' . $p->id . '-general', $currentUserId
+                ));
+                $messages = $projectMessages[$pi] ?? [];
+                foreach ($messages as $msg) {
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, $msg['body'], [], [], $msg['actor']
+                    ));
+                }
+                $created++;
+            } catch (\Throwable $e) {
+                // Skip on error
+            }
+        }
+
+        return ['conversations' => $created];
+    }
+
+    private function seedProjectTasks(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        /** @var \Pet\Application\Delivery\Command\AddTaskHandler $addTask */
+        $addTask = $c->get(\Pet\Application\Delivery\Command\AddTaskHandler::class);
+        $wpdb = $this->wpdb;
+
+        $projects = $wpdb->get_results("SELECT id, name FROM {$wpdb->prefix}pet_projects WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3");
+        if (empty($projects)) {
+            return ['tasks' => 0];
+        }
+
+        // Task definitions per project (completion is handled in seedProjectEnrichment)
+        $projectTasks = [
+            // Project 1: RPM Website (Discovery complete, Build in progress)
+            [
+                ['Kickoff Workshop', 6.0],
+                ['Requirements Elicitation', 12.0],
+                ['Theme Setup', 10.0],
+                ['Custom Components', 20.0],
+                ['UAT Support', 8.0],
+                ['Go-Live Checklist', 6.0],
+                ['Cutover Planning', 4.0],
+                ['Hypercare Support', 6.0],
+                ['Stabilization Review', 4.0],
+                ['Handover Workshop', 6.0],
+            ],
+            // Project 2: Acme Catalog Services
+            [
+                ['Training Schedule Setup', 4.0],
+                ['Onsite Training Day 1', 8.0],
+                ['Onsite Training Day 2', 8.0],
+                ['Remote Consulting Session 1', 3.0],
+                ['Remote Consulting Session 2', 3.0],
+                ['Remote Consulting Session 3', 3.0],
+                ['Progress Review', 2.0],
+                ['Final Report', 4.0],
+            ],
+            // Project 3: Nexus Cloud Migration
+            [
+                ['Cloud Readiness Assessment', 16.0],
+                ['Architecture Design', 12.0],
+                ['Migration Runbook', 8.0],
+                ['Infrastructure Provisioning', 20.0],
+                ['Data Migration', 16.0],
+                ['Application Deployment', 12.0],
+                ['Performance Testing', 8.0],
+                ['Security Audit', 6.0],
+                ['Handover & Training', 8.0],
+            ],
+        ];
+
+        $totalCount = 0;
+        foreach ($projects as $pi => $project) {
+            $projectId = (int)$project->id;
+            $existingTasks = (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->prefix}pet_tasks WHERE project_id = %d", $projectId
+            ));
+            if ($existingTasks > 0) continue;
+
+            $tasks = $projectTasks[$pi] ?? [];
+            foreach ($tasks as [$name, $hours]) {
+                try {
+                    $addTask->handle(new \Pet\Application\Delivery\Command\AddTaskCommand($projectId, $name, $hours));
+                    $totalCount++;
+                } catch (\Throwable $e) {
+                    // Skip on error
+                }
+            }
+        }
+
+        return ['tasks' => $totalCount];
+    }
+
+    private function seedProjectEnrichment(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $projTable = $wpdb->prefix . 'pet_projects';
+        $taskTable = $wpdb->prefix . 'pet_tasks';
+        $now = new \DateTimeImmutable();
+
+        // Fetch all seeded projects (created from quotes) in order
+        $projects = $wpdb->get_results(
+            "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3"
+        );
+        if (empty($projects)) {
+            return ['enriched' => 0];
+        }
+
+        // Project enrichment definitions: [state, start_offset, end_offset, sold_hours, hours_used, pm, health]
+        // Offsets are in days relative to now (negative = past)
+        $enrichments = [
+            // RPM Website: active, 6 weeks in, 2 weeks to go — healthy mid-delivery
+            [
+                'state' => 'active',
+                'start_days' => -42,
+                'end_days' => 14,
+                'sold_hours' => 82.0,
+                'hours_used' => 24.0,
+                'pm' => 'Mia Manager',
+                'health' => 'on_track',
+                'complete_tasks' => ['Kickoff Workshop', 'Requirements Elicitation', 'Theme Setup', 'Custom Components'],
+            ],
+            // Acme Catalog: active, started 3 weeks ago, deadline was 4 days ago — OVERDUE + OVER BUDGET
+            [
+                'state' => 'active',
+                'start_days' => -21,
+                'end_days' => -4,
+                'sold_hours' => 35.0,
+                'hours_used' => 38.0,
+                'pm' => 'Ava Consultant',
+                'health' => 'at_risk',
+                'complete_tasks' => ['Training Schedule Setup', 'Onsite Training Day 1', 'Onsite Training Day 2', 'Remote Consulting Session 1', 'Remote Consulting Session 2'],
+            ],
+            // Nexus Cloud: active, 1 week in, 8 weeks to go — early stage
+            [
+                'state' => 'active',
+                'start_days' => -7,
+                'end_days' => 56,
+                'sold_hours' => 106.0,
+                'hours_used' => 8.0,
+                'pm' => 'Ethan DevOps',
+                'health' => 'on_track',
+                'complete_tasks' => [],
+            ],
+        ];
+
+        $enrichedCount = 0;
+        foreach ($projects as $pi => $project) {
+            $def = $enrichments[$pi] ?? null;
+            if (!$def) continue;
+
+            $projectId = (int)$project->id;
+            $startDate = $now->modify($def['start_days'] . ' days')->format('Y-m-d');
+            $endDate = $now->modify($def['end_days'] . ' days')->format('Y-m-d');
+
+            $malleableData = json_encode([
+                'pm' => $def['pm'],
+                'health' => $def['health'],
+                'hours_used' => $def['hours_used'],
+            ], JSON_UNESCAPED_SLASHES);
+
+            // Use explicit prepared SQL for reliable direct writes
+            $result = $wpdb->query($wpdb->prepare(
+                "UPDATE $projTable SET state = %s, start_date = %s, end_date = %s, sold_hours = %f, malleable_data = %s, updated_at = %s WHERE id = %d",
+                $def['state'],
+                $startDate,
+                $endDate,
+                $def['sold_hours'],
+                $malleableData,
+                $seededAt,
+                $projectId
+            ));
+
+            if ($result === false) {
+                error_log("PET seedProjectEnrichment: UPDATE failed for project $projectId — " . $wpdb->last_error);
+            }
+
+            // Complete specified tasks via explicit SQL
+            foreach ($def['complete_tasks'] as $taskName) {
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE $taskTable SET is_completed = 1 WHERE project_id = %d AND name = %s",
+                    $projectId,
+                    $taskName
+                ));
+            }
+
+            $enrichedCount++;
+        }
+
+        return ['enriched' => $enrichedCount];
+    }
+
     private function seedBilling(string $seedRunId, string $seedProfile, string $seededAt): array
     {
-        global $wpdb;
+        $wpdb = $this->wpdb;
         $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
         /** @var \Pet\Application\Finance\Command\CreateBillingExportHandler $createExport */
         $createExport = $c->get(\Pet\Application\Finance\Command\CreateBillingExportHandler::class);
@@ -1274,7 +2552,7 @@ final class DemoSeedService
         $wpdb->delete($wpdb->prefix . 'pet_external_mappings', ['system' => 'quickbooks', 'entity_type' => 'billing_export']);
         $mappings->upsert('quickbooks', 'billing_export', $exportId, 'QB-INV-1001', 'v1');
         $mappingExportCount = (int)$wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->prefix}pet_external_mappings WHERE system = %s AND entity_type = %s AND pet_entity_id = %d",
+            "SELECT COUNT(*) FROM {$wpdb->prefix}pet_external_mappings WHERE `system` = %s AND entity_type = %s AND pet_entity_id = %d",
             'quickbooks',
             'billing_export',
             $exportId

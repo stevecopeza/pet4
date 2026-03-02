@@ -187,7 +187,9 @@ class SystemController implements RestController
                 ['step' => 'seed.quotes', 'status' => 'APPLIED'],
                 ['step' => 'seed.projects', 'status' => 'APPLIED'],
                 ['step' => 'seed.tickets', 'status' => 'APPLIED'],
+                ['step' => 'seed.backboneTickets', 'status' => 'APPLIED'],
                 ['step' => 'seed.sla', 'status' => 'APPLIED'],
+                ['step' => 'seed.workOrchestration', 'status' => 'APPLIED'],
                 ['step' => 'seed.time', 'status' => 'APPLIED'],
                 ['step' => 'seed.advisory', 'status' => 'APPLIED'],
             ];

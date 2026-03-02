@@ -1,0 +1,144 @@
+{
+  "meta": {
+    "organisation_name": "RPM Resources (Pty) Ltd",
+    "industry": "ERP Consulting & Systems Integration",
+    "time_reference": "T0 relative model"
+  },
+  "departments": [
+    "Sales",
+    "Delivery",
+    "Support",
+    "Administration",
+    "Executive"
+  ],
+  "roles": [
+    {
+      "name": "Delivery Director",
+      "base_rate": 1200,
+      "sell_rate": 1800
+    },
+    {
+      "name": "Senior Project Manager",
+      "base_rate": 950,
+      "sell_rate": 1450
+    },
+    {
+      "name": "Senior ERP Consultant",
+      "base_rate": 800,
+      "sell_rate": 1250
+    },
+    {
+      "name": "Senior Support Engineer",
+      "base_rate": 650,
+      "sell_rate": 1050
+    },
+    {
+      "name": "Junior Support Engineer",
+      "base_rate": 450,
+      "sell_rate": 750
+    }
+  ],
+  "staff": [
+    {
+      "name": "Alex Morgan",
+      "role": "Delivery Director",
+      "mobile": "+27 82 555 1001"
+    },
+    {
+      "name": "Priya Naidoo",
+      "role": "Senior Project Manager",
+      "mobile": "+27 82 555 1002"
+    },
+    {
+      "name": "Daniel Smith",
+      "role": "Senior ERP Consultant",
+      "mobile": "+27 82 555 1003"
+    },
+    {
+      "name": "Mia Jacobs",
+      "role": "Senior Support Engineer",
+      "mobile": "+27 82 555 1004"
+    },
+    {
+      "name": "Liam Patel",
+      "role": "Junior Support Engineer",
+      "mobile": "+27 82 555 1005"
+    }
+  ],
+  "service_catalog": [
+    {
+      "sku": "SERV-ERP-IMP-001",
+      "name": "ERP Full Implementation Package",
+      "default_hours": 240
+    },
+    {
+      "sku": "SERV-DATA-002",
+      "name": "Data Migration Service",
+      "default_hours": 80
+    },
+    {
+      "sku": "SERV-SLA-GOLD",
+      "name": "Gold Support SLA",
+      "monthly_fee": 45000
+    }
+  ],
+  "product_catalog": [
+    {
+      "sku": "PROD-ERP-CORE",
+      "name": "ERP Core License",
+      "cost": 250000,
+      "sell": 320000
+    },
+    {
+      "sku": "PROD-ERP-REP",
+      "name": "Advanced Reporting Module",
+      "cost": 45000,
+      "sell": 65000
+    },
+    {
+      "sku": "PROD-API-CON",
+      "name": "API Connector Pack",
+      "cost": 35000,
+      "sell": 55000
+    }
+  ],
+  "sample_quote": {
+    "id": "Q-2025-001",
+    "customer": "Cape Manufacturing (Pty) Ltd",
+    "sections": [
+      {
+        "type": "Product",
+        "sku": "PROD-ERP-CORE",
+        "quantity": 1,
+        "sell_price": 320000
+      },
+      {
+        "type": "Product",
+        "sku": "PROD-ERP-REP",
+        "quantity": 1,
+        "sell_price": 65000
+      },
+      {
+        "type": "Service",
+        "name": "Implementation",
+        "hours": 200,
+        "rate": 1400
+      }
+    ],
+    "payment_plan": "40% deposit, 40% midpoint, 20% go-live"
+  },
+  "tickets": [
+    {
+      "id": "TCK-1001",
+      "sla": "Gold",
+      "created": "T0 - 2h",
+      "breach_forecast": "T0 + 45m"
+    },
+    {
+      "id": "TCK-1002",
+      "sla": "Silver",
+      "created": "T0 - 1d",
+      "status": "Waiting on Customer"
+    }
+  ]
+}

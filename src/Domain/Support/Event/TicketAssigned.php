@@ -13,12 +13,23 @@ class TicketAssigned implements DomainEvent, SourcedEvent
 {
     private Ticket $ticket;
     private ?string $assignedAgentId;
+    private ?string $previousOwnerUserId;
+    private ?string $previousQueueId;
+    private ?string $newQueueId;
     private DateTimeImmutable $occurredAt;
 
-    public function __construct(Ticket $ticket, ?string $assignedAgentId)
-    {
+    public function __construct(
+        Ticket $ticket,
+        ?string $assignedAgentId,
+        ?string $previousOwnerUserId = null,
+        ?string $previousQueueId = null,
+        ?string $newQueueId = null
+    ) {
         $this->ticket = $ticket;
         $this->assignedAgentId = $assignedAgentId;
+        $this->previousOwnerUserId = $previousOwnerUserId;
+        $this->previousQueueId = $previousQueueId;
+        $this->newQueueId = $newQueueId;
         $this->occurredAt = new DateTimeImmutable();
     }
 
@@ -30,6 +41,21 @@ class TicketAssigned implements DomainEvent, SourcedEvent
     public function assignedAgentId(): ?string
     {
         return $this->assignedAgentId;
+    }
+
+    public function previousOwnerUserId(): ?string
+    {
+        return $this->previousOwnerUserId;
+    }
+
+    public function previousQueueId(): ?string
+    {
+        return $this->previousQueueId;
+    }
+
+    public function newQueueId(): ?string
+    {
+        return $this->newQueueId;
     }
 
     public function occurredAt(): DateTimeImmutable
@@ -57,6 +83,9 @@ class TicketAssigned implements DomainEvent, SourcedEvent
         return [
             'ticket_id' => $this->ticket->id(),
             'assigned_agent_id' => $this->assignedAgentId,
+            'previous_owner_user_id' => $this->previousOwnerUserId,
+            'previous_queue_id' => $this->previousQueueId,
+            'new_queue_id' => $this->newQueueId,
         ];
     }
 }

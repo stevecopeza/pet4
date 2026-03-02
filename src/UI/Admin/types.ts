@@ -233,6 +233,8 @@ export interface TimeEntry {
   billable: boolean;
   status: string;
   malleableData?: Record<string, any>;
+  correctsEntryId?: number | null;
+  isCorrection?: boolean;
   createdAt?: string;
   archivedAt?: string | null;
 }
@@ -244,6 +246,8 @@ export interface Sla {
   target_resolution_hours: number;
   target_response_minutes?: number;
   target_resolution_minutes?: number;
+  calendar_id?: number;
+  escalation_rules?: EscalationRule[];
 }
 
 export interface ContactAffiliation {
@@ -297,6 +301,8 @@ export interface Employee {
   firstName: string;
   lastName: string;
   email: string;
+  displayName?: string;
+  jobTitle?: string;
   status?: string;
   hireDate?: string;
   managerId?: number;
@@ -339,6 +345,7 @@ export interface SchemaDefinition {
   status: string;
   version: number;
   schema: SchemaFieldDefinition[];
+  fields?: SchemaFieldDefinition[];
   publishedAt?: string | null;
 }
 
@@ -368,6 +375,9 @@ export interface Ticket {
   contactId?: number | null;
   queueId?: string | null;
   ownerUserId?: string | null;
+  lifecycleOwner?: string;
+  isBillableDefault?: boolean;
+  billingContextType?: string;
 }
 
 export interface Article {
@@ -434,4 +444,108 @@ export interface Announcement {
   authorUserId: string;
   expiresAt: string | null;
   createdAt: string;
+}
+
+export interface Calendar {
+  id: number;
+  name: string;
+  timezone: string;
+  is_default: boolean;
+  working_windows: WorkingWindow[];
+  holidays: Holiday[];
+}
+
+export interface WorkingWindow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface Holiday {
+  name: string;
+  date: string;
+  is_recurring: boolean;
+}
+
+export interface Certification {
+  id: number;
+  name: string;
+  issuing_body: string;
+  expiry_months: number;
+}
+
+export interface PersonCertification {
+  id: number;
+  employee_id: number;
+  certification_id: number;
+  obtained_date: string;
+  expiry_date: string | null;
+  evidence_url: string | null;
+  status: string;
+  certification_name?: string;
+  issuing_body?: string;
+}
+
+export interface Skill {
+  id: number;
+  name: string;
+  category?: string;
+}
+
+export interface KpiDefinition {
+  id: number;
+  name: string;
+  description: string;
+  default_frequency: string;
+  unit: string;
+}
+
+export interface PersonKpi {
+  id: number;
+  employee_id: number;
+  kpi_definition_id: number;
+  role_id?: number;
+  period_start: string;
+  period_end: string;
+  target_value: number;
+  actual_value: number | null;
+  score: number | null;
+  kpi_name?: string;
+  kpi_unit?: string;
+}
+
+export interface RoleKpi {
+  id: number;
+  role_id: number;
+  kpi_definition_id: number;
+  weight_percentage: number;
+  target_value: number;
+  measurement_frequency: string;
+  kpi_name?: string;
+  kpi_unit?: string;
+}
+
+export interface Lead {
+  id: number;
+  customerId: number;
+  subject: string;
+  description: string;
+  status: string;
+  source: string | null;
+  estimatedValue: number | null;
+  malleableData?: Record<string, any>;
+  createdAt: string;
+  archivedAt: string | null;
+}
+
+export interface EscalationRule {
+  percentage: number;
+  action: string;
+  notify_role_id?: number;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
 }

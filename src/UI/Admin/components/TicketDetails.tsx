@@ -239,6 +239,37 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack, initialSh
     return '#46b450';
   };
 
+  const getStatusOptionsForLifecycle = (lifecycleOwner: string) => {
+    const statusMaps: Record<string, { value: string; label: string }[]> = {
+      support: [
+        { value: 'new', label: 'New' },
+        { value: 'open', label: 'Open' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'resolved', label: 'Resolved' },
+        { value: 'closed', label: 'Closed' },
+      ],
+      project: [
+        { value: 'planned', label: 'Planned' },
+        { value: 'ready', label: 'Ready' },
+        { value: 'in_progress', label: 'In Progress' },
+        { value: 'blocked', label: 'Blocked' },
+        { value: 'done', label: 'Done' },
+        { value: 'closed', label: 'Closed' },
+      ],
+      internal: [
+        { value: 'planned', label: 'Planned' },
+        { value: 'in_progress', label: 'In Progress' },
+        { value: 'done', label: 'Done' },
+        { value: 'closed', label: 'Closed' },
+      ],
+    };
+    return statusMaps[lifecycleOwner] || statusMaps.support;
+  };
+
+  const formatStatusLabel = (s: string) => {
+    return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
   const getDepartmentLabel = (id?: string | null) => {
     if (!id) return 'Unknown';
     if (id === 'dept_support') return 'Support';
@@ -403,14 +434,14 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack, initialSh
             <strong>Status:</strong>{' '}
             {isEditing ? (
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="new">New</option>
-                <option value="open">Open</option>
-                <option value="pending">Pending</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
+                {getStatusOptionsForLifecycle(ticket.lifecycleOwner || 'support').map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             ) : (
-              <span className={`pet-status-badge status-${status}`}>{status}</span>
+              <span className={`pet-status-badge status-${status}`}>
+                {formatStatusLabel(status)}
+              </span>
             )}
           </div>
           <div>

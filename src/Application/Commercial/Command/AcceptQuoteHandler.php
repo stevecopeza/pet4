@@ -17,6 +17,7 @@ use Pet\Application\System\Service\TouchedTracker;
 use Pet\Application\Support\Command\CreateTicketHandler;
 use Pet\Application\Support\Command\CreateTicketCommand;
 use Pet\Application\Conversation\Service\ActionGatingService;
+use Pet\Application\System\Service\AdminAuditLogger;
 
 class AcceptQuoteHandler
 {
@@ -26,13 +27,15 @@ class AcceptQuoteHandler
     private ?TouchedTracker $touched;
     private ?CreateTicketHandler $createTicketHandler;
     private ?ActionGatingService $gatingService;
+    private ?AdminAuditLogger $auditLogger;
 
     public function __construct(TransactionManager $transactionManager, 
         QuoteRepository $quoteRepository,
         EventBus $eventBus,
         ?TouchedTracker $touched = null,
         ?CreateTicketHandler $createTicketHandler = null,
-        ?ActionGatingService $gatingService = null
+        ?ActionGatingService $gatingService = null,
+        ?AdminAuditLogger $auditLogger = null
     ) {
         $this->transactionManager = $transactionManager;
         $this->quoteRepository = $quoteRepository;
@@ -40,6 +43,7 @@ class AcceptQuoteHandler
         $this->touched = $touched;
         $this->createTicketHandler = $createTicketHandler;
         $this->gatingService = $gatingService;
+        $this->auditLogger = $auditLogger;
     }
 
     public function handle(AcceptQuoteCommand $command): void
@@ -83,6 +87,11 @@ class AcceptQuoteHandler
         }
 
         $this->createTicketsFromQuote($quote);
+
+        $this->auditLogger?->log('quote_accepted', [
+            'quote_id' => $quote->id(),
+            'customer_id' => $quote->customerId(),
+        ]);
     
         });
     }

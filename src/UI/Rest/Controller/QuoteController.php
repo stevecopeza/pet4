@@ -48,6 +48,7 @@ use Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent;
 use Pet\Domain\Commercial\Entity\Component\Phase;
 use Pet\Domain\Commercial\Entity\Component\SimpleUnit;
 use Pet\Domain\Commercial\Entity\CostAdjustment;
+use Pet\UI\Rest\Validation\InputValidation as V;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -138,6 +139,11 @@ class QuoteController implements RestController
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createQuote'],
                 'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'customerId' => V::requiredIntArg(),
+                    'name' => V::requiredStringArg(),
+                    'description' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeTextarea']],
+                ],
             ],
         ]);
 
@@ -151,6 +157,10 @@ class QuoteController implements RestController
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateQuote'],
                 'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'name' => V::requiredStringArg(),
+                    'description' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeTextarea']],
+                ],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
@@ -330,6 +340,7 @@ class QuoteController implements RestController
         return [
             'id' => $quote->id(),
             'customerId' => $quote->customerId(),
+            'leadId' => $quote->leadId(),
             'title' => $quote->title(),
             'description' => $quote->description(),
             'state' => $quote->state()->toString(),

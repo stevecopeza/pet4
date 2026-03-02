@@ -26,5 +26,16 @@ interface QuoteRepository
 
     public function sumRevenue(\DateTimeImmutable $start, \DateTimeImmutable $end): float;
 
+    public function findByLeadId(int $leadId): ?Quote;
+
+    /**
+     * @return array<string, int>
+     */
+    public function countByState(): array;
+
+    public function sumValueByStates(array $states): float;
+
+    public function avgAcceptedValue(): float;
+
     public function delete(int $id): void;
 }

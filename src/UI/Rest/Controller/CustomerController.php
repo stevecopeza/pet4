@@ -76,13 +76,16 @@ class CustomerController implements RestController
         $customers = $this->customerRepository->findAll();
 
         $data = array_map(function ($customer) {
+            $malleable = $customer->malleableData();
             return [
                 'id' => $customer->id(),
                 'name' => $customer->name(),
                 'legalName' => $customer->legalName(),
                 'contactEmail' => $customer->contactEmail(),
                 'status' => $customer->status(),
-                'malleableData' => $customer->malleableData(),
+                'logoUrl' => $malleable['logo_url'] ?? null,
+                'brandColor' => $malleable['brand_color'] ?? null,
+                'malleableData' => $malleable,
                 'createdAt' => $customer->createdAt()->format('Y-m-d H:i:s'),
                 'archivedAt' => $customer->archivedAt() ? $customer->archivedAt()->format('Y-m-d H:i:s') : null,
             ];

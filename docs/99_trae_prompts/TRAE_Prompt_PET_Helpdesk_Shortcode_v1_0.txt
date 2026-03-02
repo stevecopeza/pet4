@@ -1,0 +1,44 @@
+clear
+
+TRAE: Implement PET Helpdesk Overview shortcode.
+
+STOP unless these docs exist in the repo at these EXACT paths:
+- plugins/pet/docs/PET_Helpdesk_Overview_Shortcode_Spec_v1_0.md
+- plugins/pet/docs/PET_Helpdesk_Overview_UI_Contract_v1_0.md
+- plugins/pet/docs/PET_Helpdesk_Overview_Data_Mapping_Checklist_v1_0.md
+
+TASK (strict):
+1) Add the three docs above to plugins/pet/docs/ verbatim (from this pack).
+2) Implement shortcode: [pet_helpdesk] per spec, using the UI Contract DOM structure.
+3) Add [pet_helpdesk] to PET → Shortcodes admin list page with:
+   - Name, description
+   - Example usage(s)
+   - Copy button
+
+NON-NEGOTIABLES:
+- No migrations. No Domain changes. Read-only.
+- No SLA business logic in UI; only render existing read-model SLA state.
+- Anonymous: show “Sign in required” and DO NOT output ticket refs/metadata.
+- Enqueue assets ONLY when shortcode present; all selectors namespaced under .pet-helpdesk.
+
+ATTRIBUTES (all optional):
+mode (manager|wallboard), team, window_days, refresh, limit_critical, limit_risk, risk_bands, show_flow, title, scope
+
+UI REQUIREMENTS:
+- Manager: KPI tiles + Critical lane + At Risk lane + Flow table.
+- Wallboard: dark theme, big KPIs, 3 columns (Critical/Risk/Flow), bottom ticker.
+- Wallboard default refresh=60 if not provided. Full refresh acceptable v1.
+
+DATA:
+- Follow Data Mapping Checklist to locate ticket + SLA read model sources.
+- Group Flow by existing queue/team concept; if unavailable, hide Flow.
+
+TESTS (minimum):
+- Attribute defaults parse.
+- Logged-in render includes “Helpdesk Overview”.
+- Anonymous render must not include “#<digits>”.
+
+DELIVERABLES:
+- Working [pet_helpdesk] shortcode in both modes.
+- Updated Shortcodes admin page entry with copy button.
+- Tests passing.

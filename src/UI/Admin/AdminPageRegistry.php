@@ -256,6 +256,19 @@ JS;
             // Get current page slug from $_GET['page']
             $currentPage = $_GET['page'] ?? 'pet-dashboard';
 
+            // Hide WordPress chrome on the Dashboards page for a standalone-app look
+            if ($currentPage === 'pet-dashboards') {
+                $chromeHideCSS = '
+                    #wpadminbar, #adminmenumain, #adminmenuback, #adminmenuwrap, #wpfooter { display: none !important; }
+                    #wpcontent, #wpbody-content { margin-left: 0 !important; padding-left: 0 !important; }
+                    #wpbody { padding-top: 0 !important; }
+                    html.wp-toolbar { padding-top: 0 !important; }
+                    #pet-admin-root { margin: 0; padding: 0; }
+                    .pet-admin-dashboard { padding: 0 !important; margin-top: 0 !important; }
+                ';
+                wp_add_inline_style('pet-admin-style', $chromeHideCSS);
+            }
+
             wp_localize_script('pet-admin-app', 'petSettings', [
                 'apiUrl' => rest_url('pet/v1'),
                 'nonce' => wp_create_nonce('wp_rest'),

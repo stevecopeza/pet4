@@ -54,6 +54,7 @@ class SqlQuoteRepository implements QuoteRepository
     {
         $data = [
             'customer_id' => $quote->customerId(),
+            'lead_id' => $quote->leadId(),
             'title' => $quote->title(),
             'description' => $quote->description(),
             'state' => $quote->state()->toString(),
@@ -68,7 +69,7 @@ class SqlQuoteRepository implements QuoteRepository
             'archived_at' => $this->formatDate($quote->archivedAt()),
         ];
 
-        $format = ['%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s'];
+        $format = ['%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s'];
 
         if ($quote->id()) {
             $this->wpdb->update(
@@ -191,6 +192,57 @@ class SqlQuoteRepository implements QuoteRepository
             $end->format('Y-m-d H:i:s')
         );
 
+        return (float) $this->wpdb->get_var($sql);
+    }
+
+    public function findByLeadId(int $leadId): ?Quote
+    {
+        $sql = $this->wpdb->prepare(
+            "SELECT * FROM {$this->quotesTable} WHERE lead_id = %d AND archived_at IS NULL ORDER BY id DESC LIMIT 1",
+            $leadId
+        );
+        $row = $this->wpdb->get_row($sql);
+        return $row ? $this->hydrate($row) : null;
+    }
+
+    /**
+     * Count quotes grouped by state (for sales KPIs).
+     * @return array<string, int>
+     */
+    public function countByState(): array
+    {
+        $sql = "SELECT state, COUNT(*) as cnt FROM {$this->quotesTable} WHERE archived_at IS NULL GROUP BY state";
+        $rows = $this->wpdb->get_results($sql);
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row->state] = (int) $row->cnt;
+        }
+        return $map;
+    }
+
+    /**
+     * Sum total_value for quotes in given states.
+     */
+    public function sumValueByStates(array $states): float
+    {
+        if (empty($states)) return 0.0;
+        $placeholders = implode(',', array_fill(0, count($states), '%s'));
+        $sql = $this->wpdb->prepare(
+            "SELECT COALESCE(SUM(total_value), 0) FROM {$this->quotesTable} WHERE state IN ($placeholders) AND archived_at IS NULL",
+            ...$states
+        );
+        return (float) $this->wpdb->get_var($sql);
+    }
+
+    /**
+     * Average total_value for accepted quotes.
+     */
+    public function avgAcceptedValue(): float
+    {
+        $sql = $this->wpdb->prepare(
+            "SELECT COALESCE(AVG(total_value), 0) FROM {$this->quotesTable} WHERE state = %s AND archived_at IS NULL",
+            QuoteState::ACCEPTED
+        );
         return (float) $this->wpdb->get_var($sql);
     }
 
@@ -397,7 +449,8 @@ class SqlQuoteRepository implements QuoteRepository
             $components,
             isset($row->malleable_data) ? json_decode($row->malleable_data, true) : [],
             $costAdjustments,
-            $paymentSchedule
+            $paymentSchedule,
+            isset($row->lead_id) && $row->lead_id ? (int)$row->lead_id : null
         );
     }
 

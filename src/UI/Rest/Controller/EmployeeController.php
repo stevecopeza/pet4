@@ -103,13 +103,21 @@ class EmployeeController implements RestController
     {
         $employees = $this->employeeRepository->findAll();
 
-        $data = array_map(function ($employee) {
+        // Deterministic color palette for ui-avatars.com initials
+        $avatarColors = ['1a56db', '6f42c1', '0d6efd', 'e83e8c', '17a2b8', '28a745', 'fd7e14', '20c997', 'dc3545', '845ec2'];
+
+        $data = array_map(function ($employee) use ($avatarColors) {
             $displayName = $employee->firstName() . ' ' . $employee->lastName();
+
+            // Generate a colored initials avatar via ui-avatars.com
+            $bgColor = $avatarColors[abs(crc32($displayName)) % count($avatarColors)];
+            $nameParam = urlencode($displayName);
+            $avatarUrl = "https://ui-avatars.com/api/?name={$nameParam}&background={$bgColor}&color=fff&size=64&bold=true";
 
             return [
                 'id' => $employee->id(),
                 'wpUserId' => $employee->wpUserId(),
-                'avatarUrl' => get_avatar_url($employee->wpUserId()),
+                'avatarUrl' => $avatarUrl,
                 'firstName' => $employee->firstName(),
                 'lastName' => $employee->lastName(),
                 'displayName' => $displayName,

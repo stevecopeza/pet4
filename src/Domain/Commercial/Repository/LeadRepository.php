@@ -12,5 +12,6 @@ interface LeadRepository
     public function findById(int $id): ?Lead;
     public function findAll(): array;
     public function findByCustomerId(int $customerId): array;
+    public function countActive(): int;
     public function delete(int $id): void;
 }

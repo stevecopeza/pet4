@@ -6,6 +6,7 @@ namespace Pet\UI\Rest\Controller;
 
 use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Domain\Commercial\Repository\QuoteRepository;
+use Pet\Domain\Commercial\Repository\LeadRepository;
 use Pet\Domain\Activity\Repository\ActivityLogRepository;
 use Pet\Domain\Time\Repository\TimeEntryRepository;
 use Pet\Domain\Work\Repository\PersonSkillRepository;
@@ -24,6 +25,7 @@ class DashboardController implements RestController
 
     private $projectRepository;
     private $quoteRepository;
+    private $leadRepository;
     private $activityLogRepository;
     private $timeEntryRepository;
     private $personSkillRepository;
@@ -36,6 +38,7 @@ class DashboardController implements RestController
     public function __construct(
         ProjectRepository $projectRepository,
         QuoteRepository $quoteRepository,
+        LeadRepository $leadRepository,
         ActivityLogRepository $activityLogRepository,
         TimeEntryRepository $timeEntryRepository,
         PersonSkillRepository $personSkillRepository,
@@ -47,6 +50,7 @@ class DashboardController implements RestController
     ) {
         $this->projectRepository = $projectRepository;
         $this->quoteRepository = $quoteRepository;
+        $this->leadRepository = $leadRepository;
         $this->activityLogRepository = $activityLogRepository;
         $this->timeEntryRepository = $timeEntryRepository;
         $this->personSkillRepository = $personSkillRepository;
@@ -100,12 +104,31 @@ class DashboardController implements RestController
         $skillHeatmap = $this->personSkillRepository->getAverageProficiencyBySkill();
         $kpiPerformance = $this->personKpiRepository->getAverageAchievementByKpi();
 
+        // Sales metrics
+        $quotesByState = $this->quoteRepository->countByState();
+        $pipelineValue = $this->quoteRepository->sumValueByStates(['draft', 'sent']);
+        $activeLeads = $this->leadRepository->countActive();
+        $avgDealSize = $this->quoteRepository->avgAcceptedValue();
+        $quotesSent = $quotesByState['sent'] ?? 0;
+        $quotesAccepted = $quotesByState['accepted'] ?? 0;
+        $totalDecided = $quotesAccepted + ($quotesByState['rejected'] ?? 0);
+        $winRate = $totalDecided > 0 ? round(($quotesAccepted / $totalDecided) * 100) : 0;
+
         $data = [
             'overview' => [
                 'activeProjects' => $activeProjects,
                 'pendingQuotes' => $pendingQuotes,
                 'utilizationRate' => $utilizationRate,
                 'revenueThisMonth' => $revenueThisMonth,
+            ],
+            'sales' => [
+                'pipelineValue' => $pipelineValue,
+                'quotesSent' => $quotesSent,
+                'winRate' => $winRate,
+                'revenueMtd' => $revenueThisMonth,
+                'activeLeads' => $activeLeads,
+                'avgDealSize' => round($avgDealSize, 2),
+                'quotesByState' => $quotesByState,
             ],
             'recentActivity' => $recentActivity,
             'skillHeatmap' => $skillHeatmap,

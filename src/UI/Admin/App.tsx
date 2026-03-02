@@ -1,5 +1,7 @@
 import React from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard from './components/Dashboard';
+import Dashboards from './components/Dashboards';
 import Projects from './components/Projects';
 import Commercial from './components/Commercial';
 import TimeEntries from './components/TimeEntries';
@@ -51,10 +53,14 @@ const App = () => {
     }
   };
 
+  const isDashboardsPage = currentPage === 'pet-dashboards';
+
   const renderContent = () => {
     switch (currentPage) {
       case 'pet-dashboard':
         return <Dashboard />;
+      case 'pet-dashboards':
+        return <Dashboards />;
       case 'pet-work':
         return <WorkItems />;
       case 'pet-delivery':
@@ -95,17 +101,28 @@ const App = () => {
     }
   };
 
-  return (
-    <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
-      <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
-        <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
-        <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
-      </header>
-      
-      <main>
+  // Dashboards page renders full-screen without WP wrapper
+  if (isDashboardsPage) {
+    return (
+      <ErrorBoundary>
         {renderContent()}
-      </main>
-    </div>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
+        <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
+          <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
+          <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
+        </header>
+        
+        <main>
+          {renderContent()}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 };
 

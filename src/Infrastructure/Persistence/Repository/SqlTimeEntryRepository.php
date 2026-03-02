@@ -13,6 +13,7 @@ class SqlTimeEntryRepository implements TimeEntryRepository
     private string $table;
     private bool $hasMalleableColumn = false;
     private bool $hasArchivedColumn = false;
+    private bool $hasCorrectsColumn = false;
 
     public function __construct(\wpdb $db)
     {
@@ -20,6 +21,7 @@ class SqlTimeEntryRepository implements TimeEntryRepository
         $this->table = $db->prefix . 'pet_time_entries';
         $this->hasMalleableColumn = ($this->db->get_var("SHOW COLUMNS FROM {$this->table} LIKE 'malleable_data'") !== null);
         $this->hasArchivedColumn = ($this->db->get_var("SHOW COLUMNS FROM {$this->table} LIKE 'archived_at'") !== null);
+        $this->hasCorrectsColumn = ($this->db->get_var("SHOW COLUMNS FROM {$this->table} LIKE 'corrects_entry_id'") !== null);
     }
 
     public function save(TimeEntry $timeEntry): void
@@ -40,6 +42,9 @@ class SqlTimeEntryRepository implements TimeEntryRepository
         if ($this->hasArchivedColumn) {
             $data['archived_at'] = $timeEntry->archivedAt() ? $timeEntry->archivedAt()->format('Y-m-d H:i:s') : null;
         }
+        if ($this->hasCorrectsColumn) {
+            $data['corrects_entry_id'] = $timeEntry->correctsEntryId();
+        }
 
         if ($timeEntry->id()) {
             $this->db->update(
@@ -49,9 +54,7 @@ class SqlTimeEntryRepository implements TimeEntryRepository
             );
         } else {
             $this->db->insert($this->table, $data);
-
-            // In a real implementation we would set the ID back on the entity via reflection or a setter
-            // $timeEntry->setId($this->db->insert_id);
+            $timeEntry->setId((int) $this->db->insert_id);
         }
     }
 
@@ -132,7 +135,8 @@ class SqlTimeEntryRepository implements TimeEntryRepository
             (int) $row->id,
             json_decode(isset($row->malleable_data) ? $row->malleable_data : '[]', true),
             isset($row->created_at) ? new \DateTimeImmutable($row->created_at) : null,
-            isset($row->archived_at) ? new \DateTimeImmutable($row->archived_at) : null
+            isset($row->archived_at) ? new \DateTimeImmutable($row->archived_at) : null,
+            isset($row->corrects_entry_id) && $row->corrects_entry_id !== null ? (int) $row->corrects_entry_id : null
         );
     }
 }
