@@ -1,0 +1,448 @@
+import React, { useEffect, useState } from 'react';
+import { Ticket, Employee } from '../types';
+import { DataTable, Column } from './DataTable';
+import TicketForm from './TicketForm';
+import TicketDetails from './TicketDetails';
+
+const Support = () => {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [showConversation, setShowConversation] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [modeFilter, setModeFilter] = useState<string>('');
+  const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
+  const [customerFilter, setCustomerFilter] = useState<string>('');
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [pendingSelectId, setPendingSelectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Restore selection from URL hash (e.g., #ticket=123)
+    try {
+      const hash = window.location.hash || '';
+      const m = hash.match(/ticket=(\d+)/);
+      if (m) {
+        setPendingSelectId(Number(m[1]));
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    if (pendingSelectId && tickets.length > 0) {
+      const found = tickets.find(t => Number(t.id) === Number(pendingSelectId));
+      if (found) {
+        setSelectedTicket(found);
+        setPendingSelectId(null);
+      }
+    }
+  }, [pendingSelectId, tickets]);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        // @ts-ignore
+        const apiUrl = window.petSettings?.apiUrl;
+        // @ts-ignore
+        const nonce = window.petSettings?.nonce;
+
+        if (!apiUrl || !nonce) {
+          return;
+        }
+
+        const response = await fetch(`${apiUrl}/employees`, {
+          headers: {
+            'X-WP-Nonce': nonce,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setEmployees(data);
+      } catch (err) {
+        console.error('Failed to fetch employees for Support list', err);
+      }
+    };
+
+    fetchEmployees();
+  }, []);
+
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      if (!apiUrl || !nonce) {
+        setError('API settings missing');
+        setTickets([]);
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (statusFilter) {
+        params.append('status', statusFilter);
+      }
+      if (modeFilter) {
+        params.append('ticket_mode', modeFilter);
+      }
+      if (customerFilter) {
+        params.append('customer_id', customerFilter);
+      }
+      if (assignmentFilter === 'unassigned') {
+        params.append('unassigned', '1');
+      }
+      if (assignmentFilter === 'mine') {
+        // @ts-ignore
+        const currentUserId = window.petSettings?.currentUserId;
+        if (currentUserId) {
+          params.append('assigned_user_id', String(currentUserId));
+        }
+      }
+
+      const query = params.toString();
+      const response = await fetch(`${apiUrl}/tickets${query ? `?${query}` : ''}`, {
+        headers: {
+          // @ts-ignore
+          'X-WP-Nonce': nonce,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError('Helpdesk is disabled (feature flag off)');
+          setTickets([]);
+          return;
+        }
+        throw new Error('Failed to fetch tickets');
+      }
+
+      let data: Ticket[] = await response.json();
+
+      if (assignmentFilter === 'assigned') {
+        data = data.filter((t) => t.assignedUserId);
+      }
+
+      setTickets(data);
+      // If we have a pending selection and it exists in the new data, select it
+      if (pendingSelectId) {
+        const found = data.find(t => Number(t.id) === Number(pendingSelectId));
+        if (found) {
+          setSelectedTicket(found);
+          setPendingSelectId(null);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTickets();
+  }, [statusFilter, modeFilter, assignmentFilter, customerFilter]);
+
+  const handleFormSuccess = () => {
+    setShowAddForm(false);
+    setEditingTicket(null);
+    fetchTickets();
+  };
+
+  const handleEdit = (ticket: Ticket) => {
+    setEditingTicket(ticket);
+    setShowAddForm(true);
+  };
+
+  const handleArchive = async (id: number) => {
+    if (!confirm('Are you sure you want to archive this ticket?')) return;
+
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const response = await fetch(`${apiUrl}/tickets/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-WP-Nonce': nonce,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to archive ticket');
+      }
+
+      fetchTickets();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to archive');
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (!confirm(`Are you sure you want to archive ${selectedIds.length} tickets?`)) return;
+
+    // @ts-ignore
+    const apiUrl = window.petSettings?.apiUrl;
+    // @ts-ignore
+    const nonce = window.petSettings?.nonce;
+
+    // Process sequentially
+    for (const id of selectedIds) {
+      try {
+        await fetch(`${apiUrl}/tickets/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'X-WP-Nonce': nonce,
+          },
+        });
+      } catch (e) {
+        console.error(`Failed to archive ${id}`, e);
+      }
+    }
+    
+    setSelectedIds([]);
+    fetchTickets();
+  };
+
+  const columns: Column<Ticket>[] = [
+    { key: 'id', header: 'ID' },
+    { key: 'subject', header: 'Subject', render: (val, item) => (
+      <button 
+        type="button"
+        onClick={(e) => { 
+          e.preventDefault(); 
+          e.stopPropagation();
+          setSelectedTicket(item); 
+          try {
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
+          } catch (_) {}
+        }}
+        style={{ fontWeight: 'bold', background: 'none', border: 'none', padding: 0, margin: 0, color: '#2271b1', cursor: 'pointer' }}
+        className="button-link"
+        aria-label={`View ticket ${String(val)}`}
+      >
+        {String(val)}
+      </button>
+    ) },
+    { 
+      key: 'malleableData', 
+      header: 'Source', 
+      render: (_val, item) => {
+        const data = item.malleableData || {};
+        if (data.source === 'quote') {
+          const quoteId = data.quote_id;
+          const phaseName = data.quote_phase_name;
+          if (quoteId && phaseName) {
+            return `Quote #${quoteId} – ${phaseName}`;
+          }
+          if (quoteId) {
+            return `Quote #${quoteId}`;
+          }
+        }
+        return '-';
+      } 
+    },
+    { key: 'customerId', header: 'Customer ID' },
+    { key: 'ticketMode', header: 'Mode' },
+    { 
+      key: 'assignedUserId', 
+      header: 'Assigned To',
+      render: (val) => {
+        if (!val) {
+          return '-';
+        }
+        const match = employees.find(e => String(e.wpUserId) === String(val));
+        if (match) {
+          return `${match.firstName} ${match.lastName}`;
+        }
+        return String(val);
+      }
+    },
+    { key: 'priority', header: 'Priority', render: (val) => <span className={`pet-priority-badge priority-${val}`}>{String(val)}</span> },
+    { key: 'status', header: 'Status', render: (val) => <span className={`pet-status-badge status-${val}`}>{String(val)}</span> },
+    { key: 'createdAt', header: 'Created' },
+  ];
+
+  if (selectedTicket) {
+    return (
+      <TicketDetails 
+        ticket={selectedTicket} 
+        initialShowConversation={showConversation}
+        onBack={() => {
+          setSelectedTicket(null);
+          setShowConversation(false);
+          fetchTickets();
+        }} 
+      />
+    );
+  }
+
+  if (loading && !tickets.length) return <div>Loading tickets...</div>;
+  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
+
+  return (
+    <div className="pet-support">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2>Support (Tickets)</h2>
+        {!showAddForm && (
+          <button type="button" className="button button-primary" onClick={() => setShowAddForm(true)}>
+            Create New Ticket
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px' }}>Status</label>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All</option>
+            <option value="active">Active</option>
+            <option value="new">New</option>
+            <option value="open">Open</option>
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px' }}>Mode</label>
+          <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
+            <option value="">All</option>
+            <option value="support">Support</option>
+            <option value="execution">Execution</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px' }}>Assignment</label>
+          <select value={assignmentFilter} onChange={(e) => setAssignmentFilter(e.target.value)}>
+            <option value="all">All</option>
+            <option value="unassigned">Unassigned</option>
+            <option value="assigned">Assigned (any)</option>
+            <option value="mine">Assigned to me</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px' }}>Customer ID</label>
+          <input
+            type="number"
+            value={customerFilter}
+            onChange={(e) => setCustomerFilter(e.target.value)}
+            style={{ width: '120px' }}
+          />
+        </div>
+        <div style={{ alignSelf: 'flex-end' }}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              setStatusFilter('');
+              setModeFilter('');
+              setAssignmentFilter('all');
+              setCustomerFilter('');
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      </div>
+
+      {showAddForm && (
+        <TicketForm 
+          onSuccess={handleFormSuccess} 
+          onCancel={() => { setShowAddForm(false); setEditingTicket(null); }} 
+          initialData={editingTicket || undefined}
+        />
+      )}
+
+      {selectedIds.length > 0 && (
+        <div style={{ padding: '10px', background: '#e5f5fa', border: '1px solid #b5e1ef', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <strong>{selectedIds.length} items selected</strong>
+          <button type="button" className="button" onClick={handleBulkArchive}>Archive Selected</button>
+        </div>
+      )}
+
+      <DataTable 
+        columns={columns} 
+        data={tickets} 
+        emptyMessage="No tickets found." 
+        selection={{
+          selectedIds,
+          onSelectionChange: setSelectedIds
+        }}
+        actions={(item) => (
+          <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+            <button 
+              type="button"
+              className="button button-small"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedTicket(item);
+                try {
+                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
+                } catch (_) {}
+                setShowConversation(true);
+              }}
+              title="Discuss"
+            >
+              💬
+            </button>
+            <button 
+              type="button"
+              className="button button-small"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setSelectedTicket(item); 
+                try {
+                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
+                } catch (_) {}
+              }}
+            >
+              View
+            </button>
+            <button 
+              type="button"
+              className="button button-small"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                try {
+                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
+                } catch (_) {}
+                handleEdit(item); 
+              }}
+            >
+              Edit
+            </button>
+            <button 
+              type="button"
+              className="button button-small button-link-delete"
+              style={{ color: '#a00', borderColor: '#a00' }}
+              onClick={(e) => { e.stopPropagation(); handleArchive(item.id); }}
+            >
+              Archive
+            </button>
+          </div>
+        )}
+        rowDetails={(item: Ticket) => (
+          <div>
+            <strong>Malleable data</strong>
+            <pre style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>
+              {item.malleableData ? JSON.stringify(item.malleableData, null, 2) : 'None'}
+            </pre>
+          </div>
+        )}
+      />
+    </div>
+  );
+};
+
+export default Support;

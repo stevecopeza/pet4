@@ -1,0 +1,366 @@
+ .pet-helpdesk {
+  --pet-helpdesk-bg: #f3f4f6;
+  --pet-helpdesk-card-bg: #ffffff;
+  --pet-helpdesk-border: #e5e7eb;
+  --pet-helpdesk-text: #111827;
+  --pet-helpdesk-text-muted: #6b7280;
+  --pet-helpdesk-accent: #2563eb;
+  --pet-helpdesk-danger: #dc2626;
+  --pet-helpdesk-warn: #d97706;
+  --pet-helpdesk-neutral: #16a34a;
+  --pet-helpdesk-radius-md: 12px;
+  --pet-helpdesk-radius-lg: 14px;
+  --pet-helpdesk-spacing-1: 4px;
+  --pet-helpdesk-spacing-2: 8px;
+  --pet-helpdesk-spacing-3: 12px;
+  --pet-helpdesk-spacing-4: 16px;
+  --pet-helpdesk-spacing-6: 24px;
+  --pet-helpdesk-spacing-8: 32px;
+  --pet-helpdesk-type-xs: 11px;
+  --pet-helpdesk-type-sm: 13px;
+  --pet-helpdesk-type-md: 15px;
+  --pet-helpdesk-type-lg: 20px;
+  --pet-helpdesk-type-xl: 26px;
+ }
+
+ .pet-helpdesk {
+  background-color: var(--pet-helpdesk-bg);
+  color: var(--pet-helpdesk-text);
+  border-radius: var(--pet-helpdesk-radius-lg);
+  padding: var(--pet-helpdesk-spacing-4);
+  border: 1px solid var(--pet-helpdesk-border);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.08);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+ }
+
+ .pet-helpdesk a {
+  color: inherit;
+ }
+
+ .pet-helpdesk__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pet-helpdesk-spacing-2);
+  margin-bottom: var(--pet-helpdesk-spacing-4);
+ }
+
+ .pet-helpdesk__breadcrumbs {
+  font-size: var(--pet-helpdesk-type-xs);
+  color: var(--pet-helpdesk-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+ }
+
+ .pet-helpdesk__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pet-helpdesk-spacing-4);
+  flex-wrap: wrap;
+ }
+
+ .pet-helpdesk__title {
+  font-size: var(--pet-helpdesk-type-xl);
+  line-height: 1.1;
+  margin: 0;
+ }
+
+ .pet-helpdesk__chips {
+  display: flex;
+  align-items: center;
+  gap: var(--pet-helpdesk-spacing-2);
+  flex-wrap: wrap;
+ }
+
+ .pet-helpdesk__chip {
+  font-size: var(--pet-helpdesk-type-xs);
+  color: var(--pet-helpdesk-text-muted);
+  border-radius: 999px;
+  border: 1px solid var(--pet-helpdesk-border);
+  padding: 4px 10px;
+  background: #ffffff;
+ }
+
+ .pet-helpdesk__context {
+  font-size: var(--pet-helpdesk-type-sm);
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--pet-helpdesk-spacing-3);
+  margin-bottom: var(--pet-helpdesk-spacing-4);
+ }
+
+ .pet-helpdesk__kpi {
+  padding: var(--pet-helpdesk-spacing-3);
+  border-radius: var(--pet-helpdesk-radius-md);
+  border: 1px solid var(--pet-helpdesk-border);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pet-helpdesk-spacing-1);
+ }
+
+ .pet-helpdesk__kpi-label {
+  font-size: var(--pet-helpdesk-type-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__kpi-value {
+  font-size: var(--pet-helpdesk-type-xl);
+  font-weight: 600;
+ }
+
+ .pet-helpdesk__kpi-sub {
+  font-size: var(--pet-helpdesk-type-xs);
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__kpi--critical .pet-helpdesk__kpi-value {
+  color: var(--pet-helpdesk-danger);
+ }
+
+ .pet-helpdesk__kpi--risk .pet-helpdesk__kpi-value {
+  color: var(--pet-helpdesk-warn);
+ }
+
+ .pet-helpdesk__kpi--breached .pet-helpdesk__kpi-value {
+  color: var(--pet-helpdesk-danger);
+ }
+
+ .pet-helpdesk__kpi--attention .pet-helpdesk__kpi-value {
+  color: var(--pet-helpdesk-accent);
+ }
+
+ .pet-helpdesk--mode-wallboard {
+  --pet-helpdesk-bg: #020617;
+  --pet-helpdesk-card-bg: #020617;
+  --pet-helpdesk-border: #1e293b;
+  --pet-helpdesk-text: #e5e7eb;
+  --pet-helpdesk-text-muted: #9ca3af;
+  --pet-helpdesk-accent: #38bdf8;
+  --pet-helpdesk-danger: #f97373;
+  --pet-helpdesk-warn: #facc15;
+  --pet-helpdesk-neutral: #22c55e;
+ }
+
+ .pet-helpdesk__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.6fr);
+  grid-template-rows: auto auto;
+  gap: var(--pet-helpdesk-spacing-3);
+ }
+
+ .pet-helpdesk__panel {
+  border-radius: var(--pet-helpdesk-radius-md);
+  border: 1px solid var(--pet-helpdesk-border);
+  background-color: #ffffff;
+  padding: var(--pet-helpdesk-spacing-3);
+ }
+
+ .pet-helpdesk__panel--critical {
+  grid-row: 1 / span 2;
+ }
+
+ .pet-helpdesk__panel--risk {
+  grid-row: 1 / span 1;
+ }
+
+ .pet-helpdesk__panel--flow {
+  grid-row: 2 / span 1;
+ }
+
+ .pet-helpdesk__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--pet-helpdesk-spacing-2);
+ }
+
+ .pet-helpdesk__panel-title {
+  font-size: var(--pet-helpdesk-type-md);
+  margin: 0;
+ }
+
+ .pet-helpdesk__badge {
+  font-size: var(--pet-helpdesk-type-xs);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pet-helpdesk-border);
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pet-helpdesk-spacing-2);
+  max-height: 320px;
+  overflow-y: auto;
+ }
+
+ .pet-helpdesk__card {
+  border-radius: var(--pet-helpdesk-radius-md);
+  padding: var(--pet-helpdesk-spacing-2) var(--pet-helpdesk-spacing-3);
+  border: 1px solid var(--pet-helpdesk-border);
+  background-color: var(--pet-helpdesk-card-bg);
+ }
+
+ .pet-helpdesk__card-title {
+  font-size: var(--pet-helpdesk-type-sm);
+  font-weight: 500;
+  margin-bottom: 2px;
+ }
+
+ .pet-helpdesk__card-meta {
+  font-size: var(--pet-helpdesk-type-xs);
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__card--danger {
+  border-color: rgba(248, 113, 113, 0.6);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25);
+ }
+
+ .pet-helpdesk__card--warn {
+  border-color: rgba(250, 204, 21, 0.5);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.2);
+ }
+
+ .pet-helpdesk__card--neutral {
+  border-style: dashed;
+ }
+
+ .pet-helpdesk__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--pet-helpdesk-type-xs);
+ }
+
+ .pet-helpdesk__table th,
+ .pet-helpdesk__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--pet-helpdesk-border);
+ }
+
+ .pet-helpdesk__table th {
+  text-align: left;
+  color: var(--pet-helpdesk-text-muted);
+  font-weight: 500;
+ }
+
+ .pet-helpdesk__table tbody tr:last-child th,
+ .pet-helpdesk__table tbody tr:last-child td {
+  border-bottom: none;
+ }
+
+ .pet-helpdesk__wb-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--pet-helpdesk-spacing-4);
+ }
+
+ .pet-helpdesk__wb-brand {
+  font-size: var(--pet-helpdesk-type-lg);
+  font-weight: 600;
+ }
+
+ .pet-helpdesk__wb-context {
+  font-size: var(--pet-helpdesk-type-sm);
+  color: var(--pet-helpdesk-text-muted);
+ }
+
+ .pet-helpdesk__wb-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pet-helpdesk-spacing-3);
+  margin-bottom: var(--pet-helpdesk-spacing-4);
+ }
+
+ .pet-helpdesk__wb-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--pet-helpdesk-spacing-3);
+  margin-bottom: var(--pet-helpdesk-spacing-3);
+ }
+
+ .pet-helpdesk__wb-col {
+  border-radius: var(--pet-helpdesk-radius-md);
+  border: 1px solid var(--pet-helpdesk-border);
+  background-color: var(--pet-helpdesk-card-bg);
+  padding: var(--pet-helpdesk-spacing-3);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+ }
+ 
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__wb-col {
+     background-color: transparent;
+     border: none;
+     padding: 0;
+ }
+
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__cards {
+     max-height: none;
+     overflow-y: visible;
+ }
+
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__card {
+     background-color: #1e293b;
+     border-color: #334155;
+     margin-bottom: 8px;
+ }
+ 
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__card--danger {
+     border-left: 4px solid var(--pet-helpdesk-danger);
+ }
+
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__card--warn {
+     border-left: 4px solid var(--pet-helpdesk-warn);
+ }
+ 
+ .pet-helpdesk--mode-wallboard .pet-helpdesk__card--normal {
+     border-left: 4px solid var(--pet-helpdesk-neutral);
+ }
+
+ .pet-helpdesk__wb-ticker {
+  margin-top: var(--pet-helpdesk-spacing-2);
+  border-top: 1px solid var(--pet-helpdesk-border);
+  padding-top: var(--pet-helpdesk-spacing-2);
+  font-size: var(--pet-helpdesk-type-xs);
+  color: var(--pet-helpdesk-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+ }
+
+ @media (max-width: 960px) {
+  .pet-helpdesk__kpis {
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pet-helpdesk__grid {
+   grid-template-columns: minmax(0, 1fr);
+   grid-template-rows: auto auto auto;
+  }
+
+  .pet-helpdesk__panel--critical,
+  .pet-helpdesk__panel--risk,
+  .pet-helpdesk__panel--flow {
+   grid-row: auto;
+  }
+
+  .pet-helpdesk__wb-kpis {
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pet-helpdesk__wb-cols {
+   grid-template-columns: minmax(0, 1fr);
+  }
+ }

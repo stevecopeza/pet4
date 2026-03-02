@@ -1,0 +1,81 @@
+/* Badge Base Styles */
+.pet-status-badge,
+.pet-priority-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+  line-height: 1.4;
+  text-transform: capitalize;
+}
+
+/* Status Badges */
+.pet-status-badge.status-new {
+  background-color: #e5e5ea;
+  color: #1d1d1f;
+}
+
+.pet-status-badge.status-in_progress,
+.pet-status-badge.status-open {
+  background-color: #e3f2fd;
+  color: #0d47a1;
+}
+
+.pet-status-badge.status-resolved,
+.pet-status-badge.status-completed {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.pet-status-badge.status-closed {
+  background-color: #f5f5f5;
+  color: #616161;
+  border: 1px solid #e0e0e0;
+}
+
+.pet-status-badge.status-published {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.pet-status-badge.status-draft {
+  background-color: #fff8e1;
+  color: #f57f17;
+}
+
+.pet-status-badge.status-archived {
+  background-color: #f5f5f5;
+  color: #616161;
+}
+
+/* Priority Badges */
+.pet-priority-badge.priority-low {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.pet-priority-badge.priority-medium {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.pet-priority-badge.priority-high {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.pet-priority-badge.priority-urgent,
+.pet-priority-badge.priority-critical {
+  background-color: #d32f2f;
+  color: #fff;
+}
+
+/* Layout Helpers */
+.pet-box {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.pet-ticket-details {
+  max-width: 1200px;
+}

@@ -1,0 +1,186 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Pet\Domain\Delivery\Entity;
+
+use Pet\Domain\Delivery\ValueObject\ProjectState;
+
+class Project
+{
+    private ?int $id;
+    private int $customerId;
+    private ?int $sourceQuoteId;
+    private string $name;
+    private ProjectState $state;
+    private float $soldHours; // Immutable constraint from quote
+    private float $soldValue;
+    private ?\DateTimeImmutable $startDate;
+    private ?\DateTimeImmutable $endDate;
+    private ?int $malleableSchemaVersion;
+    private array $malleableData;
+    private ?\DateTimeImmutable $createdAt;
+    private ?\DateTimeImmutable $updatedAt;
+    private ?\DateTimeImmutable $archivedAt;
+
+    /**
+     * @var Task[]
+     */
+    private array $tasks = [];
+
+    public function __construct(
+        int $customerId,
+        string $name,
+        float $soldHours,
+        ?int $sourceQuoteId = null,
+        ?ProjectState $state = null,
+        float $soldValue = 0.00,
+        ?\DateTimeImmutable $startDate = null,
+        ?\DateTimeImmutable $endDate = null,
+        ?int $id = null,
+        ?int $malleableSchemaVersion = null,
+        array $malleableData = [],
+        ?\DateTimeImmutable $createdAt = null,
+        ?\DateTimeImmutable $updatedAt = null,
+        ?\DateTimeImmutable $archivedAt = null,
+        array $tasks = []
+    ) {
+        $this->id = $id;
+        $this->customerId = $customerId;
+        $this->sourceQuoteId = $sourceQuoteId;
+        $this->name = $name;
+        $this->soldHours = $soldHours;
+        $this->state = $state ?? ProjectState::planned();
+        $this->soldValue = $soldValue;
+        $this->startDate = $startDate;
+        $this->endDate = $endDate;
+        $this->malleableSchemaVersion = $malleableSchemaVersion;
+        $this->malleableData = $malleableData;
+        $this->createdAt = $createdAt ?? new \DateTimeImmutable();
+        $this->updatedAt = $updatedAt;
+        $this->archivedAt = $archivedAt;
+        $this->tasks = $tasks;
+    }
+
+    public function id(): ?int
+    {
+        return $this->id;
+    }
+
+    public function customerId(): int
+    {
+        return $this->customerId;
+    }
+
+    public function soldHours(): float
+    {
+        return $this->soldHours;
+    }
+
+    public function soldValue(): float
+    {
+        return $this->soldValue;
+    }
+
+    public function startDate(): ?\DateTimeImmutable
+    {
+        return $this->startDate;
+    }
+
+    public function endDate(): ?\DateTimeImmutable
+    {
+        return $this->endDate;
+    }
+
+    public function state(): ProjectState
+    {
+        return $this->state;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function completeTask(string $taskName): void
+    {
+        foreach ($this->tasks as $index => $task) {
+            if ($task->name() === $taskName) {
+                $this->tasks[$index] = new Task(
+                    $task->name(),
+                    $task->estimatedHours(),
+                    true,
+                    $task->id(),
+                    $task->roleId()
+                );
+                return;
+            }
+        }
+        throw new \DomainException("Task '$taskName' not found.");
+    }
+
+    public function sourceQuoteId(): ?int
+    {
+        return $this->sourceQuoteId;
+    }
+
+    public function malleableSchemaVersion(): ?int
+    {
+        return $this->malleableSchemaVersion;
+    }
+
+    public function malleableData(): array
+    {
+        return $this->malleableData;
+    }
+
+    public function createdAt(): \DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function updatedAt(): ?\DateTimeImmutable
+    {
+        return $this->updatedAt;
+    }
+
+    public function archivedAt(): ?\DateTimeImmutable
+    {
+        return $this->archivedAt;
+    }
+
+    /**
+     * @return Task[]
+     */
+    public function tasks(): array
+    {
+        return $this->tasks;
+    }
+
+    public function addTask(Task $task): void
+    {
+        $this->tasks[] = $task;
+    }
+
+    public function update(
+        string $name, 
+        string $status, 
+        ?\DateTimeImmutable $startDate, 
+        ?\DateTimeImmutable $endDate, 
+        array $malleableData
+    ): void {
+        $this->name = $name;
+        // Note: soldHours and soldValue are immutable as they come from a quote or initial agreement
+        // State transition should ideally be handled via specific methods, but for generic update we allow it if valid
+        $this->state = new ProjectState($status); 
+        $this->startDate = $startDate;
+        $this->endDate = $endDate;
+        $this->malleableData = $malleableData;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    public function archive(): void
+    {
+        $this->archivedAt = new \DateTimeImmutable();
+    }
+}
