@@ -30,6 +30,8 @@ class UpdateQuoteHandler
 
         $quote->update(
             $command->customerId(),
+            $command->title(),
+            $command->description(),
             $command->currency(),
             $command->acceptedAt(),
             $command->malleableData()

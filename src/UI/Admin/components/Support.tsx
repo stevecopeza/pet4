@@ -4,6 +4,7 @@ import { DataTable, Column } from './DataTable';
 import TicketForm from './TicketForm';
 import TicketDetails from './TicketDetails';
 import { computeTicketHealth } from '../healthCompute';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 
 const Support = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -396,57 +397,22 @@ const Support = () => {
           return computeTicketHealth(ticket, slaMinutes).className;
         }}
         actions={(item) => (
-          <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-            <button 
-              type="button"
-              className="button button-small"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedTicket(item);
-                try {
-                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
-                } catch (_) {}
-                setShowConversation(true);
-              }}
-              title="Discuss"
-            >
-              💬
-            </button>
-            <button 
-              type="button"
-              className="button button-small"
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                setSelectedTicket(item); 
-                try {
-                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
-                } catch (_) {}
-              }}
-            >
-              View
-            </button>
-            <button 
-              type="button"
-              className="button button-small"
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                try {
-                  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`);
-                } catch (_) {}
-                handleEdit(item); 
-              }}
-            >
-              Edit
-            </button>
-            <button 
-              type="button"
-              className="button button-small button-link-delete"
-              style={{ color: '#a00', borderColor: '#a00' }}
-              onClick={(e) => { e.stopPropagation(); handleArchive(item.id); }}
-            >
-              Archive
-            </button>
-          </div>
+          <KebabMenu items={[
+            { type: 'action', label: 'Discuss', onClick: () => {
+              setSelectedTicket(item);
+              try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`); } catch (_) {}
+              setShowConversation(true);
+            }},
+            { type: 'action', label: 'View', onClick: () => {
+              setSelectedTicket(item);
+              try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`); } catch (_) {}
+            }},
+            { type: 'action', label: 'Edit', onClick: () => {
+              try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`); } catch (_) {}
+              handleEdit(item);
+            }},
+            { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+          ]} />
         )}
         rowDetails={(item: Ticket) => (
           <div>

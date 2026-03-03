@@ -451,6 +451,8 @@ export interface Calendar {
   name: string;
   timezone: string;
   is_default: boolean;
+  exclude_public_holidays: boolean;
+  public_holiday_country: string | null;
   working_windows: WorkingWindow[];
   holidays: Holiday[];
 }
@@ -535,6 +537,8 @@ export interface Lead {
   estimatedValue: number | null;
   malleableData?: Record<string, any>;
   createdAt: string;
+  updatedAt: string | null;
+  convertedAt: string | null;
   archivedAt: string | null;
 }
 

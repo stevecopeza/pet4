@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Lead } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import LeadForm from './LeadForm';
 import { computeLeadHealth } from '../healthCompute';
 
-const Leads = () => {
+interface LeadsProps {
+  onNavigateToQuote?: (quoteId: number) => void;
+}
+
+const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +82,39 @@ const Leads = () => {
     }
   };
 
+  const handleConvertToQuote = async (lead: Lead) => {
+    if (!confirm(`Convert lead "${lead.subject}" to a quote?`)) return;
+
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const response = await fetch(`${apiUrl}/leads/${lead.id}/convert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': nonce,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || data.error || 'Failed to convert lead');
+      }
+
+      const data = await response.json();
+      fetchLeads();
+      if (onNavigateToQuote && data.quoteId) {
+        onNavigateToQuote(data.quoteId);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to convert lead');
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (!confirm(`Are you sure you want to delete ${selectedIds.length} leads?`)) return;
 
@@ -106,7 +144,10 @@ const Leads = () => {
     { key: 'id', header: 'ID' },
     { key: 'subject', header: 'Subject' },
     { key: 'customerId', header: 'Customer', render: (val) => val ? val.toString() : '' },
-    { key: 'status', header: 'Status' },
+    { key: 'status', header: 'Status', render: (val) => {
+      const status = val as string;
+      return <span className={`pet-status-badge status-${status}`}>{status}</span>;
+    }},
     { key: 'estimatedValue', header: 'Est. Value', render: (val) => val ? `$${val}` : '-' },
     { key: 'createdAt', header: 'Created' },
   ];
@@ -122,18 +163,15 @@ const Leads = () => {
   }
 
   return (
-    <div className="pet-leads-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+    <div>
+      <div className="pet-page-header">
         <h2>Leads</h2>
-        <button 
-          className="button button-primary"
-          onClick={() => setShowAddForm(true)}
-        >
+        <button className="button button-primary" onClick={() => setShowAddForm(true)}>
           Add New Lead
         </button>
       </div>
 
-      {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+      {error && <div className="notice notice-error inline"><p>{error}</p></div>}
 
       <DataTable
         data={leads}
@@ -144,34 +182,22 @@ const Leads = () => {
           onSelectionChange: setSelectedIds
         }}
         rowClassName={(lead) => computeLeadHealth(lead).className}
-        actions={(lead) => (
-          <>
-            <button 
-              className="button button-small" 
-              onClick={() => handleEdit(lead)}
-              style={{ marginRight: '5px' }}
-            >
-              Edit
-            </button>
-            <button 
-              className="button button-small button-link-delete" 
-              onClick={() => handleDelete(lead.id)}
-              style={{ color: '#a00' }}
-            >
-              Delete
-            </button>
-          </>
-        )}
+        actions={(lead) => {
+          const items: KebabMenuItem[] = [];
+          if (lead.status === 'new' || lead.status === 'qualified') {
+            items.push({ type: 'action', label: 'Convert to Quote', onClick: () => handleConvertToQuote(lead) });
+          }
+          items.push({ type: 'action', label: 'Edit', onClick: () => handleEdit(lead) });
+          items.push({ type: 'action', label: 'Delete', onClick: () => handleDelete(lead.id), danger: true });
+          return <KebabMenu items={items} />;
+        }}
       />
 
       {selectedIds.length > 0 && (
-        <div style={{ marginTop: '15px' }}>
-          <button 
-            className="button" 
-            onClick={handleBulkDelete}
-            style={{ color: '#a00', borderColor: '#a00' }}
-          >
-            Delete Selected ({selectedIds.length})
+        <div className="pet-bulk-bar">
+          <strong>{selectedIds.length} selected</strong>
+          <button className="button button-small button-link-delete" onClick={handleBulkDelete}>
+            Delete Selected
           </button>
         </div>
       )}

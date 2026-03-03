@@ -13,6 +13,8 @@ class Calendar
     private array $workingWindows; // Array of WorkingWindow
     private array $holidays;       // Array of Holiday
     private bool $isDefault;
+    private bool $excludePublicHolidays;
+    private ?string $publicHolidayCountry;
 
     public function __construct(
         string $name,
@@ -21,7 +23,9 @@ class Calendar
         array $holidays = [],
         bool $isDefault = false,
         ?int $id = null,
-        ?string $uuid = null
+        ?string $uuid = null,
+        bool $excludePublicHolidays = false,
+        ?string $publicHolidayCountry = null
     ) {
         $this->id = $id;
         $this->uuid = $uuid ?? $this->generateUuid();
@@ -30,6 +34,8 @@ class Calendar
         $this->workingWindows = $workingWindows;
         $this->holidays = $holidays;
         $this->isDefault = $isDefault;
+        $this->excludePublicHolidays = $excludePublicHolidays;
+        $this->publicHolidayCountry = $publicHolidayCountry;
 
         $this->validateTimezone();
         $this->validateWindows();
@@ -116,6 +122,16 @@ class Calendar
     public function isDefault(): bool
     {
         return $this->isDefault;
+    }
+
+    public function excludePublicHolidays(): bool
+    {
+        return $this->excludePublicHolidays;
+    }
+
+    public function publicHolidayCountry(): ?string
+    {
+        return $this->publicHolidayCountry;
     }
     
     public function createSnapshot(): array

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Site } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import SiteForm from './SiteForm';
 
 const Sites = () => {
@@ -227,22 +228,10 @@ const Sites = () => {
           onSelectionChange: setSelectedIds
         }}
         actions={(site) => (
-          <div className="pet-row-actions">
-            <button 
-              className="button button-small" 
-              onClick={() => handleEdit(site)}
-              style={{ marginRight: '5px' }}
-            >
-              Edit
-            </button>
-            <button 
-              className="button button-small button-link-delete" 
-              onClick={() => handleArchive(site.id)}
-              style={{ color: '#b32d2e' }}
-            >
-              Archive
-            </button>
-          </div>
+          <KebabMenu items={[
+            { type: 'action', label: 'Edit', onClick: () => handleEdit(site) },
+            { type: 'action', label: 'Archive', onClick: () => handleArchive(site.id), danger: true },
+          ]} />
         )}
       />
     </div>

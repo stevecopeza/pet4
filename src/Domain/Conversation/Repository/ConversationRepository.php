@@ -21,4 +21,5 @@ interface ConversationRepository
     public function getInternalParticipantCount(int $conversationId): int;
     public function messageExistsInConversation(int $conversationId, int $messageId): bool;
     public function hasReaction(int $conversationId, int $messageId, int $actorId, string $type): bool;
+    public function findOpenSubjectKeysByContext(string $contextType, string $contextId): array;
 }

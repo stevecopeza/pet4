@@ -117,6 +117,11 @@ class CalendarController
         return new \WP_REST_Response(null, 204);
     }
 
+    private static array $dayToNumber = [
+        'sunday' => 0, 'monday' => 1, 'tuesday' => 2, 'wednesday' => 3,
+        'thursday' => 4, 'friday' => 5, 'saturday' => 6,
+    ];
+
     private function serializeCalendar(Calendar $calendar): array
     {
         return [
@@ -125,8 +130,12 @@ class CalendarController
             'name' => $calendar->name(),
             'timezone' => $calendar->timezone(),
             'is_default' => $calendar->isDefault(),
+            'exclude_public_holidays' => $calendar->excludePublicHolidays(),
+            'public_holiday_country' => $calendar->publicHolidayCountry(),
             'working_windows' => array_map(function (WorkingWindow $w) {
-                return $w->toArray();
+                $arr = $w->toArray();
+                $arr['day_of_week'] = self::$dayToNumber[strtolower($arr['day_of_week'])] ?? 1;
+                return $arr;
             }, $calendar->workingWindows()),
             'holidays' => array_map(function (Holiday $h) {
                 return $h->toArray();
@@ -136,9 +145,18 @@ class CalendarController
 
     private function deserializeCalendar(array $data, ?int $id = null, ?string $uuid = null): Calendar
     {
-        $windows = array_map(function ($w) {
+        $dayMap = [
+            0 => 'sunday', 1 => 'monday', 2 => 'tuesday', 3 => 'wednesday',
+            4 => 'thursday', 5 => 'friday', 6 => 'saturday',
+        ];
+
+        $windows = array_map(function ($w) use ($dayMap) {
+            $day = $w['day_of_week'];
+            if (is_int($day)) {
+                $day = $dayMap[$day] ?? 'monday';
+            }
             return new WorkingWindow(
-                $w['day_of_week'],
+                $day,
                 $w['start_time'],
                 $w['end_time'],
                 $w['type'] ?? 'standard',
@@ -161,7 +179,9 @@ class CalendarController
             $holidays,
             (bool)($data['is_default'] ?? false),
             $id,
-            $uuid
+            $uuid,
+            (bool)($data['exclude_public_holidays'] ?? false),
+            $data['public_holiday_country'] ?? null
         );
     }
 }

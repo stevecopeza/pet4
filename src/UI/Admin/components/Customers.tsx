@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Customer } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import CustomerForm from './CustomerForm';
 import Sites from './Sites';
 import Contacts from './Contacts';
@@ -264,21 +265,10 @@ const Customers = () => {
               onSelectionChange: setSelectedIds
             }}
             actions={(item) => (
-              <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                <button 
-                  className="button button-small"
-                  onClick={() => handleEdit(item)}
-                >
-                  Edit
-                </button>
-                <button 
-                  className="button button-small button-link-delete"
-                  onClick={() => handleArchive(item.id)}
-                  style={{ color: '#b32d2e' }}
-                >
-                  Archive
-                </button>
-              </div>
+              <KebabMenu items={[
+                { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+                { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+              ]} />
             )}
           />
         </div>

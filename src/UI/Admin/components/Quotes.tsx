@@ -1,16 +1,21 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Quote, Customer } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Quote } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import QuoteForm from './QuoteForm';
 import QuoteDetails, { computeQuoteTotals } from './QuoteDetails';
 import { computeQuoteHealth } from '../healthCompute';
 
-const Quotes = () => {
+interface QuotesProps {
+  initialQuoteId?: number | null;
+  onInitialQuoteConsumed?: () => void;
+}
+
+const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed }) => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
@@ -98,20 +103,23 @@ const Quotes = () => {
     fetchCustomers();
   }, []);
 
+  useEffect(() => {
+    if (initialQuoteId) {
+      setSelectedQuoteId(initialQuoteId);
+      if (onInitialQuoteConsumed) {
+        onInitialQuoteConsumed();
+      }
+    }
+  }, [initialQuoteId]);
+
   const handleAddSuccess = (savedQuote?: Quote) => {
     setShowAddForm(false);
-    setEditingQuote(null);
     
     if (savedQuote && savedQuote.id) {
       setSelectedQuoteId(savedQuote.id);
     } else {
       fetchQuotes();
     }
-  };
-
-  const handleEdit = (quote: Quote) => {
-    setEditingQuote(quote);
-    setShowAddForm(true);
   };
 
   const handleArchive = async (id: number) => {
@@ -172,28 +180,7 @@ const Quotes = () => {
   };
 
   const columns: Column<Quote>[] = [
-    { 
-      header: 'ID', 
-      key: 'id',
-      render: (val: any, item: Quote) => (
-        <button 
-          type="button"
-          onClick={() => setSelectedQuoteId(item.id)}
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: '#2271b1', 
-            cursor: 'pointer', 
-            padding: 0, 
-            textAlign: 'left',
-            fontWeight: 'bold',
-            fontSize: 'inherit'
-          }}
-        >
-          {String(val)}
-        </button>
-      )
-    },
+    { header: 'ID', key: 'id' },
     { 
       header: 'Customer', 
       key: 'customerId',
@@ -205,8 +192,32 @@ const Quotes = () => {
         return item.customerId ? `Customer #${item.customerId}` : '-';
       }
     },
-    { header: 'Project / Quote Title', key: 'title' },
-    { header: 'State', key: 'state' },
+    {
+      header: 'Title',
+      key: 'title',
+      render: (val: any, item: Quote) => (
+        <button
+          type="button"
+          onClick={() => setSelectedQuoteId(item.id)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#2271b1',
+            cursor: 'pointer',
+            padding: 0,
+            textAlign: 'left',
+            fontWeight: 500,
+            fontSize: 'inherit',
+          }}
+        >
+          {String(val) || '(untitled)'}
+        </button>
+      )
+    },
+    { header: 'State', key: 'state', render: (val: any) => {
+      const state = val as string;
+      return <span className={`pet-status-badge status-${state}`}>{state}</span>;
+    }},
     { header: 'Version', key: 'version' },
     { header: 'Currency', key: 'currency' },
     { 
@@ -262,33 +273,26 @@ const Quotes = () => {
       {showAddForm ? (
         <QuoteForm 
           onSuccess={handleAddSuccess} 
-          onCancel={() => { setShowAddForm(false); setEditingQuote(null); }}
-          initialData={editingQuote || undefined}
+          onCancel={() => setShowAddForm(false)}
         />
       ) : (
         <>
-          <div className="pet-header-actions" style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
-            <button 
-              onClick={() => { setEditingQuote(null); setShowAddForm(true); }}
+          <div className="pet-page-header">
+            <h2>Quotes</h2>
+            <button
+              onClick={() => setShowAddForm(true)}
               className="button button-primary"
             >
               Start building quote
             </button>
-            {selectedIds.length > 0 && (
-              <button 
-                onClick={handleBulkArchive}
-                className="button button-secondary"
-                style={{ color: '#b32d2e', borderColor: '#b32d2e' }}
-              >
-                Archive Selected ({selectedIds.length})
-              </button>
-            )}
           </div>
 
           {selectedIds.length > 0 && (
-            <div style={{ padding: '10px', background: '#e5f5fa', border: '1px solid #b5e1ef', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <strong>{selectedIds.length} items selected</strong>
-              <button className="button button-link-delete" style={{ color: '#a00', borderColor: '#a00' }} onClick={handleBulkArchive}>Archive Selected</button>
+            <div className="pet-bulk-bar">
+              <strong>{selectedIds.length} selected</strong>
+              <button className="button button-small button-link-delete" onClick={handleBulkArchive}>
+                Archive Selected
+              </button>
             </div>
           )}
 
@@ -315,29 +319,10 @@ const Quotes = () => {
                 }).className;
               }}
               actions={(quote) => (
-                <div className="pet-actions">
-                  <button 
-                    onClick={() => setSelectedQuoteId(quote.id)}
-                    className="button button-small"
-                    style={{ marginRight: '5px' }}
-                  >
-                    View
-                  </button>
-                  <button 
-                    onClick={() => handleEdit(quote)}
-                    className="button button-small"
-                    style={{ marginRight: '5px' }}
-                    disabled={quote.state !== 'draft'}
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    onClick={() => handleArchive(quote.id)}
-                    className="button button-small button-link-delete"
-                  >
-                    Archive
-                  </button>
-                </div>
+                <KebabMenu items={[
+                  { type: 'action', label: 'Open', onClick: () => setSelectedQuoteId(quote.id) },
+                  { type: 'action', label: 'Archive', onClick: () => handleArchive(quote.id), danger: true },
+                ]} />
               )}
             />
           )}

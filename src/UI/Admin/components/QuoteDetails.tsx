@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Quote, QuoteBlock, QuoteSection, Employee, Team } from '../types';
+import { Quote, QuoteBlock, QuoteSection, Employee, Team, Customer } from '../types';
 
 const flattenTeams = (nodes: Team[]): Team[] => {
   let flat: Team[] = [];
@@ -14,6 +14,7 @@ const flattenTeams = (nodes: Team[]): Team[] => {
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 import AddCostAdjustmentForm from './AddCostAdjustmentForm';
 import ConversationPanel from './ConversationPanel';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import { computeQuoteHealth } from '../healthCompute';
 
 interface MarkdownTextareaProps {
@@ -338,7 +339,6 @@ interface QuoteDetailsProps {
 }
 
 const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
-  console.log('QuoteDetails rendering for ID:', quoteId);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +346,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [catalogItems, setCatalogItems] = useState<{ id: number; name: string; unit_price: number; unit_cost: number; type: string }[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   
   const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [blockSectionIdForCreate, setBlockSectionIdForCreate] = useState<number | null>(null);
@@ -356,7 +357,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [savingBlockId, setSavingBlockId] = useState<number | null>(null);
   const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
   const [sectionDraftNames, setSectionDraftNames] = useState<Record<number, string>>({});
-  const [sectionMenuOpenId, setSectionMenuOpenId] = useState<number | null>(null);
+  const [activeSubjectKeys, setActiveSubjectKeys] = useState<Set<string>>(new Set());
   const [conversationContext, setConversationContext] = useState<{
     type: string;
     id: string;
@@ -364,6 +365,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     subject: string;
     subjectKey: string;
   } | null>(null);
+  const [editingHeaderField, setEditingHeaderField] = useState<'title' | 'description' | null>(null);
+  const [headerDraftTitle, setHeaderDraftTitle] = useState('');
+  const [headerDraftDescription, setHeaderDraftDescription] = useState('');
 
   const blocksForRendering: QuoteBlock[] = (quote?.blocks || []).slice().sort((a, b) => a.orderIndex - b.orderIndex);
   const sectionsForRendering: QuoteSection[] = (quote?.sections || [])
@@ -423,9 +427,6 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       }
 
       const data = await response.json();
-      console.log('Fetched quote data:', data);
-      console.log('Quote components:', data.components);
-      console.log('Quote sections:', data.sections);
       setQuote(data);
       setExpandedBlockId(null);
       setBlockDrafts({});
@@ -510,14 +511,111 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     onBack();
   };
 
+  const startEditingHeader = (field: 'title' | 'description') => {
+    if (!quote || quote.state !== 'draft') return;
+    if (field === 'title') {
+      setHeaderDraftTitle(quote.title || '');
+    } else {
+      setHeaderDraftDescription(quote.description || '');
+    }
+    setEditingHeaderField(field);
+  };
+
+  const saveHeaderField = async () => {
+    if (!quote || !editingHeaderField) return;
+    const field = editingHeaderField;
+    const newTitle = field === 'title' ? headerDraftTitle : quote.title;
+    const newDescription = field === 'description' ? headerDraftDescription : (quote.description ?? null);
+
+    // Skip save if unchanged
+    if (field === 'title' && newTitle === quote.title) {
+      setEditingHeaderField(null);
+      return;
+    }
+    if (field === 'description' && newDescription === (quote.description ?? '')) {
+      setEditingHeaderField(null);
+      return;
+    }
+
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const response = await fetch(`${apiUrl}/quotes/${quote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': nonce,
+        },
+        body: JSON.stringify({
+          customerId: quote.customerId,
+          title: newTitle,
+          description: newDescription,
+          currency: quote.currency,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update quote');
+      }
+
+      const updated = await response.json();
+      setQuote(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setEditingHeaderField(null);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(`${apiUrl}/customers`, {
+        headers: { 'X-WP-Nonce': nonce },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCustomers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch customers', err);
+    }
+  };
+
+  const fetchActiveSubjects = async () => {
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(
+        `${apiUrl}/conversations/active-subjects?context_type=quote&context_id=${quoteId}`,
+        { headers: { 'X-WP-Nonce': nonce } }
+      );
+      if (response.ok) {
+        const data: string[] = await response.json();
+        setActiveSubjectKeys(new Set(data));
+      }
+    } catch (err) {
+      console.error('Failed to fetch active subjects', err);
+    }
+  };
+
   useEffect(() => {
-    console.log('QuoteDetails mounted/updated. Fetching data...');
     fetchQuote();
     fetchSchema();
     fetchCatalog();
     fetchEmployees();
     fetchTeams();
-    return () => console.log('QuoteDetails unmounting');
+    fetchCustomers();
+    fetchActiveSubjects();
   }, [quoteId]);
 
   const handleAddPaymentSchedule = async () => {
@@ -603,17 +701,19 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           'X-WP-Nonce': window.petSettings.nonce,
         },
       });
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to send quote');
+        throw new Error((data && data.error) || 'Failed to send quote');
       }
-      await fetchQuote();
+      if (data) setQuote(data);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error sending quote');
+    } finally {
       setLoading(false);
     }
   };
 
+  const syncingScheduleRef = useRef(false);
   const [isEditingSchedule, setIsEditingSchedule] = useState(false);
   const [scheduleDraft, setScheduleDraft] = useState<
     {
@@ -627,6 +727,50 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       source?: 'percent' | 'amount';
     }[]
   >([]);
+
+  // Auto-sync payment schedule: create/update the default "Full Payment" milestone
+  useEffect(() => {
+    if (!quote || quote.state !== 'draft' || syncingScheduleRef.current || isEditingSchedule) return;
+
+    const { quoteTotal } = computeQuoteTotals(quote);
+    const schedule = quote.paymentSchedule || [];
+
+    // Determine if schedule is the auto-generated default
+    const isAuto = schedule.length === 1 && schedule[0].title === 'Full Payment';
+
+    const needsCreate = schedule.length === 0 && quoteTotal > 0;
+    const needsUpdate = isAuto && Math.abs(schedule[0].amount - quoteTotal) > 0.01;
+
+    if (!needsCreate && !needsUpdate) return;
+
+    syncingScheduleRef.current = true;
+
+    (async () => {
+      try {
+        const response = await fetch(
+          `${window.petSettings.apiUrl}/quotes/${quoteId}/payment-schedule`,
+          {
+            method: 'POST',
+            headers: {
+              'X-WP-Nonce': window.petSettings.nonce,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              milestones: [{ title: 'Full Payment', amount: quoteTotal, dueDate: null }],
+            }),
+          }
+        );
+        const data = await response.json().catch(() => null);
+        if (response.ok && data) {
+          setQuote(data);
+        }
+      } catch (_) {
+        // Silent failure for auto-sync
+      } finally {
+        syncingScheduleRef.current = false;
+      }
+    })();
+  }, [quote]);
 
   useEffect(() => {
     if (quote && Array.isArray(quote.paymentSchedule)) {
@@ -699,20 +843,23 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           'X-WP-Nonce': window.petSettings.nonce,
         },
       });
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to accept quote');
+        throw new Error((data && data.error) || 'Failed to accept quote');
       }
-      await fetchQuote();
+      if (data) setQuote(data);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error accepting quote');
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleAdjustmentAdded = () => {
+  const handleAdjustmentAdded = (quoteData?: any) => {
     setShowAdjustmentForm(false);
-    fetchQuote();
+    if (quoteData && typeof quoteData === 'object') {
+      setQuote(quoteData);
+    }
   };
 
   const handleRemoveAdjustment = async (adjustmentId: number) => {
@@ -725,13 +872,14 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           'X-WP-Nonce': window.petSettings.nonce,
         },
       });
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to remove adjustment');
+        throw new Error((data && data.error) || 'Failed to remove adjustment');
       }
-      await fetchQuote();
+      if (data) setQuote(data);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error removing adjustment');
+    } finally {
       setLoading(false);
     }
   };
@@ -849,7 +997,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error deleting block');
     }
@@ -913,7 +1061,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error renaming section');
     } finally {
@@ -921,9 +1069,6 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     }
   };
 
-  const toggleSectionMenu = (sectionId: number) => {
-    setSectionMenuOpenId((current) => (current === sectionId ? null : sectionId));
-  };
 
   const handleSectionToggle = async (sectionId: number, key: 'showTotalValue' | 'showItemCount' | 'showTotalHours') => {
     const section = sectionsForRendering.find((s) => s.id === sectionId);
@@ -965,11 +1110,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error updating section settings');
-    } finally {
-      setSectionMenuOpenId(null);
     }
   };
 
@@ -995,11 +1138,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error cloning section');
-    } finally {
-      setSectionMenuOpenId(null);
     }
   };
 
@@ -1034,11 +1175,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error deleting section');
-    } finally {
-      setSectionMenuOpenId(null);
     }
   };
 
@@ -1254,7 +1393,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       setExpandedBlockId(null);
       setSavingBlockId(null);
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error updating block');
       setSavingBlockId(null);
@@ -1471,7 +1610,6 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
   const handleAddSection = async () => {
     try {
-      console.log('Adding quote section for quote', quoteId);
       const response = await fetch(
         `${window.petSettings.apiUrl}/quotes/${quoteId}/sections`,
         {
@@ -1483,9 +1621,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           body: JSON.stringify({ name: 'New Section' }),
         }
       );
-      console.log('Add section response status', response.status);
       const payload = await response.json().catch(() => null);
-      console.log('Add section response body', payload);
       if (!response.ok) {
         const message =
           payload && typeof payload.error === 'string'
@@ -1493,9 +1629,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
             : 'Failed to add section';
         throw new Error(message);
       }
-      await fetchQuote();
+      if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      console.error('Error adding section', err);
       alert(
         err instanceof Error ? err.message : 'Error adding section'
       );
@@ -1632,20 +1767,61 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     updatedAt: qa.updatedAt || null,
   });
 
+  const customerName = customers.find(c => c.id === quote.customerId)?.name || `Customer #${quote.customerId}`;
+
   return (
     <div className={`pet-quote-details ${quoteHealthResult.className}`}>
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ marginBottom: '16px' }}>
         <button className="button" onClick={onBack}>&larr; Back to Quotes</button>
       </div>
 
-      <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <h2>
-            Quote #{quote.id} (v{quote.version})
-            {quoteHealthResult.reasons.map((r, i) => (
-              <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
-            ))}
-          </h2>
+      {/* Top bar: title + state + actions */}
+      <div className="pet-quote-topbar">
+        <h2>
+          {editingHeaderField === 'title' ? (
+            <input
+              type="text"
+              className="regular-text"
+              value={headerDraftTitle}
+              onChange={(e) => setHeaderDraftTitle(e.target.value)}
+              onBlur={saveHeaderField}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveHeaderField(); if (e.key === 'Escape') setEditingHeaderField(null); }}
+              autoFocus
+              style={{ fontSize: 'inherit', fontWeight: 'inherit' }}
+            />
+          ) : (
+            <span
+              onClick={() => startEditingHeader('title')}
+              className={quote.state === 'draft' ? 'pet-editable-text' : undefined}
+              title={quote.state === 'draft' ? 'Click to edit title' : undefined}
+            >
+              {quote.title || '(untitled)'}
+            </span>
+          )}
+        </h2>
+        <span className={`pet-status-badge status-${quote.state.toLowerCase()}`}>
+          {quote.state}
+        </span>
+        {quoteHealthResult.reasons.map((r, i) => (
+          <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+        ))}
+        <div className="pet-quote-topbar-actions">
+          {quote.state === 'draft' && (
+            <>
+              <button className="button" onClick={handleSaveDraft} disabled={loading}>Save Draft</button>
+              <button
+                className="button button-primary"
+                onClick={handleSend}
+                disabled={!isReady}
+                title={!isReady ? readinessIssues.join('\n') : 'Send to customer'}
+              >
+                Send Quote
+              </button>
+            </>
+          )}
+          {quote.state === 'sent' && (
+            <button className="button button-primary" onClick={handleAccept}>Accept Quote</button>
+          )}
           <button
             className="button"
             onClick={() => setConversationContext({
@@ -1656,115 +1832,95 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
               subjectKey: `quote:${quote.id}`
             })}
           >
-            Discuss Quote
+            Discuss
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <div>
-            <p><strong>Customer ID:</strong> {quote.customerId}</p>
-            <p><strong>Title:</strong> {quote.title}</p>
-            {quote.description && (
-              <p>
-                <strong>Description:</strong> {quote.description}
-              </p>
-            )}
-            <p>
-              <strong>State:</strong>{' '}
-              <span
-                className={`pet-status-badge status-${quote.state.toLowerCase()}`}
-              >
-                {quote.state}
-              </span>
-            </p>
-            {quote.state === 'draft' && (
-              <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                Changes are saved automatically. You can return to this draft
-                later without sending it.
-              </p>
-            )}
-            <div style={{ marginTop: '10px' }}>
-              {quote.state === 'draft' && (
-                <div>
-                  <button
-                    className="button"
-                    onClick={handleSaveDraft}
-                    disabled={loading}
-                    style={{ marginRight: '8px' }}
-                  >
-                    Save Draft
-                  </button>
-                  <button
-                    className="button"
-                    onClick={handleSend}
-                    disabled={!isReady}
-                    title={
-                      !isReady
-                        ? readinessIssues.join('\n')
-                        : 'Send to customer'
-                    }
-                    style={{ opacity: !isReady ? 0.5 : 1 }}
-                  >
-                    Send Quote
-                  </button>
-                  {!isReady && (
-                    <div
-                      style={{
-                        color: '#d63638',
-                        fontSize: '12px',
-                        marginTop: '5px',
-                      }}
-                    >
-                      <strong>Not ready to send:</strong>
-                      <ul style={{ margin: '5px 0 0 15px' }}>
-                        {readinessIssues.map((issue, i) => (
-                          <li key={i}>{issue}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-              {quote.state === 'sent' && (
-                <button className="button button-primary" onClick={handleAccept}>Accept Quote</button>
-              )}
-            </div>
-          </div>
-          <div>
-            <p><strong>Total Value:</strong> ${quoteTotal.toFixed(2)}</p>
-            <p><strong>Base Cost:</strong> ${totalInternalCost.toFixed(2)}</p>
-            {quote.costAdjustments && quote.costAdjustments.length > 0 && (
-              <p><strong>Adjusted Cost:</strong> ${adjustedCost.toFixed(2)}</p>
-            )}
-            <p>
-              <strong>Margin:</strong>{' '}
-              <span style={{ color: margin < 0 ? 'red' : 'green' }}>
-                ${margin.toFixed(2)}
-              </span>
-            </p>
-            <p><strong>Components:</strong> {(quote.components || []).length}</p>
-            {!quote.costAdjustments?.length && !showAdjustmentForm && (
-              <p style={{ marginTop: '8px' }}>
-                <button
-                  type="button"
-                  className="button button-small"
-                  onClick={() => setShowAdjustmentForm(true)}
-                >
-                  Add Cost Adjustment
-                </button>
-              </p>
-            )}
-          </div>
-        </div>
+      </div>
 
-        {activeSchema && quote.malleableData && (
-          <MalleableFieldsRenderer 
-            schema={activeSchema} 
-            values={quote.malleableData} 
-            onChange={() => {}} 
-            readOnly={true}
-          />
+      {/* Metadata strip */}
+      <div className="pet-quote-meta">
+        <span><strong>Customer:</strong> {customerName}</span>
+        <span><strong>Quote:</strong> #{quote.id}</span>
+        <span><strong>Version:</strong> {quote.version}</span>
+        <span><strong>Currency:</strong> {quote.currency || 'USD'}</span>
+        <span><strong>Components:</strong> {(quote.components || []).length}</span>
+      </div>
+
+      {/* KPI cards */}
+      <div className="pet-kpi-grid">
+        <div className="pet-kpi-card">
+          <div className="pet-kpi-value">${quoteTotal.toFixed(2)}</div>
+          <div className="pet-kpi-label">Total Value</div>
+        </div>
+        <div className="pet-kpi-card">
+          <div className="pet-kpi-value">${totalInternalCost.toFixed(2)}</div>
+          <div className="pet-kpi-label">Base Cost</div>
+        </div>
+        {quote.costAdjustments && quote.costAdjustments.length > 0 && (
+          <div className="pet-kpi-card">
+            <div className="pet-kpi-value">${adjustedCost.toFixed(2)}</div>
+            <div className="pet-kpi-label">Adjusted Cost</div>
+          </div>
+        )}
+        <div className="pet-kpi-card">
+          <div className={`pet-kpi-value ${margin >= 0 ? 'positive' : 'negative'}`}>
+            ${margin.toFixed(2)}
+          </div>
+          <div className="pet-kpi-label">Margin</div>
+        </div>
+        {!quote.costAdjustments?.length && !showAdjustmentForm && (
+          <div className="pet-kpi-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button type="button" className="button button-small" onClick={() => setShowAdjustmentForm(true)}>
+              + Cost Adjustment
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Description */}
+      {(quote.description || quote.state === 'draft') && (
+        <div className="pet-quote-description">
+          <strong>Description: </strong>
+          {editingHeaderField === 'description' ? (
+            <textarea
+              className="large-text"
+              rows={3}
+              value={headerDraftDescription}
+              onChange={(e) => setHeaderDraftDescription(e.target.value)}
+              onBlur={saveHeaderField}
+              onKeyDown={(e) => { if (e.key === 'Escape') setEditingHeaderField(null); }}
+              autoFocus
+            />
+          ) : (
+            <span
+              onClick={() => startEditingHeader('description')}
+              className={quote.state === 'draft' ? 'pet-editable-text' : undefined}
+              title={quote.state === 'draft' ? 'Click to edit description' : undefined}
+            >
+              {quote.description || '(none)'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Readiness notice */}
+      {quote.state === 'draft' && !isReady && (
+        <div className="pet-readiness-notice">
+          <strong>Not ready to send:</strong>
+          <ul>
+            {readinessIssues.map((issue, i) => <li key={i}>{issue}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {activeSchema && quote.malleableData && (
+        <MalleableFieldsRenderer
+          schema={activeSchema}
+          values={quote.malleableData}
+          onChange={() => {}}
+          readOnly={true}
+        />
+      )}
 
       <h3>Quote Sections</h3>
       {sectionsForRendering.length > 0 && (
@@ -1825,88 +1981,21 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                         {section.name || (isTextSection ? 'Click to add heading' : '')}
                       </span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => toggleSectionMenu(section.id)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        fontSize: '16px',
-                        lineHeight: 1,
-                      }}
-                      aria-label="Section options"
-                    >
-                      ⋯
-                    </button>
-                    {sectionMenuOpenId === section.id && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          marginTop: '24px',
-                          background: '#fff',
-                          color: '#000',
-                          border: '1px solid #ccd0d4',
-                          padding: '8px',
-                          zIndex: 10,
-                          minWidth: '180px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="button button-link"
-                          onClick={() => handleCloneSection(section.id)}
-                        >
-                          Clone section
-                        </button>
-                        <button
-                          type="button"
-                          className="button button-link"
-                          onClick={() => handleDeleteSection(section.id, hasNonTextBlocks)}
-                          disabled={hasNonTextBlocks}
-                          title={
-                            hasNonTextBlocks
-                              ? 'Cannot delete a section that contains non-text blocks.'
-                              : undefined
-                          }
-                        >
-                          Delete section
-                        </button>
-                        <div style={{ marginTop: '6px', fontSize: '11px' }}>
-                          <label style={{ display: 'block' }}>
-                            <input
-                              type="checkbox"
-                              checked={section.showTotalValue}
-                              onChange={() =>
-                                handleSectionToggle(section.id, 'showTotalValue')
-                              }
-                            />{' '}
-                            Show total value
-                          </label>
-                          <label style={{ display: 'block' }}>
-                            <input
-                              type="checkbox"
-                              checked={section.showItemCount}
-                              onChange={() =>
-                                handleSectionToggle(section.id, 'showItemCount')
-                              }
-                            />{' '}
-                            Show item count
-                          </label>
-                          <label style={{ display: 'block' }}>
-                            <input
-                              type="checkbox"
-                              checked={section.showTotalHours}
-                              onChange={() =>
-                                handleSectionToggle(section.id, 'showTotalHours')
-                              }
-                            />{' '}
-                            Show total hours
-                          </label>
-                        </div>
-                      </div>
-                    )}
+                    <KebabMenu
+                      light
+                      hasNotification={activeSubjectKeys.has(`quote_section:${section.id}`)}
+                      items={[
+                        { type: 'action', label: 'Rename', onClick: () => handleSectionNameClick(section.id, section.name) },
+                        { type: 'action', label: 'Clone section', onClick: () => handleCloneSection(section.id) },
+                        { type: 'action', label: 'Discuss', onClick: () => setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Section: ${section.name || 'Untitled'}`, subjectKey: `quote_section:${section.id}` }), hasNotification: activeSubjectKeys.has(`quote_section:${section.id}`) },
+                        { type: 'divider' },
+                        { type: 'toggle', label: 'Show total value', checked: section.showTotalValue, onChange: () => handleSectionToggle(section.id, 'showTotalValue') },
+                        { type: 'toggle', label: 'Show item count', checked: section.showItemCount, onChange: () => handleSectionToggle(section.id, 'showItemCount') },
+                        { type: 'toggle', label: 'Show total hours', checked: section.showTotalHours, onChange: () => handleSectionToggle(section.id, 'showTotalHours') },
+                        { type: 'divider' },
+                        { type: 'action', label: 'Delete section', onClick: () => handleDeleteSection(section.id, hasNonTextBlocks), danger: true, disabled: hasNonTextBlocks, disabledReason: 'Cannot delete a section that contains non-text blocks.' },
+                      ]}
+                    />
                   </div>
                   {section.showTotalValue && (
                     <span style={{ fontSize: '11px', opacity: 0.8 }}>
@@ -1940,33 +2029,22 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                               paddingBottom: '8px',
                             }}
                           >
-                            <div style={{ whiteSpace: 'pre-wrap' }}>
+                            <div
+                              style={{ whiteSpace: 'pre-wrap', cursor: isExpanded ? 'default' : 'pointer' }}
+                              onClick={() => { if (!isExpanded) openBlockEditor(block); }}
+                            >
                               {text || 'Empty text block'}
                             </div>
                             <div style={{ marginTop: '6px', textAlign: 'right' }}>
-                              <button
-                                className="button button-small"
-                                onClick={() =>
-                                  isExpanded
-                                    ? cancelBlockEdit(block.id)
-                                    : openBlockEditor(block)
-                                }
-                              >
-                                {isExpanded ? 'Close' : 'Edit'}
-                              </button>
-                              <button
-                                className="button button-small"
-                                style={{ marginLeft: '8px' }}
-                                disabled={isExpanded}
-                                title={
-                                  isExpanded
-                                    ? 'Cannot delete while editing'
-                                    : undefined
-                                }
-                                onClick={() => handleDeleteBlock(block.id)}
-                              >
-                                Delete
-                              </button>
+                              <KebabMenu
+                                hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
+                                items={[
+                                  { type: 'action', label: isExpanded ? 'Close' : 'Edit', onClick: () => isExpanded ? cancelBlockEdit(block.id) : openBlockEditor(block) },
+                                  { type: 'action', label: 'Discuss', onClick: () => setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Text Block`, subjectKey: `quote_line:${block.id}` }), hasNotification: activeSubjectKeys.has(`quote_line:${block.id}`) },
+                                  { type: 'divider' },
+                                  { type: 'action', label: 'Delete', onClick: () => handleDeleteBlock(block.id), danger: true, disabled: isExpanded, disabledReason: 'Cannot delete while editing' },
+                                ]}
+                              />
                             </div>
                             {isExpanded && (
                               <div
@@ -1974,7 +2052,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                   marginTop: '10px',
                                   padding: '10px',
                                   background: '#f8f9fa',
-                                  border: '1px solid #e2e4e7',
+                                  border: '2px solid #46b450',
                                 }}
                               >
                                 <div style={{ marginBottom: '10px' }}>
@@ -2023,42 +2101,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                   >
                     <thead>
                       <tr>
-                        <th
-                          style={{
-                            textAlign: 'left',
-                            padding: '10px',
-                            width: '15%',
-                          }}
-                        >
-                          Type
-                        </th>
-                        <th
-                          style={{
-                            textAlign: 'left',
-                            padding: '10px',
-                            width: '60%',
-                          }}
-                        >
-                          Details
-                        </th>
-                        <th
-                          style={{
-                            textAlign: 'right',
-                            padding: '10px',
-                            width: '15%',
-                          }}
-                        >
-                          Value
-                        </th>
-                        <th
-                          style={{
-                            textAlign: 'right',
-                            padding: '10px',
-                            width: '10%',
-                          }}
-                        >
-                          Actions
-                        </th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '15%' }}>Type</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '45%' }}>Details</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '8%' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '15%' }}>Value</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '17%' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2066,25 +2113,26 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                         const payload = block.payload || {};
 
                         let description = '';
+                        let qty: number | null = null;
                         if (block.type === 'TextBlock') {
                           const text =
                             typeof payload.text === 'string' ? payload.text : '';
                           description =
                             text.length > 80 ? `${text.slice(0, 80)}…` : text;
                         } else if (block.type === 'HardwareBlock') {
-                          const baseName =
+                          description =
                             typeof payload.description === 'string'
                               ? payload.description
                               : '';
-                          const quantity =
+                          qty =
                             typeof payload.quantity === 'number'
                               ? payload.quantity
                               : 1;
-                          description = baseName
-                            ? `${baseName} (Qty ${quantity})`
-                            : `Qty ${quantity}`;
                         } else if (payload && typeof payload.description === 'string') {
                           description = payload.description;
+                          if (typeof payload.quantity === 'number') {
+                            qty = payload.quantity;
+                          }
                         }
 
                         let value: number | null = null;
@@ -2111,7 +2159,10 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
                         return (
                           <React.Fragment key={block.id}>
-                            <tr>
+                            <tr
+                              style={{ cursor: isExpanded ? 'default' : 'pointer', background: isExpanded ? '#f0faf0' : undefined }}
+                              onClick={() => { if (!isExpanded) openBlockEditor(block); }}
+                            >
                               <td style={{ padding: '10px' }}>{block.type}</td>
                               <td style={{ padding: '10px' }}>
                                 {block.type === 'OnceOffProjectBlock' ? (
@@ -2335,50 +2386,26 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                 )}
                               </td>
                               <td style={{ padding: '10px', textAlign: 'right' }}>
+                                {qty !== null ? qty : '-'}
+                              </td>
+                              <td style={{ padding: '10px', textAlign: 'right' }}>
                                 {value !== null ? `$${value.toFixed(2)}` : '-'}
                               </td>
                               <td style={{ padding: '10px', textAlign: 'right' }}>
-                                <button
-                                  className="button button-small"
-                                  onClick={() =>
-                                    isExpanded ? cancelBlockEdit(block.id) : openBlockEditor(block)
-                                  }
-                                >
-                                  {isExpanded ? 'Close' : 'Edit'}
-                                </button>
-                                <button
-                                  className="button button-small"
-                                  style={{ marginLeft: '8px' }}
-                                  onClick={() => {
-                                    const desc = (block.payload && typeof block.payload.description === 'string') 
-                                      ? block.payload.description 
-                                      : block.type;
-                                    setConversationContext({
-                                      type: 'quote',
-                                      id: quote.id.toString(),
-                                      version: quote.version.toString(),
-                                      subject: `Block: ${desc}`,
-                                      subjectKey: `quote_line:${block.id}`
-                                    });
-                                  }}
-                                  title="Discuss Line Item"
-                                >
-                                  💬
-                                </button>
-                                <button
-                                  className="button button-small"
-                                  style={{ marginLeft: '8px' }}
-                                  disabled={isExpanded}
-                                  title={isExpanded ? 'Cannot delete while editing' : undefined}
-                                  onClick={() => handleDeleteBlock(block.id)}
-                                >
-                                  Delete
-                                </button>
+                                <KebabMenu
+                                  hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
+                                  items={[
+                                    { type: 'action', label: isExpanded ? 'Close' : 'Edit', onClick: () => isExpanded ? cancelBlockEdit(block.id) : openBlockEditor(block) },
+                                    { type: 'action', label: 'Discuss', onClick: () => { const desc = (block.payload && typeof block.payload.description === 'string') ? block.payload.description : block.type; setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Block: ${desc}`, subjectKey: `quote_line:${block.id}` }); }, hasNotification: activeSubjectKeys.has(`quote_line:${block.id}`) },
+                                    { type: 'divider' },
+                                    { type: 'action', label: 'Delete', onClick: () => handleDeleteBlock(block.id), danger: true, disabled: isExpanded, disabledReason: 'Cannot delete while editing' },
+                                  ]}
+                                />
                               </td>
                             </tr>
                             {isExpanded && (
                               <tr>
-                                <td colSpan={4} style={{ padding: '10px', background: '#f8f9fa' }}>
+                                <td colSpan={5} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450' }}>
                                   {block.type === 'OnceOffSimpleServiceBlock' && (
                                     <div style={{ marginBottom: '10px' }}>
                                       <div style={{ marginBottom: '10px' }}>

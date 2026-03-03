@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Project } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import ProjectForm from './ProjectForm';
 import ProjectDetails from './ProjectDetails';
 import { computeProjectHealth } from '../healthCompute';
@@ -216,27 +217,11 @@ const Projects = () => {
         }}
         rowClassName={(p) => computeProjectHealth(p).className}
         actions={(item) => (
-          <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-            <button 
-              className="button button-small"
-              onClick={() => setSelectedProjectId(item.id)}
-            >
-              Tasks
-            </button>
-            <button 
-              className="button button-small"
-              onClick={() => handleEdit(item)}
-            >
-              Edit
-            </button>
-            <button 
-              className="button button-small button-link-delete"
-              style={{ color: '#a00', borderColor: '#a00' }}
-              onClick={() => handleArchive(item.id)}
-            >
-              Archive
-            </button>
-          </div>
+          <KebabMenu items={[
+            { type: 'action', label: 'Tasks', onClick: () => setSelectedProjectId(item.id) },
+            { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+            { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+          ]} />
         )}
       />
     </div>

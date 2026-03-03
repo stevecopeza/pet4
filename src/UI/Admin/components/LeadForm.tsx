@@ -137,19 +137,19 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
   };
 
   return (
-    <div className="pet-form-container" style={{ padding: '20px', background: '#f9f9f9', border: '1px solid #ddd', marginBottom: '20px' }}>
+    <div className="pet-form-card">
       <h3>{isEditMode ? 'Edit Lead' : 'Create New Lead'}</h3>
-      {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+      {error && <div className="notice notice-error inline"><p>{error}</p></div>}
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Customer:</label>
+        <div className="pet-field">
+          <label>Customer</label>
           {loadingCustomers ? (
-            <div>Loading customers...</div>
+            <p>Loading customers…</p>
           ) : (
-            <select 
-              value={customerId} 
+            <select
+              className="regular-text"
+              value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              style={{ width: '100%', maxWidth: '400px' }}
               required
               disabled={isEditMode}
             >
@@ -161,57 +161,58 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
           )}
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Subject:</label>
+        <div className="pet-field">
+          <label>Subject</label>
           <input
             type="text"
+            className="regular-text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            style={{ width: '100%', maxWidth: '400px' }}
             required
           />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Description:</label>
+        <div className="pet-field">
+          <label>Description</label>
           <textarea
+            className="large-text"
+            rows={4}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            style={{ width: '100%', maxWidth: '400px', minHeight: '100px' }}
             required
           />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Source:</label>
+        <div className="pet-field">
+          <label>Source</label>
           <input
             type="text"
+            className="regular-text"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             placeholder="e.g. Website, Referral"
-            style={{ width: '100%', maxWidth: '400px' }}
           />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Estimated Value:</label>
+        <div className="pet-field">
+          <label>Estimated Value</label>
           <input
             type="number"
+            className="regular-text"
             step="0.01"
             value={estimatedValue}
             onChange={(e) => setEstimatedValue(e.target.value)}
             placeholder="0.00"
-            style={{ width: '100%', maxWidth: '400px' }}
           />
         </div>
 
         {isEditMode && (
-          <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+          <div className="pet-field">
+            <label>Status</label>
             <select
+              className="regular-text"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              style={{ width: '100%', maxWidth: '400px' }}
             >
               <option value="new">New</option>
               <option value="contacted">Contacted</option>
@@ -230,8 +231,8 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
           />
         )}
 
-        <div style={{ marginTop: '20px' }}>
-          <button type="submit" disabled={loading} className="button button-primary" style={{ marginRight: '10px' }}>
+        <div className="pet-form-actions">
+          <button type="submit" disabled={loading} className="button button-primary">
             {loading ? 'Saving...' : (isEditMode ? 'Update Lead' : 'Create Lead')}
           </button>
           <button type="button" onClick={onCancel} className="button">

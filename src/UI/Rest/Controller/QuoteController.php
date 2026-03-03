@@ -141,7 +141,7 @@ class QuoteController implements RestController
                 'permission_callback' => [$this, 'checkPermission'],
                 'args' => [
                     'customerId' => V::requiredIntArg(),
-                    'name' => V::requiredStringArg(),
+                    'title' => V::requiredStringArg(),
                     'description' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeTextarea']],
                 ],
             ],
@@ -158,7 +158,7 @@ class QuoteController implements RestController
                 'callback' => [$this, 'updateQuote'],
                 'permission_callback' => [$this, 'checkPermission'],
                 'args' => [
-                    'name' => V::requiredStringArg(),
+                    'title' => V::requiredStringArg(),
                     'description' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeTextarea']],
                 ],
             ],
@@ -685,6 +685,8 @@ class QuoteController implements RestController
             $command = new UpdateQuoteCommand(
                 $id,
                 (int) $params['customerId'],
+                (string) ($params['title'] ?? ''),
+                isset($params['description']) ? (string) $params['description'] : null,
                 (string) ($params['currency'] ?? 'USD'),
                 !empty($params['acceptedAt']) ? new \DateTimeImmutable($params['acceptedAt']) : null,
                 $params['malleableData'] ?? []
@@ -692,7 +694,8 @@ class QuoteController implements RestController
 
             $this->updateQuoteHandler->handle($command);
 
-            return new WP_REST_Response(['message' => 'Quote updated'], 200);
+            $quote = $this->quoteRepository->findById($id);
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }

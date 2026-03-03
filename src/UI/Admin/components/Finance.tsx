@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 
 type BillingExportRow = {
   id: number;
@@ -74,50 +75,39 @@ const Finance: React.FC = () => {
         data={exportsData} 
         emptyMessage="No billing exports yet."
         actions={(row) => (
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button 
-              className="button button-small" 
-              onClick={async () => {
-                setSelectedExport(row);
-                setItemsLoading(true);
-                setActionError(null);
-                try {
-                  const res = await fetch(`${window.petSettings.apiUrl}/billing/exports/${row.id}/items`, {
-                    headers: { 'X-WP-Nonce': window.petSettings.nonce },
-                  });
-                  if (!res.ok) throw new Error('Failed to load items');
-                  const data = await res.json();
-                  setItems(data);
-                } catch (e) {
-                  setActionError(e instanceof Error ? e.message : 'Unknown error');
-                } finally {
-                  setItemsLoading(false);
-                }
-              }}
-            >
-              View
-            </button>
-            <button 
-              className="button button-primary button-small" 
-              disabled={row.status !== 'draft'}
-              onClick={async () => {
-                setActionError(null);
-                try {
-                  const res = await fetch(`${window.petSettings.apiUrl}/billing/exports/${row.id}/queue`, {
-                    method: 'POST',
-                    headers: { 'X-WP-Nonce': window.petSettings.nonce },
-                  });
-                  if (!res.ok) throw new Error('Failed to queue export');
-                  await res.json();
-                  setExportsData(exportsData.map(e => e.id === row.id ? { ...e, status: 'queued' } : e));
-                } catch (e) {
-                  setActionError(e instanceof Error ? e.message : 'Unknown error');
-                }
-              }}
-            >
-              Queue
-            </button>
-          </div>
+          <KebabMenu items={[
+            { type: 'action', label: 'View', onClick: async () => {
+              setSelectedExport(row);
+              setItemsLoading(true);
+              setActionError(null);
+              try {
+                const res = await fetch(`${window.petSettings.apiUrl}/billing/exports/${row.id}/items`, {
+                  headers: { 'X-WP-Nonce': window.petSettings.nonce },
+                });
+                if (!res.ok) throw new Error('Failed to load items');
+                const data = await res.json();
+                setItems(data);
+              } catch (e) {
+                setActionError(e instanceof Error ? e.message : 'Unknown error');
+              } finally {
+                setItemsLoading(false);
+              }
+            }},
+            { type: 'action', label: 'Queue', onClick: async () => {
+              setActionError(null);
+              try {
+                const res = await fetch(`${window.petSettings.apiUrl}/billing/exports/${row.id}/queue`, {
+                  method: 'POST',
+                  headers: { 'X-WP-Nonce': window.petSettings.nonce },
+                });
+                if (!res.ok) throw new Error('Failed to queue export');
+                await res.json();
+                setExportsData(exportsData.map(e => e.id === row.id ? { ...e, status: 'queued' } : e));
+              } catch (e) {
+                setActionError(e instanceof Error ? e.message : 'Unknown error');
+              }
+            }, disabled: row.status !== 'draft', disabledReason: 'Only draft exports can be queued' },
+          ]} />
         )}
       />
 

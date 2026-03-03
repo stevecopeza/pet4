@@ -1609,6 +1609,167 @@
   padding: 0 6px;
 }
 
+/* --- Operational Health at a Glance --- */
+.pd-ops-health {
+  border-top: 3px solid #0d6efd;
+}
+
+.pd-ops-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+}
+
+.pd-ops-chart {
+  min-width: 0;
+}
+
+.pd-ops-chart-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin: 0 0 14px 0;
+}
+
+/* Donut */
+.pd-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.pd-donut {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pd-donut-hole {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pd-donut-pct {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #1a1a2e;
+}
+
+.pd-donut-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+  margin-top: 2px;
+}
+
+.pd-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pd-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.pd-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pd-legend-label {
+  color: #555;
+  flex: 1;
+}
+
+.pd-legend-count {
+  font-weight: 600;
+  color: #1a1a2e;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bar charts (Priority + Customer Exposure) */
+.pd-priority-bars,
+.pd-exposure-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pd-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pd-bar-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #555;
+  width: 64px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.pd-bar-label--cust {
+  width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-bar-track {
+  flex: 1;
+  height: 22px;
+  background: #f0f2f5;
+  border-radius: 4px;
+  display: flex;
+  overflow: hidden;
+}
+
+.pd-bar-fill {
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.pd-bar-fill--stack {
+  border-radius: 0;
+}
+
+.pd-bar-fill--stack:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.pd-bar-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .pd-header { padding: 16px 20px; }
@@ -1621,4 +1782,5 @@
   .pd-ticket-header { flex-direction: column; gap: 8px; }
   .pd-ts-staff-row { flex-direction: column; gap: 8px; }
   .pd-ts-staff-info { min-width: 0; }
+  .pd-ops-grid { grid-template-columns: 1fr; }
 }

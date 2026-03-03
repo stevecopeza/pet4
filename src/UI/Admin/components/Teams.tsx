@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Team, Employee } from '../types';
+import { Team } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import TeamForm from './TeamForm';
 import TeamView from './TeamView';
 
@@ -297,21 +298,10 @@ const Teams = () => {
             onSelectionChange: setSelectedIds
           }}
           actions={(item) => (
-            <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-              <button 
-                className={`button button-small`}
-                onClick={() => handleEdit(item)}
-              >
-                Edit
-              </button>
-              <button 
-                className={`button button-small button-link-delete`}
-                style={{ color: '#a00', borderColor: '#a00' }}
-                onClick={() => handleArchive(item.id)}
-              >
-                Archive
-              </button>
-            </div>
+            <KebabMenu items={[
+              { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+              { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+            ]} />
           )}
         />
       </>

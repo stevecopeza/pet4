@@ -442,6 +442,62 @@ const ManagerView: React.FC<{
   const strategicTypes = ['QUOTE_ACCEPTED', 'CONTRACT_CREATED', 'PROJECT_CREATED', 'MILESTONE_COMPLETED', 'ESCALATION_TRIGGERED', 'QUOTE_SENT', 'SLA_BREACH_RECORDED'];
   const strategicActivity = activity.filter(a => strategicTypes.includes(a.event_type) || a.severity === 'breach' || a.severity === 'commercial');
 
+  /* ---- Operational Health computations ---- */
+  // Build a work-item lookup keyed by source_id for ticket work items
+  const ticketWiMap = new Map<string, WorkItem>();
+  workItems.filter(wi => wi.source_type === 'ticket').forEach(wi => ticketWiMap.set(wi.source_id, wi));
+
+  // SLA Compliance donut segments
+  const slaSegments = { breached: 0, warning: 0, healthy: 0, paused: 0, closed: 0 };
+  tickets.forEach(t => {
+    if (['closed', 'resolved'].includes(t.status)) { slaSegments.closed++; return; }
+    if (t.status === 'paused' || t.status === 'on_hold') { slaSegments.paused++; return; }
+    const wi = ticketWiMap.get(String(t.id));
+    const rem = wi?.sla_time_remaining ?? null;
+    if (rem !== null && rem < 0) slaSegments.breached++;
+    else if (rem !== null && rem < 60) slaSegments.warning++;
+    else slaSegments.healthy++;
+  });
+  const slaTotal = Object.values(slaSegments).reduce((a, b) => a + b, 0);
+  const slaDeg = (n: number) => slaTotal > 0 ? (n / slaTotal) * 360 : 0;
+  const donutGradient = slaTotal > 0
+    ? `conic-gradient(
+        #dc3545 0deg ${slaDeg(slaSegments.breached)}deg,
+        #f0ad4e ${slaDeg(slaSegments.breached)}deg ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning)}deg,
+        #28a745 ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning)}deg ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning) + slaDeg(slaSegments.healthy)}deg,
+        #6c757d ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning) + slaDeg(slaSegments.healthy)}deg ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning) + slaDeg(slaSegments.healthy) + slaDeg(slaSegments.paused)}deg,
+        #adb5bd ${slaDeg(slaSegments.breached) + slaDeg(slaSegments.warning) + slaDeg(slaSegments.healthy) + slaDeg(slaSegments.paused)}deg 360deg
+      )`
+    : 'conic-gradient(#e0e0e0 0deg 360deg)';
+
+  // Tickets by Priority (open only)
+  const priorityCounts: Record<string, number> = {};
+  openTickets.forEach(t => {
+    const p = (t.priority || 'medium').toLowerCase();
+    priorityCounts[p] = (priorityCounts[p] || 0) + 1;
+  });
+  const priorityOrder = ['critical', 'high', 'medium', 'low'];
+  const priorityColors: Record<string, string> = { critical: '#dc3545', high: '#f0ad4e', medium: '#0d6efd', low: '#28a745' };
+  const maxPriority = Math.max(1, ...Object.values(priorityCounts));
+
+  // Customer Exposure (open tickets per customer, sorted by breached count)
+  const custExposure: { name: string; open: number; breached: number; warning: number }[] = [];
+  const custBuckets = new Map<number, { open: number; breached: number; warning: number }>();
+  openTickets.forEach(t => {
+    const b = custBuckets.get(t.customerId) || { open: 0, breached: 0, warning: 0 };
+    b.open++;
+    const wi = ticketWiMap.get(String(t.id));
+    const rem = wi?.sla_time_remaining ?? null;
+    if (rem !== null && rem < 0) b.breached++;
+    else if (rem !== null && rem < 60) b.warning++;
+    custBuckets.set(t.customerId, b);
+  });
+  custBuckets.forEach((v, cid) => {
+    custExposure.push({ name: customers.get(cid) || `Customer #${cid}`, ...v });
+  });
+  custExposure.sort((a, b) => b.breached - a.breached || b.open - a.open);
+  const maxExposure = Math.max(1, ...custExposure.map(c => c.open));
+
   return (
     <>
       <div className="pd-kpi-strip">
@@ -452,6 +508,77 @@ const ManagerView: React.FC<{
         <KpiCard value={openTickets.length} label="Open Tickets" color="teal" />
         <KpiCard value={tickets.filter(t => t.intake_source === 'pulseway' && !['closed','resolved'].includes(t.status)).length} label={'\u{1F5A5}\uFE0F Pulseway Alerts'} color="purple" />
         <KpiCard value={overview.pendingQuotes} label="Pending Quotes" color="amber" />
+      </div>
+
+      {/* Operational Health at a Glance */}
+      <div className="pd-attention-panel pd-ops-health">
+        <h3 className="pd-section-title">Operational Health at a Glance</h3>
+        <div className="pd-ops-grid">
+          {/* SLA Compliance Donut */}
+          <div className="pd-ops-chart">
+            <h4 className="pd-ops-chart-title">SLA Compliance</h4>
+            <div className="pd-donut-wrap">
+              <div className="pd-donut" style={{ background: donutGradient }}>
+                <div className="pd-donut-hole">
+                  <span className="pd-donut-pct">{slaHealth}%</span>
+                  <span className="pd-donut-label">compliant</span>
+                </div>
+              </div>
+              <div className="pd-donut-legend">
+                {[{ label: 'Breached', count: slaSegments.breached, color: '#dc3545' },
+                  { label: 'Warning', count: slaSegments.warning, color: '#f0ad4e' },
+                  { label: 'Healthy', count: slaSegments.healthy, color: '#28a745' },
+                  { label: 'Paused', count: slaSegments.paused, color: '#6c757d' },
+                  { label: 'Closed', count: slaSegments.closed, color: '#adb5bd' },
+                ].map(s => (
+                  <div key={s.label} className="pd-legend-row">
+                    <span className="pd-legend-dot" style={{ background: s.color }} />
+                    <span className="pd-legend-label">{s.label}</span>
+                    <span className="pd-legend-count">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Tickets by Priority */}
+          <div className="pd-ops-chart">
+            <h4 className="pd-ops-chart-title">Tickets by Priority</h4>
+            <div className="pd-priority-bars">
+              {priorityOrder.map(p => (
+                <div key={p} className="pd-bar-row">
+                  <span className="pd-bar-label">{p.charAt(0).toUpperCase() + p.slice(1)}</span>
+                  <div className="pd-bar-track">
+                    <div
+                      className="pd-bar-fill"
+                      style={{ width: `${pct(priorityCounts[p] || 0, maxPriority)}%`, background: priorityColors[p] || '#0d6efd' }}
+                    />
+                  </div>
+                  <span className="pd-bar-count">{priorityCounts[p] || 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Customer Exposure */}
+          <div className="pd-ops-chart">
+            <h4 className="pd-ops-chart-title">Customer Exposure</h4>
+            <div className="pd-exposure-bars">
+              {custExposure.length === 0 && <div className="pd-empty">No open tickets</div>}
+              {custExposure.slice(0, 8).map(c => (
+                <div key={c.name} className="pd-bar-row">
+                  <span className="pd-bar-label pd-bar-label--cust">{c.name}</span>
+                  <div className="pd-bar-track">
+                    <div className="pd-bar-fill" style={{ width: `${pct(c.breached, maxExposure)}%`, background: '#dc3545' }} />
+                    <div className="pd-bar-fill pd-bar-fill--stack" style={{ width: `${pct(c.warning, maxExposure)}%`, background: '#f0ad4e' }} />
+                    <div className="pd-bar-fill pd-bar-fill--stack" style={{ width: `${pct(c.open - c.breached - c.warning, maxExposure)}%`, background: '#28a745' }} />
+                  </div>
+                  <span className="pd-bar-count">{c.open}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="pd-attention-panel">

@@ -3,7 +3,7 @@ import { Calendar, WorkingWindow, Holiday } from '../types';
 
 interface CalendarFormProps {
   initialData?: Calendar;
-  onSave: (data: Partial<Calendar>) => void;
+  onSuccess: () => void;
   onCancel: () => void;
 }
 
@@ -17,22 +17,61 @@ const DAYS_OF_WEEK = [
   { id: 0, name: 'Sunday' },
 ];
 
-const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSave, onCancel }) => {
+const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onCancel }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [timezone, setTimezone] = useState(initialData?.timezone || 'UTC');
   const [isDefault, setIsDefault] = useState(initialData?.is_default || false);
+  const [excludePublicHolidays, setExcludePublicHolidays] = useState(initialData?.exclude_public_holidays || false);
+  const [publicHolidayCountry, setPublicHolidayCountry] = useState(initialData?.public_holiday_country || '');
   const [workingWindows, setWorkingWindows] = useState<WorkingWindow[]>(initialData?.working_windows || []);
   const [holidays, setHolidays] = useState<Holiday[]>(initialData?.holidays || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      name,
-      timezone,
-      is_default: isDefault,
-      working_windows: workingWindows,
-      holidays: holidays
-    });
+    setLoading(true);
+    setError(null);
+
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const method = 'POST';
+      const url = initialData
+        ? `${apiUrl}/calendars/${initialData.id}`
+        : `${apiUrl}/calendars`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': nonce,
+        },
+        body: JSON.stringify({
+          name,
+          timezone,
+          is_default: isDefault,
+          exclude_public_holidays: excludePublicHolidays,
+          public_holiday_country: excludePublicHolidays ? publicHolidayCountry || null : null,
+          working_windows: workingWindows,
+          holidays: holidays,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to save calendar');
+      }
+
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateWorkingWindow = (dayOfWeek: number, field: 'start_time' | 'end_time', value: string) => {
@@ -73,8 +112,9 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSave, onCanc
   };
 
   return (
-    <div className="pet-form-container" style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div className="pet-form-container" style={{ background: '#f9f9f9', padding: '20px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px' }}>
       <h3>{initialData ? 'Edit Calendar' : 'New Calendar'}</h3>
+      {error && <div className="notice notice-error" style={{ marginBottom: '15px' }}><p>{error}</p></div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Name</label>
@@ -111,6 +151,43 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSave, onCanc
             />
             {' '}Is Default Calendar
           </label>
+        </div>
+
+        <div className="form-group" style={{ marginTop: '15px' }}>
+          <label>
+            <input 
+              type="checkbox" 
+              checked={excludePublicHolidays} 
+              onChange={e => setExcludePublicHolidays(e.target.checked)} 
+            />
+            {' '}Exclude Public Holidays
+          </label>
+          {excludePublicHolidays && (
+            <div style={{ marginTop: '10px' }}>
+              <label>Country</label>
+              <select 
+                value={publicHolidayCountry} 
+                onChange={e => setPublicHolidayCountry(e.target.value)}
+                required
+                style={{ width: '100%', padding: '8px' }}
+              >
+                <option value="">-- Select Country --</option>
+                <option value="ZA">South Africa</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="AU">Australia</option>
+                <option value="CA">Canada</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="NZ">New Zealand</option>
+                <option value="IN">India</option>
+                <option value="SG">Singapore</option>
+                <option value="AE">United Arab Emirates</option>
+                <option value="KE">Kenya</option>
+                <option value="NG">Nigeria</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: '30px' }}>
@@ -193,28 +270,15 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSave, onCanc
         <div style={{ marginTop: '30px', display: 'flex', gap: '10px' }}>
           <button 
             type="submit" 
-            style={{ 
-              background: '#007cba', 
-              color: '#fff', 
-              border: 'none', 
-              padding: '10px 20px', 
-              borderRadius: '4px',
-              cursor: 'pointer' 
-            }}
+            className="button button-primary"
+            disabled={loading}
           >
-            Save Calendar
+            {loading ? 'Saving...' : 'Save Calendar'}
           </button>
           <button 
             type="button" 
+            className="button"
             onClick={onCancel}
-            style={{ 
-              background: '#f0f0f1', 
-              color: '#000', 
-              border: '1px solid #ccc', 
-              padding: '10px 20px', 
-              borderRadius: '4px',
-              cursor: 'pointer' 
-            }}
           >
             Cancel
           </button>

@@ -75,7 +75,7 @@ export function DataTable<T extends { id: string | number }>({
   const columnCount = columns.length + (selection ? 1 : 0) + (actions ? 1 : 0);
 
   return (
-    <div className="pet-data-table-container" style={{ overflowX: 'auto' }}>
+    <div className="pet-data-table-container" style={{ overflowX: 'visible' }}>
       <table className="wp-list-table widefat fixed striped" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
         <thead>
           <tr>

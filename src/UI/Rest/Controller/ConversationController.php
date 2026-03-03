@@ -151,6 +151,12 @@ class ConversationController
             'permission_callback' => [$this, 'checkPermission'],
         ]);
 
+        register_rest_route('pet/v1', '/conversations/active-subjects', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getActiveSubjects'],
+            'permission_callback' => [$this, 'checkPermission'],
+        ]);
+
         register_rest_route('pet/v1', '/conversations/me', [
             'methods' => 'GET',
             'callback' => [$this, 'getMyConversations'],
@@ -181,6 +187,20 @@ class ConversationController
         $userId = get_current_user_id();
         $counts = $this->conversationRepository->getUnreadCounts($userId);
         return new WP_REST_Response($counts, 200);
+    }
+
+    public function getActiveSubjects(WP_REST_Request $request): WP_REST_Response
+    {
+        $contextType = $request->get_param('context_type');
+        $contextId = $request->get_param('context_id');
+
+        if (!$contextType || !$contextId) {
+            return new WP_REST_Response(['error' => 'context_type and context_id are required'], 400);
+        }
+
+        $subjectKeys = $this->conversationRepository->findOpenSubjectKeysByContext($contextType, $contextId);
+
+        return new WP_REST_Response($subjectKeys, 200);
     }
 
     public function getMyConversations(WP_REST_Request $request): WP_REST_Response

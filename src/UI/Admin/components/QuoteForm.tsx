@@ -144,24 +144,24 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ onSuccess, onCancel, initialData 
   };
 
   return (
-    <div className="card" style={{ padding: '20px', maxWidth: '800px', background: '#fff', border: '1px solid #ccd0d4' }}>
+    <div className="pet-form-card">
       <h2>{isEditMode ? 'Edit Quote' : 'Step 1: Create Quote Header'}</h2>
-      
+
       {!isEditMode && (
-        <div className="notice notice-info inline" style={{ marginBottom: '20px' }}>
+        <div className="notice notice-info inline">
           <p>Create the quote header first. You will be able to add line items and select catalog services on the next screen.</p>
         </div>
       )}
 
       {error && <div className="notice notice-error inline"><p>{error}</p></div>}
-      
+
       <div onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e)}>
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Customer</label>
-          <select 
-            value={customerId} 
+        <div className="pet-field">
+          <label>Customer</label>
+          <select
+            className="regular-text"
+            value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
-            style={{ width: '100%', maxWidth: '300px' }}
             disabled={loading || loadingCustomers}
           >
             <option value="">Select Customer</option>
@@ -171,79 +171,50 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ onSuccess, onCancel, initialData 
           </select>
         </div>
 
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Quote Title</label>
-          <input 
-            type="text" 
+        <div className="pet-field">
+          <label>Quote Title</label>
+          <input
+            type="text"
+            className="regular-text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{ width: '100%', maxWidth: '400px' }}
             disabled={loading}
             placeholder="e.g. Q123 - Server Upgrade"
           />
         </div>
 
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Description (Optional)</label>
-          <textarea 
+        <div className="pet-field">
+          <label>Description (Optional)</label>
+          <textarea
+            className="large-text"
+            rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            style={{ width: '100%', maxWidth: '500px', minHeight: '80px' }}
             disabled={loading}
           />
         </div>
-
-        {/* Total Value is derived from line items, not manually entered */}
-        {/* 
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Total Value</label>
-          <input 
-            type="number" 
-            value={totalValue}
-            onChange={(e) => setTotalValue(e.target.value)}
-            style={{ width: '100%', maxWidth: '200px' }}
-            disabled={loading}
-            min="0"
-            step="0.01"
-          />
-        </div>
-        */}
-
-        {/* Accepted At removed as per user request - quotes start as drafts */}
-        {/*
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Accepted At (Optional)</label>
-          <input 
-            type="datetime-local" 
-            value={acceptedAt}
-            onChange={(e) => setAcceptedAt(e.target.value)}
-            style={{ width: '100%', maxWidth: '300px' }}
-            disabled={loading}
-          />
-        </div>
-        */}
 
         {activeSchema && (
-          <MalleableFieldsRenderer 
-            schema={activeSchema} 
-            values={malleableData} 
-            onChange={(key, value) => setMalleableData(prev => ({ ...prev, [key]: value }))} 
+          <MalleableFieldsRenderer
+            schema={activeSchema}
+            values={malleableData}
+            onChange={(key, value) => setMalleableData(prev => ({ ...prev, [key]: value }))}
           />
         )}
 
-        <div className="pet-form-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-          <button 
-            type="button" 
-            className="button button-primary" 
+        <div className="pet-form-actions">
+          <button
+            type="button"
+            className="button button-primary"
             onClick={handleSubmit}
             disabled={loading}
           >
             {loading ? 'Saving...' : (isEditMode ? 'Update Quote' : 'Start building quote')}
           </button>
-          <button 
-            type="button" 
-            className="button" 
-            onClick={onCancel} 
+          <button
+            type="button"
+            className="button"
+            onClick={onCancel}
             disabled={loading}
           >
             Cancel

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface AddCostAdjustmentFormProps {
-  onSuccess: () => void;
+  onSuccess: (quoteData?: any) => void;
   onCancel: () => void;
   quoteId: number;
 }
@@ -42,12 +42,13 @@ const AddCostAdjustmentForm: React.FC<AddCostAdjustmentFormProps> = ({ onSuccess
         body: JSON.stringify(payload),
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to add cost adjustment');
+        throw new Error((data && data.error) || 'Failed to add cost adjustment');
       }
 
-      onSuccess();
+      onSuccess(data);
     } catch (err) {
       console.error('AddCostAdjustmentForm: Error', err);
       setError(err instanceof Error ? err.message : 'An error occurred');

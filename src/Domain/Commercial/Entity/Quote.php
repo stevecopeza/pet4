@@ -322,7 +322,9 @@ class Quote
     }
 
     public function update(
-        int $customerId, 
+        int $customerId,
+        string $title,
+        ?string $description,
         string $currency,
         ?\DateTimeImmutable $acceptedAt,
         array $malleableData = []
@@ -331,6 +333,8 @@ class Quote
             throw new \DomainException('Cannot update a quote that is not in draft state.');
         }
         $this->customerId = $customerId;
+        $this->title = $title;
+        $this->description = $description;
         $this->currency = $currency;
         $this->acceptedAt = $acceptedAt;
         $this->malleableData = $malleableData;

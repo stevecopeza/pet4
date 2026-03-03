@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Calendar } from '../types';
 import { DataTable, Column } from './DataTable';
 import CalendarForm from './CalendarForm';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 
 const Calendars = () => {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
@@ -12,10 +13,14 @@ const Calendars = () => {
 
   const fetchCalendars = async () => {
     try {
-      const response = await fetch(`${window.petSettings.apiUrl}/calendars`, {
-        headers: {
-          'X-WP-Nonce': window.petSettings.nonce,
-        },
+      setLoading(true);
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const response = await fetch(`${apiUrl}/calendars`, {
+        headers: { 'X-WP-Nonce': nonce },
       });
 
       if (!response.ok) {
@@ -35,11 +40,6 @@ const Calendars = () => {
     fetchCalendars();
   }, []);
 
-  const handleCreate = () => {
-    setEditingCalendar(null);
-    setShowForm(true);
-  };
-
   const handleEdit = (calendar: Calendar) => {
     setEditingCalendar(calendar);
     setShowForm(true);
@@ -49,106 +49,70 @@ const Calendars = () => {
     if (!confirm('Are you sure you want to delete this calendar?')) return;
 
     try {
-      const response = await fetch(`${window.petSettings.apiUrl}/calendars/${id}`, {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const response = await fetch(`${apiUrl}/calendars/${id}`, {
         method: 'DELETE',
-        headers: {
-          'X-WP-Nonce': window.petSettings.nonce,
-        },
+        headers: { 'X-WP-Nonce': nonce },
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to delete calendar');
-      }
-
-      setCalendars(prev => prev.filter(c => c.id !== id));
+      if (!response.ok) throw new Error('Failed to delete calendar');
+      fetchCalendars();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
-  const handleSave = async (calendar: Partial<Calendar>) => {
-    try {
-      const url = editingCalendar 
-        ? `${window.petSettings.apiUrl}/calendars/${editingCalendar.id}`
-        : `${window.petSettings.apiUrl}/calendars`;
-      
-      const method = editingCalendar ? 'POST' : 'POST'; // POST for update as per WP REST API usually, or PUT
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-WP-Nonce': window.petSettings.nonce,
-        },
-        body: JSON.stringify(calendar),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save calendar');
-      }
-
-      const savedCalendar = await response.json();
-      
-      if (editingCalendar) {
-        setCalendars(prev => prev.map(c => c.id === savedCalendar.id ? savedCalendar : c));
-      } else {
-        setCalendars(prev => [...prev, savedCalendar]);
-      }
-      
-      setShowForm(false);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Save failed');
-    }
-  };
-
-  if (loading) return <div>Loading calendars...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
-
-  if (showForm) {
-    return (
-      <CalendarForm 
-        initialData={editingCalendar || undefined}
-        onSave={handleSave}
-        onCancel={() => setShowForm(false)}
-      />
-    );
-  }
-
   const columns: Column<Calendar>[] = [
-    { key: 'name', header: 'Name', render: (val) => <strong>{val as string}</strong> },
+    { key: 'name', header: 'Name', render: (val, item) => (
+      <button
+        type="button"
+        onClick={() => handleEdit(item)}
+        style={{ background: 'none', border: 'none', color: '#2271b1', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 'bold', fontSize: 'inherit' }}
+      >
+        {val as string}
+      </button>
+    )},
     { key: 'timezone', header: 'Timezone' },
     { key: 'is_default', header: 'Default', render: (val) => val ? 'Yes' : 'No' },
-    { 
-      key: 'id', 
-      header: 'Actions', 
-      render: (_, item) => (
-        <div>
-          <button onClick={() => handleEdit(item)} style={{ marginRight: '10px' }}>Edit</button>
-          <button onClick={() => handleDelete(item.id)} style={{ color: 'red' }}>Delete</button>
-        </div>
-      )
-    },
   ];
+
+  if (loading && !calendars.length) return <div>Loading calendars...</div>;
+  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
 
   return (
     <div className="pet-calendars">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>Calendars</h2>
-        <button 
-          onClick={handleCreate}
-          style={{
-            background: '#007cba',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Add Calendar
-        </button>
+        {!showForm && (
+          <button className="button button-primary" onClick={() => { setEditingCalendar(null); setShowForm(true); }}>
+            Add Calendar
+          </button>
+        )}
       </div>
-      <DataTable columns={columns} data={calendars} />
+
+      {showForm && (
+        <CalendarForm
+          initialData={editingCalendar || undefined}
+          onSuccess={() => { setShowForm(false); setEditingCalendar(null); fetchCalendars(); }}
+          onCancel={() => { setShowForm(false); setEditingCalendar(null); }}
+        />
+      )}
+
+      <DataTable
+        columns={columns}
+        data={calendars}
+        emptyMessage="No calendars found."
+        actions={(item) => (
+          <KebabMenu items={[
+            { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+            { type: 'action', label: 'Delete', onClick: () => handleDelete(item.id), danger: true },
+          ]} />
+        )}
+      />
     </div>
   );
 };

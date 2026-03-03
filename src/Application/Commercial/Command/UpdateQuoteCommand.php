@@ -8,19 +8,25 @@ class UpdateQuoteCommand
 {
     private int $id;
     private int $customerId;
+    private string $title;
+    private ?string $description;
     private string $currency;
     private ?\DateTimeImmutable $acceptedAt;
     private array $malleableData;
 
     public function __construct(
-        int $id, 
-        int $customerId, 
+        int $id,
+        int $customerId,
+        string $title,
+        ?string $description,
         string $currency = 'USD',
         ?\DateTimeImmutable $acceptedAt = null,
         array $malleableData = []
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
+        $this->title = $title;
+        $this->description = $description;
         $this->currency = $currency;
         $this->acceptedAt = $acceptedAt;
         $this->malleableData = $malleableData;
@@ -34,6 +40,16 @@ class UpdateQuoteCommand
     public function customerId(): int
     {
         return $this->customerId;
+    }
+
+    public function title(): string
+    {
+        return $this->title;
+    }
+
+    public function description(): ?string
+    {
+        return $this->description;
     }
 
     public function currency(): string

@@ -123,6 +123,22 @@ class SqlConversationRepository implements ConversationRepository
         return $this->hydrate($row);
     }
 
+    public function findOpenSubjectKeysByContext(string $contextType, string $contextId): array
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'pet_conversations';
+
+        $sql = $wpdb->prepare(
+            "SELECT DISTINCT subject_key FROM $table WHERE context_type = %s AND context_id = %s AND state != %s AND subject_key IS NOT NULL",
+            $contextType,
+            $contextId,
+            'resolved'
+        );
+
+        $rows = $wpdb->get_col($sql);
+        return $rows ?: [];
+    }
+
     public function findByContext(string $contextType, string $contextId, ?string $contextVersion = null, ?string $subjectKey = null): ?Conversation
     {
         global $wpdb;

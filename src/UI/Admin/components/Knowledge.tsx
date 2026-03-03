@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Article } from '../types';
 import { DataTable, Column } from './DataTable';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import ArticleForm from './ArticleForm';
 import ArticleDetails from './ArticleDetails';
 
@@ -190,32 +191,16 @@ const Knowledge = () => {
               selectedIds,
               onSelectionChange: setSelectedIds
             }}
-            actions={(item) => (
-              <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                <button 
-                  className="button button-small" 
-                  onClick={() => setViewingArticle(item)}
-                >
-                  View
-                </button>
-                <button 
-                  className="button button-small"
-                  onClick={() => setEditingArticle(item)}
-                  disabled={item.status === 'archived'}
-                >
-                  Edit
-                </button>
-                {item.status !== 'archived' && (
-                  <button 
-                    className="button button-small button-link-delete"
-                    style={{ color: '#a00', borderColor: '#a00' }}
-                    onClick={() => handleArchive(item.id)}
-                  >
-                    Archive
-                  </button>
-                )}
-              </div>
-            )}
+            actions={(item) => {
+              const items: KebabMenuItem[] = [
+                { type: 'action', label: 'View', onClick: () => setViewingArticle(item) },
+                { type: 'action', label: 'Edit', onClick: () => setEditingArticle(item), disabled: item.status === 'archived', disabledReason: 'Archived articles cannot be edited' },
+              ];
+              if (item.status !== 'archived') {
+                items.push({ type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true });
+              }
+              return <KebabMenu items={items} />;
+            }}
           />
         </>
       )}

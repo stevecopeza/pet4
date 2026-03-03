@@ -26,6 +26,8 @@ class SqlCalendarRepository implements CalendarRepository
             'name' => $calendar->name(),
             'timezone' => $calendar->timezone(),
             'is_default' => $calendar->isDefault() ? 1 : 0,
+            'exclude_public_holidays' => $calendar->excludePublicHolidays() ? 1 : 0,
+            'public_holiday_country' => $calendar->publicHolidayCountry(),
         ];
 
         if ($calendar->id()) {
@@ -134,7 +136,9 @@ class SqlCalendarRepository implements CalendarRepository
             $holidays,
             (bool)$row->is_default,
             (int)$row->id,
-            $row->uuid
+            $row->uuid,
+            (bool)($row->exclude_public_holidays ?? false),
+            $row->public_holiday_country ?? null
         );
     }
 
