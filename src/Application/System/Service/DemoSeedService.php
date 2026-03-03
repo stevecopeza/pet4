@@ -1268,22 +1268,77 @@ final class DemoSeedService
         $projectsTable = $wpdb->prefix . 'pet_projects';
         $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $clockTable = $wpdb->prefix . 'pet_sla_clock_state';
-        $projectRow = $wpdb->get_row("SELECT * FROM $projectsTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 1");
-        if (!$projectRow) {
+        // --- Customer IDs ---
+        $rpmCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'RPM Resources (Pty) Ltd' LIMIT 1");
+        $acmeCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Acme Manufacturing SA (Pty) Ltd' LIMIT 1");
+        $nexusCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
+
+        // --- Per-customer project lookup ---
+        $rpmProject = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $projectsTable WHERE customer_id = %d AND source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 1",
+            $rpmCustId
+        ));
+        if (!$rpmProject) {
             return ['tickets' => 0, 'sla' => 'missing_project'];
         }
-        $customerId = (int)$projectRow->customer_id;
+        $acmeProject = $acmeCustId ? $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $projectsTable WHERE customer_id = %d AND source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 1",
+            $acmeCustId
+        )) : null;
+        $nexusProject = $nexusCustId ? $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $projectsTable WHERE customer_id = %d AND source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 1",
+            $nexusCustId
+        )) : null;
+
         $calendar = $calRepo->findDefault();
         if (!$calendar) {
             $calendar = new \Pet\Domain\Calendar\Entity\Calendar('Default', 'UTC', [], [], true);
         }
-        $sla = new \Pet\Domain\Sla\Entity\SlaDefinition('Standard', $calendar, 240, 1440, [
+
+        // --- 4 SLA Definitions (3 published + 1 draft) ---
+        $premium = new \Pet\Domain\Sla\Entity\SlaDefinition('Premium', $calendar, 60, 480, [
+            new \Pet\Domain\Sla\Entity\EscalationRule(50, 'warn'),
+            new \Pet\Domain\Sla\Entity\EscalationRule(75, 'escalate'),
+            new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+        ], 'published', 1);
+        $slaRepo->save($premium);
+
+        $standard = new \Pet\Domain\Sla\Entity\SlaDefinition('Standard', $calendar, 240, 1440, [
             new \Pet\Domain\Sla\Entity\EscalationRule(75, 'warn'),
             new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
         ], 'published', 1);
-        $slaRepo->save($sla);
-        $snapshot = $sla->createSnapshot((int)$projectRow->id);
-        $snapshotId = $slaRepo->saveSnapshot($snapshot);
+        $slaRepo->save($standard);
+
+        $essential = new \Pet\Domain\Sla\Entity\SlaDefinition('Essential', $calendar, 480, 2880, [
+            new \Pet\Domain\Sla\Entity\EscalationRule(80, 'warn'),
+            new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+        ], 'published', 1);
+        $slaRepo->save($essential);
+
+        $compliance = new \Pet\Domain\Sla\Entity\SlaDefinition('Compliance', $calendar, 120, 720, [
+            new \Pet\Domain\Sla\Entity\EscalationRule(75, 'warn'),
+            new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+        ], 'draft', 1);
+        $slaRepo->save($compliance);
+
+        // --- Per-project snapshots ---
+        $premiumSnap = $premium->createSnapshot((int)$rpmProject->id);
+        $premiumSnapId = $slaRepo->saveSnapshot($premiumSnap);
+
+        $standardSnap = null;
+        $standardSnapId = null;
+        if ($acmeProject) {
+            $standardSnap = $standard->createSnapshot((int)$acmeProject->id);
+            $standardSnapId = $slaRepo->saveSnapshot($standardSnap);
+        }
+
+        $essentialSnap = null;
+        $essentialSnapId = null;
+        if ($nexusProject) {
+            $essentialSnap = $essential->createSnapshot((int)$nexusProject->id);
+            $essentialSnapId = $slaRepo->saveSnapshot($essentialSnap);
+        }
+
         // RPM tickets
         $rpmSubjects = [
             ['Login issue', 'critical'],
@@ -1296,12 +1351,11 @@ final class DemoSeedService
         ];
         foreach ($rpmSubjects as [$s, $pri]) {
             $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
-                $customerId, null, null, $s, 'Auto-generated demo ticket for RPM Resources', $pri, []
+                $rpmCustId, null, null, $s, 'Auto-generated demo ticket for RPM Resources', $pri, []
             ));
         }
 
         // Acme tickets
-        $acmeCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Acme Manufacturing SA (Pty) Ltd' LIMIT 1");
         if ($acmeCustId) {
             $acmeSubjects = [
                 ['ERP module crashing on reports', 'critical'],
@@ -1316,7 +1370,6 @@ final class DemoSeedService
         }
 
         // Nexus tickets
-        $nexusCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
         if ($nexusCustId) {
             $nexusSubjects = [
                 ['AWS console access issue', 'high'],
@@ -1329,15 +1382,36 @@ final class DemoSeedService
                 ));
             }
         }
+
+        // --- Per-customer SLA binding ---
         $now = new \DateTimeImmutable();
-        $responseDue = $now->modify('+' . $snapshot->responseTargetMinutes() . ' minutes')->format('Y-m-d H:i:s');
-        $resolutionDue = $now->modify('+' . $snapshot->resolutionTargetMinutes() . ' minutes')->format('Y-m-d H:i:s');
+        $customerSlaMap = [
+            $rpmCustId => ['snapshot_id' => $premiumSnapId, 'response' => 60, 'resolution' => 480, 'version' => $premiumSnap->slaVersionAtBinding()],
+        ];
+        if ($acmeCustId && $standardSnapId && $standardSnap) {
+            $customerSlaMap[$acmeCustId] = ['snapshot_id' => $standardSnapId, 'response' => 240, 'resolution' => 1440, 'version' => $standardSnap->slaVersionAtBinding()];
+        }
+        if ($nexusCustId && $essentialSnapId && $essentialSnap) {
+            $customerSlaMap[$nexusCustId] = ['snapshot_id' => $essentialSnapId, 'response' => 480, 'resolution' => 2880, 'version' => $essentialSnap->slaVersionAtBinding()];
+        }
+
         $recentTickets = $wpdb->get_results(
-            "SELECT id FROM $ticketsTable ORDER BY id DESC LIMIT 13"
+            "SELECT id, customer_id FROM $ticketsTable ORDER BY id DESC LIMIT 13"
         );
+
+        $rpmTicketIds = [];
+        $acmeTicketIds = [];
+        $nexusTicketIds = [];
+
         foreach ($recentTickets as $row) {
+            $custId = (int)$row->customer_id;
+            $slaInfo = $customerSlaMap[$custId] ?? $customerSlaMap[$rpmCustId];
+
+            $responseDue = $now->modify('+' . $slaInfo['response'] . ' minutes')->format('Y-m-d H:i:s');
+            $resolutionDue = $now->modify('+' . $slaInfo['resolution'] . ' minutes')->format('Y-m-d H:i:s');
+
             $wpdb->update($ticketsTable, [
-                'sla_snapshot_id' => $snapshotId,
+                'sla_snapshot_id' => $slaInfo['snapshot_id'],
                 'response_due_at' => $responseDue,
                 'resolution_due_at' => $resolutionDue,
                 'status' => 'open',
@@ -1347,25 +1421,29 @@ final class DemoSeedService
                 'ticket_id' => (int)$row->id,
                 'last_event_dispatched' => 'none',
                 'last_evaluated_at' => null,
-                'sla_version_id' => $snapshot->slaVersionAtBinding(),
+                'sla_version_id' => $slaInfo['version'],
                 'paused_flag' => 0,
                 'escalation_stage' => 0
             ]);
             $this->registryAdd($seedRunId, $ticketsTable, (string)$row->id);
             $this->registryAdd($seedRunId, $clockTable, (string)$this->wpdb->insert_id);
+
+            if ($custId === $rpmCustId) $rpmTicketIds[] = (int)$row->id;
+            elseif ($custId === $acmeCustId) $acmeTicketIds[] = (int)$row->id;
+            elseif ($custId === $nexusCustId) $nexusTicketIds[] = (int)$row->id;
         }
+
         $ticketIds = array_map(fn($r) => (int)$r->id, $recentTickets);
         if (!empty($ticketIds)) {
-            $criticalId = $ticketIds[0];
-            $closedId = $ticketIds[1] ?? null;
-            $pendingId = $ticketIds[2] ?? null;
-            $resolvedId = $ticketIds[3] ?? null;
-            $pausedId = $ticketIds[2] ?? null;
-            $nearBreachId = $ticketIds[3] ?? null;
-            $breachedId = $ticketIds[4] ?? null;
+            // --- Status variety across RPM tickets ---
+            $criticalId = $rpmTicketIds[0] ?? null;
+            $closedId = $rpmTicketIds[1] ?? null;
+            $pendingId = $rpmTicketIds[2] ?? null;
+            $resolvedId = $rpmTicketIds[3] ?? null;
 
-            // Critical open ticket
-            $wpdb->update($ticketsTable, ['priority' => 'critical', 'status' => 'open'], ['id' => $criticalId]);
+            if ($criticalId) {
+                $wpdb->update($ticketsTable, ['priority' => 'critical', 'status' => 'open'], ['id' => $criticalId]);
+            }
 
             // Closed + resolved ticket (completed concept)
             if ($closedId) {
@@ -1393,15 +1471,19 @@ final class DemoSeedService
                 ], ['id' => $resolvedId]);
             }
 
-            if ($pausedId) {
-                $wpdb->update($clockTable, ['paused_flag' => 1], ['ticket_id' => $pausedId]);
+            // --- Tier-aware SLA clock states ---
+            // Premium (tight 60/480 SLA): 1 breached, 1 near-breach
+            if (isset($rpmTicketIds[4])) {
+                $wpdb->update($clockTable, ['breach_at' => $now->format('Y-m-d H:i:s')], ['ticket_id' => $rpmTicketIds[4]]);
             }
-            if ($nearBreachId) {
-                $wpdb->update($clockTable, ['escalation_stage' => 1], ['ticket_id' => $nearBreachId]);
+            if (isset($rpmTicketIds[5])) {
+                $wpdb->update($clockTable, ['escalation_stage' => 1], ['ticket_id' => $rpmTicketIds[5]]);
             }
-            if ($breachedId) {
-                $wpdb->update($clockTable, ['breach_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')], ['ticket_id' => $breachedId]);
+            // Standard (mid 240/1440 SLA): 1 paused (customer waiting)
+            if (isset($acmeTicketIds[0])) {
+                $wpdb->update($clockTable, ['paused_flag' => 1], ['ticket_id' => $acmeTicketIds[0]]);
             }
+            // Essential (generous 480/2880 SLA): all healthy — no clock tweaks
 
             // --- Ticket assignments: realistic mix of assigned / queued / unassigned ---
             // Queue IDs use canonical string names matching frontend QUEUES constant
@@ -1436,7 +1518,7 @@ final class DemoSeedService
             // Remaining tickets (~6) left fully unassigned — demo shows "no assignment" state
         }
         $ticketsCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $ticketsTable");
-        return ['tickets' => $ticketsCount, 'sla' => 'ok'];
+        return ['tickets' => $ticketsCount, 'sla_definitions' => 4, 'sla_snapshots' => 3, 'sla' => 'ok'];
     }
 
     /**

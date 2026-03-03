@@ -35,6 +35,12 @@ add_action('plugins_loaded', function () {
         $shortcodeRegistrar = new \Pet\UI\Shortcode\ShortcodeRegistrar();
         $shortcodeRegistrar->register();
 
+        $standaloneDashboard = new \Pet\UI\Standalone\StandaloneDashboardPage(
+            __DIR__,
+            plugin_dir_url(__FILE__)
+        );
+        $standaloneDashboard->register();
+
         // Register REST API
         $apiRegistry = new \Pet\UI\Rest\ApiRegistry($container);
         $apiRegistry->register();
@@ -120,6 +126,9 @@ add_filter('cron_schedules', function ($schedules) {
 
 // Schedule Cron Event on Activation
 register_activation_hook(__FILE__, function () {
+    // Flush rewrite rules so /pet-dashboards/ works immediately
+    flush_rewrite_rules();
+
     if (!wp_next_scheduled('pet_sla_automation_event')) {
         wp_schedule_event(time(), 'pet_five_minutes', 'pet_sla_automation_event');
     }

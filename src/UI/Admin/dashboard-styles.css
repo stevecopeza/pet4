@@ -201,6 +201,45 @@
   background: #f0f2f5;
 }
 
+/* Rotated SLA tier label between border bar and content */
+.pd-sla-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: inherit;
+  align-self: center;
+  padding: 0 1px 0 0;
+  margin-left: -10px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* Inherit SLA label colour from the UHB / severity border */
+.pd-attention-card.severity-critical .pd-sla-label,
+.pd-attention-card.severity-breached .pd-sla-label,
+.pd-attention-card.uhb-red .pd-sla-label {
+  color: #dc3545;
+}
+.pd-attention-card.severity-warning .pd-sla-label,
+.pd-attention-card.uhb-amber .pd-sla-label {
+  color: #d48a07;
+}
+.pd-attention-card.severity-info .pd-sla-label,
+.pd-attention-card.uhb-green .pd-sla-label {
+  color: #28a745;
+}
+.pd-attention-card.uhb-blue .pd-sla-label {
+  color: #0d6efd;
+}
+.pd-attention-card.severity-unassigned .pd-sla-label,
+.pd-attention-card.uhb-grey .pd-sla-label {
+  color: #adb5bd;
+}
+
 .pd-attention-card.severity-critical,
 .pd-attention-card.severity-breached {
   border-left-color: #dc3545;

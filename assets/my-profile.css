@@ -1,0 +1,514 @@
+/* ================================================================
+   PET My Profile — Modern Card Layout
+   ================================================================ */
+.pet-my-profile {
+  --pmp-bg: #f3f4f6;
+  --pmp-card-bg: #ffffff;
+  --pmp-border: #e5e7eb;
+  --pmp-text: #111827;
+  --pmp-text-muted: #6b7280;
+  --pmp-accent: #2563eb;
+  --pmp-accent-light: #dbeafe;
+  --pmp-success: #16a34a;
+  --pmp-success-light: #dcfce7;
+  --pmp-warn: #d97706;
+  --pmp-warn-light: #fef3c7;
+  --pmp-danger: #dc2626;
+  --pmp-danger-light: #fee2e2;
+  --pmp-purple: #7c3aed;
+  --pmp-purple-light: #ede9fe;
+  --pmp-radius: 12px;
+  --pmp-radius-sm: 8px;
+
+  background: var(--pmp-bg);
+  color: var(--pmp-text);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  border-radius: var(--pmp-radius);
+  border: 1px solid var(--pmp-border);
+  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.08);
+}
+
+/* ---- Notice banners ---- */
+.pet-my-profile-notice {
+  padding: 10px 16px;
+  border-radius: var(--pmp-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+.pet-my-profile-success {
+  background: var(--pmp-success-light);
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.pet-my-profile-error {
+  background: var(--pmp-danger-light);
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* ================================================================
+   HEADER — Avatar + Identity
+   ================================================================ */
+.pmp-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--pmp-border);
+}
+
+.pmp-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pmp-avatar img {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--pmp-accent-light);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.pmp-avatar-status {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pmp-success);
+  border: 2.5px solid var(--pmp-card-bg);
+}
+
+.pmp-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.pmp-name {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+.pmp-title {
+  font-size: 14px;
+  color: var(--pmp-text-muted);
+  margin: 0 0 8px;
+}
+
+.pmp-contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--pmp-text-muted);
+}
+
+.pmp-contact-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pmp-contact-icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.pmp-member-since {
+  font-size: 11px;
+  color: var(--pmp-text-muted);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pmp-header-actions {
+  flex-shrink: 0;
+}
+
+.pmp-edit-btn,
+.pmp-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--pmp-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--pmp-border);
+  background: var(--pmp-card-bg);
+  color: var(--pmp-text);
+  transition: all 0.15s ease;
+}
+
+.pmp-edit-btn:hover {
+  background: var(--pmp-accent);
+  color: #fff;
+  border-color: var(--pmp-accent);
+}
+
+.pmp-cancel-btn:hover {
+  background: #f9fafb;
+}
+
+/* ================================================================
+   CARDS
+   ================================================================ */
+.pmp-card {
+  background: var(--pmp-card-bg);
+  border: 1px solid var(--pmp-border);
+  border-radius: var(--pmp-radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.pmp-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pmp-text-muted);
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pmp-border);
+}
+
+/* ================================================================
+   EDIT FORM
+   ================================================================ */
+.pmp-edit-form {
+  display: none;
+}
+
+.pmp-edit-form.is-active {
+  display: block;
+}
+
+.pmp-view-section.is-hidden {
+  display: none;
+}
+
+.pmp-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.pmp-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pmp-form-group.pmp-full-width {
+  grid-column: 1 / -1;
+}
+
+.pmp-form-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pmp-text-muted);
+}
+
+.pmp-form-input {
+  padding: 9px 12px;
+  border: 1px solid var(--pmp-border);
+  border-radius: var(--pmp-radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--pmp-text);
+  background: #f9fafb;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pmp-form-input:focus {
+  outline: none;
+  border-color: var(--pmp-accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  background: #fff;
+}
+
+.pmp-form-static {
+  font-size: 14px;
+  color: var(--pmp-text);
+  padding: 9px 0;
+}
+
+.pmp-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--pmp-border);
+}
+
+.pmp-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  border-radius: var(--pmp-radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--pmp-accent);
+  color: #fff;
+  transition: background 0.15s;
+}
+
+.pmp-save-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ================================================================
+   ROLES & TEAMS — Pill tags
+   ================================================================ */
+.pmp-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pmp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pmp-pill--role {
+  background: var(--pmp-accent-light);
+  color: var(--pmp-accent);
+  border: 1px solid #93c5fd;
+}
+
+.pmp-pill--team {
+  background: var(--pmp-purple-light);
+  color: var(--pmp-purple);
+  border: 1px solid #c4b5fd;
+}
+
+.pmp-pill-icon {
+  font-size: 12px;
+}
+
+.pmp-subsection-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pmp-text-muted);
+  margin-bottom: 6px;
+}
+
+/* ================================================================
+   SKILLS — Proficiency bars
+   ================================================================ */
+.pmp-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pmp-skill-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pmp-skill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pmp-skill-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pmp-skill-date {
+  font-size: 11px;
+  color: var(--pmp-text-muted);
+}
+
+.pmp-skill-bars {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.pmp-skill-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pmp-skill-bar-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pmp-text-muted);
+}
+
+.pmp-skill-bar-track {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pmp-skill-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pmp-skill-bar-fill--self {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.pmp-skill-bar-fill--mgr {
+  background: linear-gradient(90deg, #8b5cf6, #7c3aed);
+}
+
+.pmp-skill-rating {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pmp-text-muted);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ================================================================
+   CERTIFICATIONS — Status cards
+   ================================================================ */
+.pmp-certs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pmp-cert-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--pmp-radius-sm);
+  background: #f9fafb;
+  border: 1px solid var(--pmp-border);
+}
+
+.pmp-cert-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pmp-cert-name {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.pmp-cert-issuer {
+  font-size: 12px;
+  color: var(--pmp-text-muted);
+}
+
+.pmp-cert-dates {
+  font-size: 11px;
+  color: var(--pmp-text-muted);
+  margin-top: 4px;
+}
+
+.pmp-cert-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pmp-cert-badge--active {
+  background: var(--pmp-success-light);
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.pmp-cert-badge--expiring {
+  background: var(--pmp-warn-light);
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.pmp-cert-badge--expired {
+  background: var(--pmp-danger-light);
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.pmp-cert-badge--unknown {
+  background: #f1f5f9;
+  color: var(--pmp-text-muted);
+  border: 1px solid var(--pmp-border);
+}
+
+/* ================================================================
+   EMPTY STATES
+   ================================================================ */
+.pmp-empty {
+  text-align: center;
+  padding: 20px 12px;
+  color: var(--pmp-text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+@media (max-width: 600px) {
+  .pet-my-profile {
+    padding: 16px;
+  }
+  .pmp-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  .pmp-contact-row {
+    justify-content: center;
+  }
+  .pmp-header-actions {
+    align-self: center;
+  }
+  .pmp-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .pmp-cert-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

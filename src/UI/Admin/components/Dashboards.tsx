@@ -44,6 +44,8 @@ interface TicketItem {
   lifecycleOwner?: string;
   isBillableDefault?: boolean;
   billingContextType?: string;
+  slaSnapshotId?: number | null;
+  slaName?: string | null;
 }
 
 interface WorkItem {
@@ -219,8 +221,9 @@ const AttentionCard: React.FC<{
   uhbClass?: string;
   reasons?: { label: string; color: string }[];
   recoveryHistory?: HealthHistory | null;
+  slaName?: string | null;
   onClick?: () => void;
-}> = ({ subject, meta, severity, timer, timerClass, statusLabel, pulse, isPulseway, uhbClass, reasons, recoveryHistory, onClick }) => (
+}> = ({ subject, meta, severity, timer, timerClass, statusLabel, pulse, isPulseway, uhbClass, reasons, recoveryHistory, slaName, onClick }) => (
   <div
     className={`pd-attention-card ${uhbClass || `severity-${severity}`} ${pulse ? 'pd-pulse' : ''} ${onClick ? 'pd-clickable' : ''} ${recoveryHistory ? 'uhb-has-recovery' : ''}`}
     onClick={onClick}
@@ -232,6 +235,7 @@ const AttentionCard: React.FC<{
         {recoveryHistory.was_amber && <span className="uhb-dot uhb-dot-amber" title="Was at-risk during lifecycle" />}
       </div>
     )}
+    {slaName && <div className="pd-sla-label">{slaName}</div>}
     <div className="pd-attention-body">
       <div className="pd-attention-subject">
         {isPulseway && <span className="pd-pulseway-tag">{`\u{1F5A5}\uFE0F`} PW</span>}
@@ -377,7 +381,7 @@ const ManagerView: React.FC<{
 
   // Needs attention: breached, warnings, unassigned
   const ticketMap = new Map(tickets.map(t => [String(t.id), t]));
-  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; isPulseway?: boolean; uhbClass?: string; reasons?: { label: string; color: string }[]; sort: number }[] = [];
+  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; isPulseway?: boolean; uhbClass?: string; reasons?: { label: string; color: string }[]; slaName?: string | null; sort: number }[] = [];
 
   workItems
     .filter(wi => wi.source_type === 'ticket')
@@ -399,6 +403,7 @@ const ManagerView: React.FC<{
           isPulseway: ticket.intake_source === 'pulseway',
           uhbClass: health.className,
           reasons: health.reasons,
+          slaName: ticket.slaName || null,
           sort: 0,
         });
       } else if (wi.sla_time_remaining !== null && wi.sla_time_remaining < 60) {
@@ -412,6 +417,7 @@ const ManagerView: React.FC<{
           isPulseway: ticket.intake_source === 'pulseway',
           uhbClass: health.className,
           reasons: health.reasons,
+          slaName: ticket.slaName || null,
           sort: 1,
         });
       }
@@ -424,6 +430,7 @@ const ManagerView: React.FC<{
           statusLabel: 'UNASSIGNED',
           isPulseway: ticket.intake_source === 'pulseway',
           uhbClass: health.className,
+          slaName: ticket.slaName || null,
           sort: 2,
         });
       }
@@ -457,7 +464,7 @@ const ManagerView: React.FC<{
         ) : (
           <div className="pd-attention-grid">
             {attentionItems.slice(0, 12).map((item, i) => (
-              <AttentionCard key={i} {...item} />
+              <AttentionCard key={i} {...item} slaName={item.slaName} />
             ))}
           </div>
         )}
@@ -523,6 +530,7 @@ const SupportView: React.FC<{
         isPulseway: ticket.intake_source === 'pulseway',
         uhbClass: health.className,
         reasons: health.reasons,
+        slaName: ticket.slaName || null,
         sort: wi.sla_time_remaining ?? 9999,
       };
     })
@@ -545,6 +553,7 @@ const SupportView: React.FC<{
       isPulseway: ticket.intake_source === 'pulseway',
       uhbClass: health.className,
       reasons: health.reasons,
+      slaName: ticket.slaName || null,
       sort: wi.sla_time_remaining ?? 9999,
     };
   });
@@ -573,7 +582,7 @@ const SupportView: React.FC<{
         ) : (
           <div className="pd-attention-grid">
             {attentionItems.map((item, i) => (
-              <AttentionCard key={i} {...item} onClick={() => onTicketClick(item.ticketId)} />
+              <AttentionCard key={i} {...item} slaName={item.slaName} onClick={() => onTicketClick(item.ticketId)} />
             ))}
           </div>
         )}
@@ -587,7 +596,7 @@ const SupportView: React.FC<{
           </h3>
           <div className="pd-attention-grid">
             {unassignedAttention.map((item, i) => (
-              <AttentionCard key={i} {...item} onClick={() => onTicketClick(item.ticketId)} />
+              <AttentionCard key={i} {...item} slaName={item.slaName} onClick={() => onTicketClick(item.ticketId)} />
             ))}
           </div>
         </div>

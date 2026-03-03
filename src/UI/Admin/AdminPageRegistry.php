@@ -128,8 +128,38 @@ class AdminPageRegistry
                 [
                     'tag' => 'pet_activity_stream',
                     'name' => 'Activity Stream',
-                    'description' => 'Displays recent PET activity relevant to the current user.',
-                    'example' => '[pet_activity_stream limit="20"]',
+                    'description' => 'Displays recent PET activity relevant to the current user. Supports filters, grouping, and auto-refresh.',
+                    'example' => '[pet_activity_stream limit="20" scope="my" window_days="14"]',
+                ],
+                [
+                    'tag' => 'pet_activity_wallboard',
+                    'name' => 'Activity Wallboard',
+                    'description' => 'Full-screen rolling activity feed designed for lobby TVs / wallboards. Auto-refreshes every 30 seconds.',
+                    'example' => '[pet_activity_wallboard limit="20" refresh="30"]',
+                ],
+                [
+                    'tag' => 'pet_helpdesk',
+                    'name' => 'Helpdesk Overview',
+                    'description' => 'Live SLA health dashboard with KPIs, critical/at-risk lanes, and ticket flow. Supports manager and wallboard modes.',
+                    'example' => '[pet_helpdesk mode="manager" team="all" refresh="60"]',
+                ],
+                [
+                    'tag' => 'pet_my_conversations',
+                    'name' => 'My Conversations',
+                    'description' => 'Shows the current user\'s recent conversations with context badges and state indicators.',
+                    'example' => '[pet_my_conversations limit="10"]',
+                ],
+                [
+                    'tag' => 'pet_my_approvals',
+                    'name' => 'Pending Approvals',
+                    'description' => 'Lists decisions awaiting the current user\'s approval, with urgency indicators based on wait time.',
+                    'example' => '[pet_my_approvals]',
+                ],
+                [
+                    'tag' => 'pet_knowledge_base',
+                    'name' => 'Knowledge Base',
+                    'description' => 'Searchable knowledge base articles grouped by category, with excerpts. Optionally filter by category.',
+                    'example' => '[pet_knowledge_base limit="20"]',
                 ],
             ];
 

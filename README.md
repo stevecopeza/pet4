@@ -33,6 +33,26 @@ To provide a single, immutable source of operational truth that integrates comme
 *   **Forecasts:** Probability-weighted revenue projection.
 *   **Revenue Recognition:** Accrual-based tracking via milestones.
 
+## 🧩 Frontend Shortcodes
+
+PET provides 9 WordPress shortcodes for embedding operational surfaces into pages and posts. All require authentication and are read-only by default.
+
+| Shortcode | Purpose |
+|---|---|
+| `[pet_my_profile]` | User profile with roles, skills, certifications (view + edit personal details) |
+| `[pet_my_work]` | "My Day" dashboard — assigned tickets, tasks, KPIs, department queue |
+| `[pet_my_calendar]` | Agenda-style calendar for the next 14 days |
+| `[pet_activity_stream]` | Chronological activity feed with filters and auto-refresh |
+| `[pet_activity_wallboard]` | Full-screen rolling activity feed for lobby TVs |
+| `[pet_helpdesk]` | Live SLA health dashboard (manager + wallboard modes) |
+| `[pet_my_conversations]` | Recent conversations with context badges and state pills |
+| `[pet_my_approvals]` | Pending approval decisions with urgency indicators |
+| `[pet_knowledge_base]` | Searchable articles grouped by category with excerpts |
+
+All shortcodes are listed with copy-to-clipboard under **PET → Shortcodes** in the admin menu.
+
+Full implementation reference: [docs/24_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md](docs/24_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md)
+
 ## 🏗 Architecture
 
 PET follows **Domain-Driven Design (DDD)** and **Clean Architecture** principles:

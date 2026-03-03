@@ -232,16 +232,35 @@ class TicketController implements RestController
             });
         }
 
-        $data = array_map(function ($ticket) use ($ticketAssignments) {
+        // Batch-load SLA snapshot names for tickets that have one
+        global $wpdb;
+        $snapshotNames = [];
+        $snapshotIds = array_filter(array_unique(array_map(fn($t) => $t->slaSnapshotId(), $tickets)));
+        if (!empty($snapshotIds)) {
+            $placeholders = implode(',', array_fill(0, count($snapshotIds), '%d'));
+            $snapTable = $wpdb->prefix . 'pet_contract_sla_snapshots';
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, sla_name_at_binding FROM $snapTable WHERE id IN ($placeholders)",
+                ...array_values($snapshotIds)
+            ));
+            foreach ($rows as $r) {
+                $snapshotNames[(int)$r->id] = $r->sla_name_at_binding;
+            }
+        }
+
+        $data = array_map(function ($ticket) use ($ticketAssignments, $snapshotNames) {
             $malleable = $ticket->malleableData();
             $mode = $malleable['ticket_mode'] ?? 'support';
             $assignedUserId = $ticketAssignments[$ticket->id()] ?? null;
+            $snapId = $ticket->slaSnapshotId();
 
             return [
                 'id' => $ticket->id(),
                 'customerId' => $ticket->customerId(),
                 'siteId' => $ticket->siteId(),
                 'slaId' => $ticket->slaId(),
+                'slaSnapshotId' => $snapId,
+                'slaName' => $snapId ? ($snapshotNames[$snapId] ?? null) : null,
                 'subject' => $ticket->subject(),
                 'description' => $ticket->description(),
                 'status' => $ticket->status(),

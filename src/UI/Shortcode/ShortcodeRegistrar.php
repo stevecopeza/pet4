@@ -435,6 +435,15 @@ class ShortcodeRegistrar
 
     public function renderMyProfile(array $atts = [], ?string $content = null): string
     {
+        if (function_exists('wp_enqueue_style')) {
+            wp_enqueue_style(
+                'pet-my-profile',
+                plugin_dir_url(dirname(__DIR__, 2)) . 'assets/my-profile.css',
+                [],
+                '1.0.0'
+            );
+        }
+
         if (!is_user_logged_in()) {
             return '<div class="pet-my-profile"><p>' . esc_html__('Please log in to view your profile.', 'pet') . '</p></div>';
         }
@@ -625,123 +634,283 @@ class ShortcodeRegistrar
             }
         }
 
+        // Avatar
+        $avatarUrl = get_avatar_url($user->ID, ['size' => 192]);
+        $memberSince = date_i18n('F Y', strtotime($user->user_registered));
+
+        // Certification status helper
+        $certStatusFn = function (string $expiry, string $status): array {
+            if ($status !== '') {
+                $s = strtolower($status);
+                if (in_array($s, ['active', 'valid'], true)) return ['active', __('Active', 'pet')];
+                if (in_array($s, ['expired', 'revoked'], true)) return ['expired', __('Expired', 'pet')];
+                if (in_array($s, ['expiring'], true)) return ['expiring', __('Expiring', 'pet')];
+            }
+            if ($expiry !== '') {
+                $exp = strtotime($expiry);
+                if ($exp !== false) {
+                    $now = time();
+                    if ($exp < $now) return ['expired', __('Expired', 'pet')];
+                    if ($exp < $now + 90 * 86400) return ['expiring', __('Expiring Soon', 'pet')];
+                    return ['active', __('Active', 'pet')];
+                }
+            }
+            return ['unknown', __('Unknown', 'pet')];
+        };
+
+        $uid = 'pmp-' . $user->ID;
+
         $html = '<div class="pet-my-profile">';
         $html .= $message;
-        $html .= '<form method="post" class="pet-my-profile-form">';
-        $html .= '<h2>' . esc_html__('My Profile', 'pet') . '</h2>';
-        $html .= '<div class="pet-my-profile-section">';
-        $html .= '<label>' . esc_html__('Display name', 'pet') . '<br />';
-        $html .= '<input type="text" name="pet_display_name" value="' . esc_attr($displayName) . '" /></label>';
-        $html .= '<label>' . esc_html__('First name', 'pet') . '<br />';
-        $html .= '<input type="text" name="pet_first_name" value="' . esc_attr($firstName) . '" /></label>';
-        $html .= '<label>' . esc_html__('Last name', 'pet') . '<br />';
-        $html .= '<input type="text" name="pet_last_name" value="' . esc_attr($lastName) . '" /></label>';
-        $html .= '<p><strong>' . esc_html__('Email', 'pet') . ':</strong> ' . esc_html($email) . '</p>';
-        $html .= '<label>' . esc_html__('Phone', 'pet') . '<br />';
-        $html .= '<input type="text" name="pet_phone" value="' . esc_attr((string) $phone) . '" /></label>';
-        $html .= '<label>' . esc_html__('Title / Position', 'pet') . '<br />';
-        $html .= '<input type="text" name="pet_title" value="' . esc_attr((string) $title) . '" /></label>';
+
+        // ── HEADER: Avatar + Identity ──
+        $html .= '<div class="pmp-header">';
+        $html .= '<div class="pmp-avatar">';
+        $html .= '<img src="' . esc_url($avatarUrl) . '" alt="' . esc_attr($displayName) . '" />';
+        $html .= '<span class="pmp-avatar-status"></span>';
+        $html .= '</div>';
+        $html .= '<div class="pmp-identity">';
+        $html .= '<h2 class="pmp-name">' . esc_html($displayName) . '</h2>';
+        if ($title !== '') {
+            $html .= '<p class="pmp-title">' . esc_html((string) $title) . '</p>';
+        }
+        $html .= '<div class="pmp-contact-row">';
+        $html .= '<span class="pmp-contact-item"><span class="pmp-contact-icon">&#9993;</span> ' . esc_html($email) . '</span>';
+        if ($phone !== '' && $phone !== false) {
+            $html .= '<span class="pmp-contact-item"><span class="pmp-contact-icon">&#9742;</span> ' . esc_html((string) $phone) . '</span>';
+        }
+        $html .= '</div>';
+        $html .= '<div class="pmp-member-since">' . esc_html(sprintf(__('Member since %s', 'pet'), $memberSince)) . '</div>';
+        $html .= '</div>';
+        $html .= '<div class="pmp-header-actions">';
+        $html .= '<button type="button" class="pmp-edit-btn" onclick="document.getElementById(\'' . esc_attr($uid) . '-edit\').classList.add(\'is-active\');document.getElementById(\'' . esc_attr($uid) . '-view\').classList.add(\'is-hidden\');this.style.display=\'none\';">';
+        $html .= '&#9998; ' . esc_html__('Edit', 'pet');
+        $html .= '</button>';
+        $html .= '</div>';
         $html .= '</div>';
 
-        if ($atts['show_roles'] === '1') {
-            $html .= '<div class="pet-my-profile-section">';
-            $html .= '<h3>' . esc_html__('Roles', 'pet') . '</h3>';
-            $html .= '<p><strong>' . esc_html__('WordPress Roles', 'pet') . '</strong><br />';
-            if (!empty($wpRoles)) {
-                $html .= esc_html(implode(', ', $wpRoles));
-            } else {
-                $html .= esc_html__('No roles assigned.', 'pet');
-            }
-            $html .= '</p>';
-            if (!empty($petTeams)) {
-                $html .= '<p><strong>' . esc_html__('PET Teams/Departments', 'pet') . '</strong><br />';
-                $html .= esc_html(implode(', ', $petTeams));
-                $html .= '</p>';
-            }
-            $html .= '</div>';
-        }
+        // ── EDIT FORM (hidden by default) ──
+        $html .= '<form method="post" id="' . esc_attr($uid) . '-edit" class="pmp-edit-form">';
+        $html .= '<div class="pmp-card">';
+        $html .= '<h3 class="pmp-card-title">' . esc_html__('Edit Personal Details', 'pet') . '</h3>';
+        $html .= '<div class="pmp-form-grid">';
 
-        if ($atts['show_skills'] === '1') {
-            $html .= '<div class="pet-my-profile-section">';
-            $html .= '<h3>' . esc_html__('Skills', 'pet') . '</h3>';
-            if (empty($skills)) {
-                $html .= '<p>' . esc_html__('No skills recorded yet.', 'pet') . '</p>';
-            } else {
-                $html .= '<ul class="pet-my-profile-skills">';
-                foreach ($skills as $skill) {
-                    $label = isset($skill['name']) ? $skill['name'] : '';
-                    $extra = [];
-                    if (isset($skill['self_rating']) && $skill['self_rating'] > 0) {
-                        $extra[] = sprintf(__('Self: %d', 'pet'), (int) $skill['self_rating']);
-                    }
-                    if (isset($skill['manager_rating']) && $skill['manager_rating'] > 0) {
-                        $extra[] = sprintf(__('Manager: %d', 'pet'), (int) $skill['manager_rating']);
-                    }
-                    if (isset($skill['effective_date']) && $skill['effective_date'] !== '') {
-                        $extra[] = $skill['effective_date'];
-                    }
-                    $html .= '<li><span class="pet-skill-name">' . esc_html((string) $label) . '</span>';
-                    if (!empty($extra)) {
-                        $html .= ' <span class="pet-skill-meta">(' . esc_html(implode(' • ', $extra)) . ')</span>';
-                    }
-                    $html .= '</li>';
-                }
-                $html .= '</ul>';
-            }
-            $html .= '</div>';
-        }
+        $html .= '<div class="pmp-form-group">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('First Name', 'pet') . '</label>';
+        $html .= '<input type="text" name="pet_first_name" class="pmp-form-input" value="' . esc_attr($firstName) . '" />';
+        $html .= '</div>';
 
-        if ($atts['show_certs'] === '1') {
-            $html .= '<div class="pet-my-profile-section">';
-            $html .= '<h3>' . esc_html__('Certifications', 'pet') . '</h3>';
-            if (empty($certifications)) {
-                $html .= '<p>' . esc_html__('No certifications recorded yet.', 'pet') . '</p>';
-            } else {
-                $html .= '<ul class="pet-my-profile-certs">';
-                foreach ($certifications as $cert) {
-                    $name = isset($cert['name']) ? $cert['name'] : '';
-                    $issuer = isset($cert['issuer']) ? $cert['issuer'] : '';
-                    $obtained = isset($cert['obtained']) ? $cert['obtained'] : '';
-                    $expiry = isset($cert['expiry']) ? $cert['expiry'] : '';
-                    $status = isset($cert['status']) ? $cert['status'] : '';
-                    $html .= '<li>';
-                    $html .= '<span class="pet-cert-name">' . esc_html((string) $name) . '</span>';
-                    if ($issuer !== '') {
-                        $html .= ' <span class="pet-cert-issuer">(' . esc_html($issuer) . ')</span>';
-                    }
-                    $metaParts = [];
-                    if ($obtained !== '') {
-                        $metaParts[] = sprintf(__('Obtained: %s', 'pet'), $obtained);
-                    }
-                    if ($expiry !== '') {
-                        $metaParts[] = sprintf(__('Expiry: %s', 'pet'), $expiry);
-                    }
-                    if ($status !== '') {
-                        $metaParts[] = sprintf(__('Status: %s', 'pet'), $status);
-                    }
-                    if (!empty($metaParts)) {
-                        $html .= '<div class="pet-cert-meta">' . esc_html(implode(' • ', $metaParts)) . '</div>';
-                    }
-                    $html .= '</li>';
-                }
-                $html .= '</ul>';
-            }
-            $html .= '</div>';
-        }
+        $html .= '<div class="pmp-form-group">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('Last Name', 'pet') . '</label>';
+        $html .= '<input type="text" name="pet_last_name" class="pmp-form-input" value="' . esc_attr($lastName) . '" />';
+        $html .= '</div>';
+
+        $html .= '<div class="pmp-form-group pmp-full-width">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('Display Name', 'pet') . '</label>';
+        $html .= '<input type="text" name="pet_display_name" class="pmp-form-input" value="' . esc_attr($displayName) . '" />';
+        $html .= '</div>';
+
+        $html .= '<div class="pmp-form-group">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('Phone', 'pet') . '</label>';
+        $html .= '<input type="text" name="pet_phone" class="pmp-form-input" value="' . esc_attr((string) $phone) . '" />';
+        $html .= '</div>';
+
+        $html .= '<div class="pmp-form-group">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('Title / Position', 'pet') . '</label>';
+        $html .= '<input type="text" name="pet_title" class="pmp-form-input" value="' . esc_attr((string) $title) . '" />';
+        $html .= '</div>';
+
+        $html .= '<div class="pmp-form-group pmp-full-width">';
+        $html .= '<label class="pmp-form-label">' . esc_html__('Email', 'pet') . '</label>';
+        $html .= '<div class="pmp-form-static">' . esc_html($email) . '</div>';
+        $html .= '</div>';
+
+        $html .= '</div>'; // .pmp-form-grid
 
         wp_nonce_field('pet_my_profile_update', 'pet_my_profile_nonce');
         $html .= '<input type="hidden" name="pet_my_profile_action" value="update_profile" />';
-        $html .= '<p><button type="submit" class="button button-primary">' . esc_html__('Save changes', 'pet') . '</button></p>';
-        $html .= '</form>';
+
+        $html .= '<div class="pmp-form-actions">';
+        $html .= '<button type="submit" class="pmp-save-btn">&#10003; ' . esc_html__('Save Changes', 'pet') . '</button>';
+        $html .= '<button type="button" class="pmp-cancel-btn" onclick="document.getElementById(\'' . esc_attr($uid) . '-edit\').classList.remove(\'is-active\');document.getElementById(\'' . esc_attr($uid) . '-view\').classList.remove(\'is-hidden\');document.querySelector(\'.pmp-edit-btn\').style.display=\'\';">';
+        $html .= esc_html__('Cancel', 'pet');
+        $html .= '</button>';
         $html .= '</div>';
+
+        $html .= '</div>'; // .pmp-card
+        $html .= '</form>';
+
+        // ── VIEW SECTIONS ──
+        $html .= '<div id="' . esc_attr($uid) . '-view" class="pmp-view-section">';
+
+        // Roles & Teams
+        if ($atts['show_roles'] === '1') {
+            $html .= '<div class="pmp-card">';
+            $html .= '<h3 class="pmp-card-title">' . esc_html__('Roles & Teams', 'pet') . '</h3>';
+
+            if (!empty($wpRoles)) {
+                $html .= '<div class="pmp-subsection-label">' . esc_html__('Roles', 'pet') . '</div>';
+                $html .= '<div class="pmp-pills">';
+                foreach ($wpRoles as $role) {
+                    $html .= '<span class="pmp-pill pmp-pill--role"><span class="pmp-pill-icon">&#9733;</span>' . esc_html($role) . '</span>';
+                }
+                $html .= '</div>';
+            }
+
+            if (!empty($petTeams)) {
+                $html .= '<div class="pmp-subsection-label">' . esc_html__('Teams', 'pet') . '</div>';
+                $html .= '<div class="pmp-pills">';
+                foreach ($petTeams as $team) {
+                    $html .= '<span class="pmp-pill pmp-pill--team"><span class="pmp-pill-icon">&#9824;</span>' . esc_html($team) . '</span>';
+                }
+                $html .= '</div>';
+            }
+
+            if (empty($wpRoles) && empty($petTeams)) {
+                $html .= '<div class="pmp-empty">' . esc_html__('No roles or teams assigned.', 'pet') . '</div>';
+            }
+
+            $html .= '</div>'; // .pmp-card
+        }
+
+        // Skills
+        if ($atts['show_skills'] === '1') {
+            $html .= '<div class="pmp-card">';
+            $html .= '<h3 class="pmp-card-title">' . esc_html__('Skills', 'pet') . '</h3>';
+            if (empty($skills)) {
+                $html .= '<div class="pmp-empty">' . esc_html__('No skills recorded yet.', 'pet') . '</div>';
+            } else {
+                $html .= '<div class="pmp-skills-list">';
+                foreach ($skills as $skill) {
+                    $name = isset($skill['name']) ? (string) $skill['name'] : '';
+                    $selfRating = isset($skill['self_rating']) ? (int) $skill['self_rating'] : 0;
+                    $mgrRating = isset($skill['manager_rating']) ? (int) $skill['manager_rating'] : 0;
+                    $effectiveDate = isset($skill['effective_date']) ? (string) $skill['effective_date'] : '';
+                    $selfPct = min(100, max(0, $selfRating * 20));
+                    $mgrPct = min(100, max(0, $mgrRating * 20));
+
+                    $html .= '<div class="pmp-skill-row">';
+                    $html .= '<div class="pmp-skill-header">';
+                    $html .= '<span class="pmp-skill-name">' . esc_html($name) . '</span>';
+                    if ($effectiveDate !== '') {
+                        $html .= '<span class="pmp-skill-date">' . esc_html($effectiveDate) . '</span>';
+                    }
+                    $html .= '</div>';
+
+                    $html .= '<div class="pmp-skill-bars">';
+                    if ($selfRating > 0) {
+                        $html .= '<div class="pmp-skill-bar-group">';
+                        $html .= '<span class="pmp-skill-bar-label">' . esc_html__('Self', 'pet') . '</span>';
+                        $html .= '<div class="pmp-skill-bar-track"><div class="pmp-skill-bar-fill pmp-skill-bar-fill--self" style="width:' . $selfPct . '%"></div></div>';
+                        $html .= '</div>';
+                    }
+                    if ($mgrRating > 0) {
+                        $html .= '<div class="pmp-skill-bar-group">';
+                        $html .= '<span class="pmp-skill-bar-label">' . esc_html__('Manager', 'pet') . '</span>';
+                        $html .= '<div class="pmp-skill-bar-track"><div class="pmp-skill-bar-fill pmp-skill-bar-fill--mgr" style="width:' . $mgrPct . '%"></div></div>';
+                        $html .= '</div>';
+                    }
+                    if ($selfRating > 0 || $mgrRating > 0) {
+                        $best = max($selfRating, $mgrRating);
+                        $html .= '<span class="pmp-skill-rating">' . $best . '/5</span>';
+                    }
+                    $html .= '</div>'; // .pmp-skill-bars
+
+                    $html .= '</div>'; // .pmp-skill-row
+                }
+                $html .= '</div>'; // .pmp-skills-list
+            }
+            $html .= '</div>'; // .pmp-card
+        }
+
+        // Certifications
+        if ($atts['show_certs'] === '1') {
+            $html .= '<div class="pmp-card">';
+            $html .= '<h3 class="pmp-card-title">' . esc_html__('Certifications', 'pet') . '</h3>';
+            if (empty($certifications)) {
+                $html .= '<div class="pmp-empty">' . esc_html__('No certifications recorded yet.', 'pet') . '</div>';
+            } else {
+                $html .= '<div class="pmp-certs-list">';
+                foreach ($certifications as $cert) {
+                    $cName = isset($cert['name']) ? (string) $cert['name'] : '';
+                    $cIssuer = isset($cert['issuer']) ? (string) $cert['issuer'] : '';
+                    $cObtained = isset($cert['obtained']) ? (string) $cert['obtained'] : '';
+                    $cExpiry = isset($cert['expiry']) ? (string) $cert['expiry'] : '';
+                    $cStatus = isset($cert['status']) ? (string) $cert['status'] : '';
+                    [$badgeClass, $badgeLabel] = $certStatusFn($cExpiry, $cStatus);
+
+                    $html .= '<div class="pmp-cert-item">';
+                    $html .= '<div class="pmp-cert-info">';
+                    $html .= '<div class="pmp-cert-name">' . esc_html($cName) . '</div>';
+                    if ($cIssuer !== '') {
+                        $html .= '<div class="pmp-cert-issuer">' . esc_html($cIssuer) . '</div>';
+                    }
+                    $dateParts = [];
+                    if ($cObtained !== '') {
+                        $dateParts[] = sprintf(__('Obtained: %s', 'pet'), $cObtained);
+                    }
+                    if ($cExpiry !== '') {
+                        $dateParts[] = sprintf(__('Expires: %s', 'pet'), $cExpiry);
+                    }
+                    if (!empty($dateParts)) {
+                        $html .= '<div class="pmp-cert-dates">' . esc_html(implode(' &middot; ', $dateParts)) . '</div>';
+                    }
+                    $html .= '</div>'; // .pmp-cert-info
+                    $html .= '<span class="pmp-cert-badge pmp-cert-badge--' . esc_attr($badgeClass) . '">' . esc_html($badgeLabel) . '</span>';
+                    $html .= '</div>'; // .pmp-cert-item
+                }
+                $html .= '</div>'; // .pmp-certs-list
+            }
+            $html .= '</div>'; // .pmp-card
+        }
+
+        $html .= '</div>'; // .pmp-view-section
+        $html .= '</div>'; // .pet-my-profile
 
         return $html;
     }
 
+    private function enqueueShortcodesCss(): void
+    {
+        if (function_exists('wp_enqueue_style')) {
+            wp_enqueue_style(
+                'pet-shortcodes',
+                plugin_dir_url(dirname(__DIR__, 2)) . 'assets/shortcodes.css',
+                [],
+                '1.0.0'
+            );
+        }
+    }
+
+    private function scFormatDue(string $due): array
+    {
+        if ($due === '') return ['', 'soon'];
+        $today = date('Y-m-d');
+        if ($due < $today) return [sprintf(__('Overdue: %s', 'pet'), $due), 'overdue'];
+        if ($due === $today) return [__('Due today', 'pet'), 'today'];
+        $tomorrow = date('Y-m-d', strtotime('+1 day'));
+        if ($due === $tomorrow) return [__('Due tomorrow', 'pet'), 'soon'];
+        return [$due, 'soon'];
+    }
+
+    private function scFormatSla(?int $minutes): array
+    {
+        if ($minutes === null) return ['', 'ok'];
+        $abs = abs($minutes);
+        $h = intdiv($abs, 60);
+        $m = $abs % 60;
+        $label = $h > 0 ? sprintf('%dh %dm', $h, $m) : sprintf('%dm', $m);
+        if ($minutes < 0) return [sprintf(__('Breached %s', 'pet'), $label), 'breach'];
+        if ($minutes < 60) return [sprintf(__('%s left', 'pet'), $label), 'warn'];
+        return [sprintf(__('%s left', 'pet'), $label), 'ok'];
+    }
+
     public function renderMyWork(array $atts = [], ?string $content = null): string
     {
+        $this->enqueueShortcodesCss();
+
         if (!is_user_logged_in()) {
-            return '<div class="pet-my-work"><p>' . esc_html__('Please log in to view your work.', 'pet') . '</p></div>';
+            return '<div class="pet-sc pet-my-work"><div class="sc-empty">' . esc_html__('Please log in to view your work.', 'pet') . '</div></div>';
         }
 
         $userId = (string) get_current_user_id();
@@ -824,6 +993,9 @@ class ShortcodeRegistrar
                         $customerName = $customer->name();
                     }
 
+                    $slaMinutes = $relatedItem !== null ? $relatedItem->getSlaTimeRemainingMinutes() : null;
+                    $priority = $relatedItem !== null ? $relatedItem->getPriorityScore() : 0.0;
+
                     $supportItems[] = [
                         'title' => $ticket->subject(),
                         'reference' => sprintf(__('Ticket #%d', 'pet'), $ticketId),
@@ -831,6 +1003,8 @@ class ShortcodeRegistrar
                         'due' => $dueDate,
                         'customer' => $customerName,
                         'link' => admin_url('admin.php?page=pet-support'),
+                        'sla_minutes' => $slaMinutes,
+                        'priority' => $priority,
                     ];
                 }
             }
@@ -947,133 +1121,132 @@ class ShortcodeRegistrar
             unset($rows);
         }
 
-        $html = '<div class="pet-my-work">';
-        $html .= '<h2>' . esc_html__('My Work', 'pet') . '</h2>';
+        // KPI calculations
+        $today = date('Y-m-d');
+        $atRisk = 0;
+        foreach ($supportItems as $si) {
+            $sla = $si['sla_minutes'] ?? null;
+            if ($sla !== null && $sla < 0) $atRisk++;
+        }
+        $dueToday = count(array_filter($supportItems, function ($r) use ($today) { return ($r['due'] ?? '') === $today; }));
+        $totalQueue = 0;
+        foreach ($departmentQueues as $rows) { $totalQueue += count($rows); }
 
-        $html .= '<div class="pet-my-work-tabs">';
-        $html .= '<button type="button" class="pet-my-work-tab pet-my-work-tab-active" data-tab="mine">' . esc_html__('My items', 'pet') . '</button>';
-        $html .= '<button type="button" class="pet-my-work-tab" data-tab="departments">' . esc_html__('Departments', 'pet') . '</button>';
+        $html = '<div class="pet-sc pet-my-work">';
+        $html .= '<h2 class="sc-title">' . esc_html__('My Work', 'pet') . '</h2>';
+        $html .= '<p class="sc-subtitle">' . esc_html__('Your assigned tickets, tasks, and department queues.', 'pet') . '</p>';
+
+        // KPI strip
+        $html .= '<div class="sc-kpi-strip">';
+        $html .= '<div class="sc-kpi sc-kpi--accent"><div class="sc-kpi-value">' . count($supportItems) . '</div><div class="sc-kpi-label">' . esc_html__('My Tickets', 'pet') . '</div></div>';
+        $html .= '<div class="sc-kpi sc-kpi--' . ($atRisk > 0 ? 'danger' : 'success') . '"><div class="sc-kpi-value">' . $atRisk . '</div><div class="sc-kpi-label">' . esc_html__('At Risk', 'pet') . '</div></div>';
+        $html .= '<div class="sc-kpi sc-kpi--' . ($dueToday > 0 ? 'warn' : 'teal') . '"><div class="sc-kpi-value">' . $dueToday . '</div><div class="sc-kpi-label">' . esc_html__('Due Today', 'pet') . '</div></div>';
+        $html .= '<div class="sc-kpi sc-kpi--purple"><div class="sc-kpi-value">' . count($projectItems) . '</div><div class="sc-kpi-label">' . esc_html__('Tasks', 'pet') . '</div></div>';
+        $html .= '<div class="sc-kpi sc-kpi--teal"><div class="sc-kpi-value">' . $totalQueue . '</div><div class="sc-kpi-label">' . esc_html__('Queue', 'pet') . '</div></div>';
         $html .= '</div>';
 
-        $html .= '<div class="pet-my-work-panel pet-my-work-panel-mine">';
+        // Tabs
+        $html .= '<div class="sc-tabs">';
+        $html .= '<button type="button" class="sc-tab is-active" data-panel="sc-mine">' . esc_html__('My Items', 'pet') . '</button>';
+        $html .= '<button type="button" class="sc-tab" data-panel="sc-dept">' . esc_html__('Department Queue', 'pet') . '</button>';
+        $html .= '</div>';
 
-        $html .= '<div class="pet-my-work-section">';
-        $html .= '<h3>' . esc_html__('Support Tickets', 'pet') . '</h3>';
+        // Panel: My Items
+        $html .= '<div class="sc-panel is-visible" id="sc-mine">';
+
+        // Support tickets
+        $html .= '<div class="sc-card">';
+        $html .= '<div class="sc-card-title">' . esc_html__('Support Tickets', 'pet') . ' <span class="sc-badge">' . count($supportItems) . '</span></div>';
         if (empty($supportItems)) {
-            $html .= '<p>' . esc_html__('No support tickets assigned.', 'pet') . '</p>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#10003;</span>' . esc_html__('No support tickets assigned.', 'pet') . '</div>';
         } else {
-            $html .= '<table class="pet-my-work-table"><thead><tr>';
-            $html .= '<th>' . esc_html__('Title', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Status', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Due date', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Customer', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Link', 'pet') . '</th>';
-            $html .= '</tr></thead><tbody>';
             foreach ($supportItems as $row) {
-                $html .= '<tr>';
-                $html .= '<td>' . esc_html((string) $row['title']) . '</td>';
-                $html .= '<td>' . esc_html((string) $row['status']) . '</td>';
-                $html .= '<td>' . esc_html((string) $row['due']) . '</td>';
-                $html .= '<td>' . esc_html((string) $row['customer']) . '</td>';
-                if ($row['link']) {
-                    $html .= '<td><a href="' . esc_url((string) $row['link']) . '">' . esc_html__('View', 'pet') . '</a></td>';
-                } else {
-                    $html .= '<td>' . esc_html__('N/A', 'pet') . '</td>';
-                }
-                $html .= '</tr>';
-            }
-            $html .= '</tbody></table>';
-        }
-        $html .= '</div>';
+                [$dueLabel, $dueClass] = $this->scFormatDue((string) $row['due']);
+                [$slaLabel, $slaClass] = $this->scFormatSla($row['sla_minutes'] ?? null);
+                $statusSlug = strtolower(str_replace(' ', '', (string) $row['status']));
+                $pillClass = 'sc-pill--status';
+                if (strpos($statusSlug, 'progress') !== false) $pillClass = 'sc-pill--active';
+                elseif ($statusSlug === 'waiting') $pillClass = 'sc-pill--waiting';
 
-        $html .= '<div class="pet-my-work-section">';
-        $html .= '<h3>' . esc_html__('Project Tasks / Other Work', 'pet') . '</h3>';
-        if (empty($projectItems)) {
-            $html .= '<p>' . esc_html__('No project work items assigned.', 'pet') . '</p>';
-        } else {
-            $html .= '<table class="pet-my-work-table"><thead><tr>';
-            $html .= '<th>' . esc_html__('Title', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Status', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Due date', 'pet') . '</th>';
-            $html .= '<th>' . esc_html__('Link', 'pet') . '</th>';
-            $html .= '</tr></thead><tbody>';
-            foreach ($projectItems as $row) {
-                $html .= '<tr>';
-                $html .= '<td>' . esc_html((string) $row['title']) . '</td>';
-                $html .= '<td>' . esc_html((string) $row['status']) . '</td>';
-                $html .= '<td>' . esc_html((string) $row['due']) . '</td>';
-                if ($row['link']) {
-                    $html .= '<td><a href="' . esc_url((string) $row['link']) . '">' . esc_html__('View', 'pet') . '</a></td>';
-                } else {
-                    $html .= '<td>' . esc_html__('N/A', 'pet') . '</td>';
-                }
-                $html .= '</tr>';
-            }
-            $html .= '</tbody></table>';
-        }
-        $html .= '</div>';
-
-        $html .= '</div>';
-
-        $html .= '<div class="pet-my-work-panel pet-my-work-panel-departments" style="display:none">';
-        $html .= '<div class="pet-my-work-section">';
-        $html .= '<h3>' . esc_html__('Department queues', 'pet') . '</h3>';
-        if (empty($departmentQueues)) {
-            $html .= '<p>' . esc_html__('No open items for your departments.', 'pet') . '</p>';
-        } else {
-            foreach ($departmentQueues as $departmentName => $rows) {
-                $html .= '<div class="pet-my-work-department">';
-                $html .= '<h4>' . esc_html((string) $departmentName) . '</h4>';
-                $html .= '<table class="pet-my-work-table"><thead><tr>';
-                $html .= '<th>' . esc_html__('Title', 'pet') . '</th>';
-                $html .= '<th>' . esc_html__('Status', 'pet') . '</th>';
-                $html .= '<th>' . esc_html__('Due date', 'pet') . '</th>';
-                $html .= '<th>' . esc_html__('Customer', 'pet') . '</th>';
-                $html .= '<th>' . esc_html__('Link', 'pet') . '</th>';
-                $html .= '</tr></thead><tbody>';
-                foreach ($rows as $row) {
-                    $html .= '<tr>';
-                    $html .= '<td>' . esc_html((string) $row['title']) . '</td>';
-                    $html .= '<td>' . esc_html((string) $row['status']) . '</td>';
-                    $html .= '<td>' . esc_html((string) $row['due']) . '</td>';
-                    $html .= '<td>' . esc_html((string) $row['customer']) . '</td>';
-                    if ($row['link']) {
-                        $html .= '<td><a href="' . esc_url((string) $row['link']) . '">' . esc_html__('View', 'pet') . '</a></td>';
-                    } else {
-                        $html .= '<td>' . esc_html__('N/A', 'pet') . '</td>';
-                    }
-                    $html .= '</tr>';
-                }
-                $html .= '</tbody></table>';
+                $html .= '<div class="sc-item">';
+                $html .= '<div class="sc-item-icon sc-item-icon--ticket">&#127915;</div>';
+                $html .= '<div class="sc-item-body">';
+                $html .= '<div class="sc-item-title">';
+                if ($row['link']) $html .= '<a href="' . esc_url((string) $row['link']) . '">';
+                $html .= esc_html((string) $row['title']);
+                if ($row['link']) $html .= '</a>';
+                $html .= '</div>';
+                $html .= '<div class="sc-item-meta">';
+                $html .= '<span>' . esc_html((string) $row['reference']) . '</span>';
+                if ($row['customer'] !== '') $html .= '<span class="sc-item-meta-sep"></span><span>' . esc_html((string) $row['customer']) . '</span>';
+                $html .= '</div>';
+                $html .= '</div>';
+                $html .= '<div class="sc-item-right">';
+                $html .= '<span class="sc-pill ' . esc_attr($pillClass) . '">' . esc_html((string) $row['status']) . '</span>';
+                if ($slaLabel !== '') $html .= '<span class="sc-sla sc-sla--' . esc_attr($slaClass) . '">' . esc_html($slaLabel) . '</span>';
+                if ($dueLabel !== '') $html .= '<span class="sc-due sc-due--' . esc_attr($dueClass) . '">' . esc_html($dueLabel) . '</span>';
+                $html .= '</div>';
                 $html .= '</div>';
             }
         }
         $html .= '</div>';
-        $html .= '</div>';
 
-        $html .= '<script>';
-        $html .= '(function(){';
-        $html .= 'var containers=document.querySelectorAll(".pet-my-work");';
-        $html .= 'for(var i=0;i<containers.length;i++){';
-        $html .= '(function(c){';
-        $html .= 'var tabs=c.querySelectorAll(".pet-my-work-tab");';
-        $html .= 'var panels=c.querySelectorAll(".pet-my-work-panel");';
-        $html .= 'for(var j=0;j<tabs.length;j++){';
-        $html .= 'tabs[j].addEventListener("click",function(e){';
-        $html .= 'e.preventDefault();';
-        $html .= 'var target=this.getAttribute("data-tab");';
-        $html .= 'for(var k=0;k<tabs.length;k++){tabs[k].classList.remove("pet-my-work-tab-active");}';
-        $html .= 'this.classList.add("pet-my-work-tab-active");';
-        $html .= 'for(var k=0;k<panels.length;k++){';
-        $html .= 'var p=panels[k];';
-        $html .= 'if(p.classList.contains("pet-my-work-panel-"+target)){p.style.display="";}else{p.style.display="none";}';
-        $html .= '}';
-        $html .= '});';
-        $html .= '}';
-        $html .= '})(containers[i]);';
-        $html .= '}';
-        $html .= '})();';
-        $html .= '</script>';
+        // Project tasks
+        $html .= '<div class="sc-card">';
+        $html .= '<div class="sc-card-title">' . esc_html__('Project Tasks', 'pet') . ' <span class="sc-badge">' . count($projectItems) . '</span></div>';
+        if (empty($projectItems)) {
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128203;</span>' . esc_html__('No project tasks assigned.', 'pet') . '</div>';
+        } else {
+            foreach ($projectItems as $row) {
+                [$dueLabel, $dueClass] = $this->scFormatDue((string) $row['due']);
+                $html .= '<div class="sc-item">';
+                $html .= '<div class="sc-item-icon sc-item-icon--task">&#128203;</div>';
+                $html .= '<div class="sc-item-body">';
+                $html .= '<div class="sc-item-title">' . esc_html((string) $row['title']) . '</div>';
+                $html .= '<div class="sc-item-meta"><span>' . esc_html((string) $row['reference']) . '</span></div>';
+                $html .= '</div>';
+                $html .= '<div class="sc-item-right">';
+                $html .= '<span class="sc-pill sc-pill--active">' . esc_html((string) $row['status']) . '</span>';
+                if ($dueLabel !== '') $html .= '<span class="sc-due sc-due--' . esc_attr($dueClass) . '">' . esc_html($dueLabel) . '</span>';
+                $html .= '</div>';
+                $html .= '</div>';
+            }
+        }
+        $html .= '</div>';
+        $html .= '</div>'; // #sc-mine
+
+        // Panel: Department Queue
+        $html .= '<div class="sc-panel" id="sc-dept">';
+        if (empty($departmentQueues)) {
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128230;</span>' . esc_html__('No unassigned items in your department queues.', 'pet') . '</div>';
+        } else {
+            foreach ($departmentQueues as $departmentName => $rows) {
+                $html .= '<div class="sc-card">';
+                $html .= '<div class="sc-card-title">' . esc_html((string) $departmentName) . ' <span class="sc-badge">' . count($rows) . '</span></div>';
+                foreach ($rows as $row) {
+                    [$dueLabel, $dueClass] = $this->scFormatDue((string) $row['due']);
+                    $html .= '<div class="sc-item">';
+                    $html .= '<div class="sc-item-icon sc-item-icon--ticket">&#127915;</div>';
+                    $html .= '<div class="sc-item-body">';
+                    $html .= '<div class="sc-item-title">' . esc_html((string) $row['title']) . '</div>';
+                    $html .= '<div class="sc-item-meta">';
+                    $html .= '<span>' . esc_html((string) $row['reference']) . '</span>';
+                    if (($row['customer'] ?? '') !== '') $html .= '<span class="sc-item-meta-sep"></span><span>' . esc_html((string) $row['customer']) . '</span>';
+                    $html .= '</div>';
+                    $html .= '</div>';
+                    $html .= '<div class="sc-item-right">';
+                    $html .= '<span class="sc-pill sc-pill--pending">' . esc_html__('Unassigned', 'pet') . '</span>';
+                    if ($dueLabel !== '') $html .= '<span class="sc-due sc-due--' . esc_attr($dueClass) . '">' . esc_html($dueLabel) . '</span>';
+                    $html .= '</div>';
+                    $html .= '</div>';
+                }
+                $html .= '</div>';
+            }
+        }
+        $html .= '</div>'; // #sc-dept
+
+        // Tab switching script
+        $html .= '<script>(function(){var r=document.querySelector(".pet-my-work");if(!r)return;r.querySelectorAll(".sc-tab").forEach(function(t){t.addEventListener("click",function(){r.querySelectorAll(".sc-tab").forEach(function(x){x.classList.remove("is-active")});t.classList.add("is-active");r.querySelectorAll(".sc-panel").forEach(function(p){p.classList.toggle("is-visible",p.id===t.getAttribute("data-panel"))})})})})();</script>';
 
         $html .= '</div>';
 
@@ -1082,8 +1255,10 @@ class ShortcodeRegistrar
 
     public function renderMyCalendar(array $atts = [], ?string $content = null): string
     {
+        $this->enqueueShortcodesCss();
+
         if (!is_user_logged_in()) {
-            return '<div class="pet-my-calendar"><p>' . esc_html__('Please log in to view your calendar.', 'pet') . '</p></div>';
+            return '<div class="pet-sc pet-my-calendar"><div class="sc-empty">' . esc_html__('Please log in to view your calendar.', 'pet') . '</div></div>';
         }
 
         $userId = (string) get_current_user_id();
@@ -1130,6 +1305,7 @@ class ShortcodeRegistrar
                 $itemsByDate[$dateKey][] = [
                     'time' => $timeLabel,
                     'type' => $type,
+                    'sourceType' => $item->getSourceType(),
                     'title' => $title,
                     'link' => $link,
                 ];
@@ -1140,32 +1316,51 @@ class ShortcodeRegistrar
 
         ksort($itemsByDate);
 
-        $html = '<div class="pet-my-calendar">';
-        $html .= '<h2>' . esc_html__('My Calendar (next 14 days)', 'pet') . '</h2>';
+        $todayStr = $now->format('Y-m-d');
+        $tomorrowStr = $now->modify('+1 day')->format('Y-m-d');
+        $totalItems = 0;
+        foreach ($itemsByDate as $entries) { $totalItems += count($entries); }
+
+        $html = '<div class="pet-sc pet-my-calendar">';
+        $html .= '<h2 class="sc-title">' . esc_html__('My Calendar', 'pet') . '</h2>';
+        $html .= '<p class="sc-subtitle">' . esc_html(sprintf(__('%d items in the next 14 days', 'pet'), $totalItems)) . '</p>';
 
         if (empty($itemsByDate)) {
-            $html .= '<p>' . esc_html__('No upcoming items in the next 14 days.', 'pet') . '</p>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128197;</span>' . esc_html__('No upcoming items in the next 14 days.', 'pet') . '</div>';
             $html .= '</div>';
             return $html;
         }
 
         foreach ($itemsByDate as $date => $entries) {
-            $html .= '<div class="pet-my-calendar-day">';
-            $html .= '<h3>' . esc_html($date) . '</h3>';
-            $html .= '<ul class="pet-my-calendar-list">';
-            foreach ($entries as $entry) {
-                $html .= '<li>';
-                $html .= '<span class="pet-my-calendar-time">' . esc_html($entry['time']) . '</span> ';
-                $html .= '<span class="pet-my-calendar-type">[' . esc_html($entry['type']) . ']</span> ';
-                if ($entry['link']) {
-                    $html .= '<a href="' . esc_url((string) $entry['link']) . '" class="pet-my-calendar-title">' . esc_html((string) $entry['title']) . '</a>';
-                } else {
-                    $html .= '<span class="pet-my-calendar-title">' . esc_html((string) $entry['title']) . '</span>';
-                }
-                $html .= '</li>';
+            $isToday = ($date === $todayStr);
+            $isTomorrow = ($date === $tomorrowStr);
+            $friendlyDate = $isToday ? __('Today', 'pet') : ($isTomorrow ? __('Tomorrow', 'pet') : '');
+            $formattedDate = date_i18n('l, M j', strtotime($date));
+
+            $html .= '<div class="sc-cal-day">';
+            $html .= '<div class="sc-cal-date' . ($isToday ? ' sc-cal-date--today' : '') . '">';
+            if ($friendlyDate !== '') {
+                $html .= esc_html($friendlyDate) . ' <span class="sc-cal-date-sub">' . esc_html($formattedDate) . '</span>';
+            } else {
+                $html .= esc_html($formattedDate);
             }
-            $html .= '</ul>';
             $html .= '</div>';
+
+            $html .= '<div class="sc-cal-timeline">';
+            foreach ($entries as $entry) {
+                $src = $entry['sourceType'] ?? 'work';
+                $html .= '<div class="sc-cal-entry sc-cal-entry--' . esc_attr($src) . '">';
+                $html .= '<span class="sc-cal-time">' . esc_html($entry['time']) . '</span>';
+                $html .= '<span class="sc-cal-type">' . esc_html($entry['type']) . '</span>';
+                if ($entry['link']) {
+                    $html .= '<a href="' . esc_url((string) $entry['link']) . '" class="sc-cal-title">' . esc_html((string) $entry['title']) . '</a>';
+                } else {
+                    $html .= '<span class="sc-cal-title">' . esc_html((string) $entry['title']) . '</span>';
+                }
+                $html .= '</div>';
+            }
+            $html .= '</div>'; // .sc-cal-timeline
+            $html .= '</div>'; // .sc-cal-day
         }
 
         $html .= '</div>';
@@ -1470,24 +1665,19 @@ class ShortcodeRegistrar
 
     public function renderMyConversations(array $atts = [], ?string $content = null): string
     {
+        $this->enqueueShortcodesCss();
+
         if (!is_user_logged_in()) {
-            return '<div class="pet-shortcode pet-my-conversations"><p>' . esc_html__('Sign in required to view conversations.', 'pet') . '</p></div>';
+            return '<div class="pet-sc pet-my-conversations"><div class="sc-empty">' . esc_html__('Sign in required.', 'pet') . '</div></div>';
         }
 
         $atts = shortcode_atts(
-            [
-                'limit' => '10',
-                'title' => 'My Conversations',
-            ],
+            ['limit' => '10', 'title' => 'My Conversations'],
             $atts,
             'pet_my_conversations'
         );
 
-        $limit = (int) $atts['limit'];
-        if ($limit <= 0) {
-            $limit = 10;
-        }
-
+        $limit = max(1, (int) $atts['limit']);
         $userId = get_current_user_id();
         $conversations = [];
 
@@ -1497,31 +1687,43 @@ class ShortcodeRegistrar
             $conversations = $conversationRepo->findRecentByUserId($userId, $limit);
         } catch (\Throwable $e) {
             error_log('PET [pet_my_conversations] error: ' . $e->getMessage());
-            return '<div class="pet-shortcode pet-error">' . esc_html__('Error loading conversations.', 'pet') . '</div>';
+            return '<div class="pet-sc pet-my-conversations"><div class="sc-empty">' . esc_html__('Error loading conversations.', 'pet') . '</div></div>';
         }
 
-        $html = '<div class="pet-shortcode pet-my-conversations">';
-        if (!empty($atts['title'])) {
-            $html .= '<h3 class="pet-shortcode-title">' . esc_html($atts['title']) . '</h3>';
-        }
+        $openCount = 0;
+        foreach ($conversations as $c) { if ($c->state() === 'open') $openCount++; }
+
+        $html = '<div class="pet-sc pet-my-conversations">';
+        $html .= '<h2 class="sc-title">' . esc_html($atts['title']) . '</h2>';
+        $html .= '<p class="sc-subtitle">' . esc_html(sprintf(__('%d conversations, %d open', 'pet'), count($conversations), $openCount)) . '</p>';
 
         if (empty($conversations)) {
-            $html .= '<p class="pet-empty-state">' . esc_html__('No recent conversations.', 'pet') . '</p>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128172;</span>' . esc_html__('No recent conversations.', 'pet') . '</div>';
         } else {
-            $html .= '<ul class="pet-list pet-conversation-list">';
             foreach ($conversations as $conversation) {
                 $url = admin_url('admin.php?page=pet-conversations&id=' . $conversation->id());
-                $html .= '<li class="pet-list-item">';
-                $html .= '<a href="' . esc_url($url) . '" class="pet-list-link">';
-                $html .= '<span class="pet-item-title">' . esc_html($conversation->subject()) . '</span>';
-                $html .= '<span class="pet-item-meta">';
-                $html .= '<span class="pet-item-date">' . esc_html($conversation->createdAt()->format('M j, Y')) . '</span>';
-                $html .= '<span class="pet-item-status pet-status-' . esc_attr($conversation->state()) . '">' . esc_html(ucfirst($conversation->state())) . '</span>';
-                $html .= '</span>';
-                $html .= '</a>';
-                $html .= '</li>';
+                $ctx = $conversation->contextType();
+                $ctxClass = in_array($ctx, ['ticket'], true) ? 'ticket' : (in_array($ctx, ['project', 'project_task'], true) ? 'project' : 'general');
+                $pillClass = $conversation->state() === 'open' ? 'sc-pill--open' : 'sc-pill--resolved';
+                $ago = human_time_diff($conversation->createdAt()->getTimestamp(), time());
+
+                $html .= '<div class="sc-item">';
+                $html .= '<div class="sc-item-icon sc-item-icon--conversation">&#128172;</div>';
+                $html .= '<div class="sc-item-body">';
+                $html .= '<div class="sc-item-title"><a href="' . esc_url($url) . '">' . esc_html($conversation->subject()) . '</a></div>';
+                $html .= '<div class="sc-item-meta">';
+                $html .= '<span class="sc-convo-context sc-convo-context--' . esc_attr($ctxClass) . '">' . esc_html(ucfirst($ctx)) . '</span>';
+                if ($conversation->contextId() !== '') {
+                    $html .= '<span>#' . esc_html($conversation->contextId()) . '</span>';
+                }
+                $html .= '<span class="sc-item-meta-sep"></span><span>' . esc_html(sprintf(__('%s ago', 'pet'), $ago)) . '</span>';
+                $html .= '</div>';
+                $html .= '</div>';
+                $html .= '<div class="sc-item-right">';
+                $html .= '<span class="sc-pill ' . esc_attr($pillClass) . '">' . esc_html(ucfirst($conversation->state())) . '</span>';
+                $html .= '</div>';
+                $html .= '</div>';
             }
-            $html .= '</ul>';
         }
         $html .= '</div>';
 
@@ -1530,17 +1732,13 @@ class ShortcodeRegistrar
 
     public function renderMyApprovals(array $atts = [], ?string $content = null): string
     {
+        $this->enqueueShortcodesCss();
+
         if (!is_user_logged_in()) {
-            return '<div class="pet-shortcode pet-my-approvals"><p>' . esc_html__('Sign in required to view approvals.', 'pet') . '</p></div>';
+            return '<div class="pet-sc pet-my-approvals"><div class="sc-empty">' . esc_html__('Sign in required.', 'pet') . '</div></div>';
         }
 
-        $atts = shortcode_atts(
-            [
-                'title' => 'Pending Approvals',
-            ],
-            $atts,
-            'pet_my_approvals'
-        );
+        $atts = shortcode_atts(['title' => 'Pending Approvals'], $atts, 'pet_my_approvals');
 
         $userId = get_current_user_id();
         $decisions = [];
@@ -1551,48 +1749,46 @@ class ShortcodeRegistrar
             $decisions = $decisionRepo->findPendingByUserId($userId);
         } catch (\Throwable $e) {
             error_log('PET [pet_my_approvals] error: ' . $e->getMessage());
-            return '<div class="pet-shortcode pet-error">' . esc_html__('Error loading approvals.', 'pet') . '</div>';
+            return '<div class="pet-sc pet-my-approvals"><div class="sc-empty">' . esc_html__('Error loading approvals.', 'pet') . '</div></div>';
         }
 
-        $html = '<div class="pet-shortcode pet-my-approvals">';
-        if (!empty($atts['title'])) {
-            $html .= '<h3 class="pet-shortcode-title">' . esc_html($atts['title']) . '</h3>';
-        }
+        $html = '<div class="pet-sc pet-my-approvals">';
+        $html .= '<h2 class="sc-title">' . esc_html($atts['title']) . '</h2>';
+        $html .= '<p class="sc-subtitle">' . esc_html(sprintf(__('%d pending decisions', 'pet'), count($decisions))) . '</p>';
 
         if (empty($decisions)) {
-            $html .= '<p class="pet-empty-state">' . esc_html__('No pending approvals.', 'pet') . '</p>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#10003;</span>' . esc_html__('No pending approvals — you\'re all caught up.', 'pet') . '</div>';
         } else {
-            $html .= '<ul class="pet-list pet-approval-list">';
             foreach ($decisions as $decision) {
                 $url = admin_url('admin.php?page=pet-conversations&id=' . $decision->conversationId());
-                
-                $html .= '<li class="pet-list-item">';
-                $html .= '<div class="pet-approval-card">';
-                $html .= '<div class="pet-approval-header">';
-                $html .= '<span class="pet-approval-type">' . esc_html(ucwords(str_replace('_', ' ', $decision->decisionType()))) . '</span>';
-                $html .= '<span class="pet-item-date">' . esc_html($decision->requestedAt()->format('M j, Y')) . '</span>';
-                $html .= '</div>';
-                
+                $daysPending = max(0, (int) ((time() - $decision->requestedAt()->getTimestamp()) / 86400));
+                $urgencyClass = $daysPending >= 5 ? 'high' : ($daysPending >= 2 ? 'medium' : 'low');
+                $urgencyLabel = $daysPending === 0 ? __('Today', 'pet') : sprintf(__('%dd ago', 'pet'), $daysPending);
+
                 $payload = $decision->payload();
                 $details = '';
                 if (!empty($payload['description'])) {
-                    $details = $payload['description'];
+                    $details = (string) $payload['description'];
                 } elseif (!empty($payload['reason'])) {
-                    $details = $payload['reason'];
-                }
-                
-                if ($details) {
-                    $html .= '<div class="pet-approval-details">' . esc_html($details) . '</div>';
+                    $details = (string) $payload['reason'];
                 }
 
-                $html .= '<div class="pet-approval-actions">';
-                $html .= '<a href="' . esc_url($url) . '" class="button button-small">' . esc_html__('Review', 'pet') . '</a>';
+                $html .= '<div class="sc-item">';
+                $html .= '<div class="sc-item-icon sc-item-icon--approval">&#9888;</div>';
+                $html .= '<div class="sc-item-body">';
+                $html .= '<div class="sc-item-title">' . esc_html(ucwords(str_replace('_', ' ', $decision->decisionType()))) . '</div>';
+                $html .= '<div class="sc-item-meta">';
+                if ($details !== '') {
+                    $html .= '<span>' . esc_html(mb_strimwidth($details, 0, 80, '...')) . '</span>';
+                }
                 $html .= '</div>';
-                
                 $html .= '</div>';
-                $html .= '</li>';
+                $html .= '<div class="sc-item-right">';
+                $html .= '<span class="sc-approval-urgency sc-approval-urgency--' . esc_attr($urgencyClass) . '">' . esc_html($urgencyLabel) . '</span>';
+                $html .= '<a href="' . esc_url($url) . '" class="sc-action-btn">' . esc_html__('Review', 'pet') . '</a>';
+                $html .= '</div>';
+                $html .= '</div>';
             }
-            $html .= '</ul>';
         }
         $html .= '</div>';
 
@@ -1601,65 +1797,80 @@ class ShortcodeRegistrar
 
     public function renderKnowledgeBase(array $atts = [], ?string $content = null): string
     {
+        $this->enqueueShortcodesCss();
+
         $atts = shortcode_atts(
-            [
-                'category' => '',
-                'limit' => '5',
-                'title' => 'Knowledge Base',
-            ],
+            ['category' => '', 'limit' => '20', 'title' => 'Knowledge Base'],
             $atts,
             'pet_knowledge_base'
         );
 
-        $limit = (int) $atts['limit'];
-        if ($limit <= 0) {
-            $limit = 5;
-        }
-
+        $limit = max(1, (int) $atts['limit']);
         $articles = [];
 
         try {
             $container = ContainerFactory::create();
             $articleRepo = $container->get(ArticleRepository::class);
-            
-            if (!empty($atts['category'])) {
-                $articles = $articleRepo->findByCategory($atts['category']);
-            } else {
-                $articles = $articleRepo->findAll();
-            }
-            
+            $articles = !empty($atts['category'])
+                ? $articleRepo->findByCategory($atts['category'])
+                : $articleRepo->findAll();
             if (count($articles) > $limit) {
                 $articles = array_slice($articles, 0, $limit);
             }
-            
         } catch (\Throwable $e) {
             error_log('PET [pet_knowledge_base] error: ' . $e->getMessage());
-            return '<div class="pet-shortcode pet-error">' . esc_html__('Error loading knowledge base.', 'pet') . '</div>';
+            return '<div class="pet-sc pet-knowledge-base"><div class="sc-empty">' . esc_html__('Error loading knowledge base.', 'pet') . '</div></div>';
         }
 
-        $html = '<div class="pet-shortcode pet-knowledge-base">';
-        if (!empty($atts['title'])) {
-            $html .= '<h3 class="pet-shortcode-title">' . esc_html($atts['title']) . '</h3>';
+        // Group by category
+        $byCategory = [];
+        foreach ($articles as $article) {
+            $cat = ucfirst($article->category());
+            $byCategory[$cat][] = $article;
         }
+        ksort($byCategory, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $uid = 'pet-kb-' . wp_rand(1000, 9999);
+
+        $html = '<div class="pet-sc pet-knowledge-base">';
+        $html .= '<h2 class="sc-title">' . esc_html($atts['title']) . '</h2>';
+        $html .= '<p class="sc-subtitle">' . esc_html(sprintf(__('%d articles across %d categories', 'pet'), count($articles), count($byCategory))) . '</p>';
+
+        // Search
+        $html .= '<div class="sc-search-wrap">';
+        $html .= '<input type="text" class="sc-search" id="' . esc_attr($uid) . '-search" placeholder="' . esc_attr__('Search articles...', 'pet') . '" />';
+        $html .= '</div>';
 
         if (empty($articles)) {
-            $html .= '<p class="pet-empty-state">' . esc_html__('No articles found.', 'pet') . '</p>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128218;</span>' . esc_html__('No articles found.', 'pet') . '</div>';
         } else {
-            $html .= '<ul class="pet-list pet-article-list">';
-            foreach ($articles as $article) {
-                $url = admin_url('admin.php?page=pet-knowledge&id=' . $article->id());
-                
-                $html .= '<li class="pet-list-item">';
-                $html .= '<a href="' . esc_url($url) . '" class="pet-list-link">';
-                $html .= '<span class="pet-item-title">' . esc_html($article->title()) . '</span>';
-                $html .= '<span class="pet-item-meta">';
-                $html .= '<span class="pet-item-category">' . esc_html(ucfirst($article->category())) . '</span>';
-                $html .= '</span>';
-                $html .= '</a>';
-                $html .= '</li>';
+            foreach ($byCategory as $cat => $catArticles) {
+                $html .= '<div class="sc-category-group">';
+                $html .= '<div class="sc-category-label">' . esc_html($cat) . ' <span class="sc-badge">' . count($catArticles) . '</span></div>';
+                foreach ($catArticles as $article) {
+                    $url = admin_url('admin.php?page=pet-knowledge&id=' . $article->id());
+                    $excerpt = mb_strimwidth(strip_tags($article->content()), 0, 120, '...');
+
+                    $html .= '<div class="sc-item" data-search-text="' . esc_attr(strtolower($article->title() . ' ' . $article->category() . ' ' . $excerpt)) . '">';
+                    $html .= '<div class="sc-item-icon sc-item-icon--article">&#128218;</div>';
+                    $html .= '<div class="sc-item-body">';
+                    $html .= '<div class="sc-item-title"><a href="' . esc_url($url) . '">' . esc_html($article->title()) . '</a></div>';
+                    if ($excerpt !== '' && $excerpt !== '...') {
+                        $html .= '<div class="sc-article-excerpt">' . esc_html($excerpt) . '</div>';
+                    }
+                    $html .= '</div>';
+                    $html .= '<div class="sc-item-right">';
+                    $html .= '<span class="sc-pill sc-pill--status">' . esc_html($cat) . '</span>';
+                    $html .= '</div>';
+                    $html .= '</div>';
+                }
+                $html .= '</div>';
             }
-            $html .= '</ul>';
         }
+
+        // Search filter script
+        $html .= '<script>(function(){var s=document.getElementById("' . esc_js($uid) . '-search");if(!s)return;s.addEventListener("input",function(){var q=s.value.toLowerCase();var items=s.closest(".pet-knowledge-base").querySelectorAll(".sc-item[data-search-text]");items.forEach(function(el){el.style.display=el.getAttribute("data-search-text").indexOf(q)!==-1?"":"none"})})})();</script>';
+
         $html .= '</div>';
 
         return $html;
