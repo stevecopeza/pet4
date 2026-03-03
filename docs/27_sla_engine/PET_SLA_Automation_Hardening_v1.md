@@ -46,6 +46,22 @@ Transitions occur only when crossing threshold boundaries.
 
 No transition → No event dispatch.
 
+### 2a. Tiered SLA Clock State Extensions
+
+For tiered SLAs, the clock state additionally tracks:
+- `active_tier_priority` — which tier is currently governing the clock
+- `tier_elapsed_business_minutes` — minutes elapsed in current tier
+- `carried_forward_percent` — percentage carried from previous tier
+- `total_transitions` — count of tier boundary crossings
+
+Tier transitions are recorded in `sla_clock_tier_transitions` for
+audit. The state machine above applies **per tier** — a ticket may
+reach Warning in Tier 1, transition to Tier 2, and return to Active
+state relative to Tier 2's targets (with carry-forward applied).
+
+A ticket may accumulate multiple breach events across tiers.
+See docs_27_sla_engine_08_tiered_sla_spec.md for full algorithm.
+
 ------------------------------------------------------------------------
 
 ## 3. Required Infrastructure Guarantees
@@ -94,11 +110,16 @@ Clock must be recalculated when:
 -   Ticket priority changes
 -   Ticket status pauses/unpauses clock
 -   Due time is modified
+-   Tier boundary crossed (tiered SLAs)
+-   Manual tier override applied (tiered SLAs)
 
 Recalculation MUST:
 
 -   Not re-fire previously dispatched events
 -   Adjust future thresholds deterministically
+-   For tiered SLAs: apply carry-forward cap at each tier transition
+-   For tiered SLAs: re-evaluate escalation thresholds against new
+    tier's target after transition
 
 ------------------------------------------------------------------------
 
@@ -130,12 +151,18 @@ result in: - One TicketBreachedEvent - One downstream notification
 -   Warning → Breached transition
 -   Double evaluation does not double-fire
 -   Concurrent evaluation safe (simulated)
+-   Tier transition applies carry-forward cap correctly
+-   Tier transition after breach enters new tier at cap%
+-   Manual tier override records audit trail
+-   Escalation re-evaluation after tier transition
 
 ### Integration Tests
 
 -   Scheduler triggers evaluation
 -   Batch processing works
 -   Migration-safe execution
+-   Tier boundary crossing during cron batch evaluation
+-   Multiple transitions in single ticket lifecycle
 
 ------------------------------------------------------------------------
 

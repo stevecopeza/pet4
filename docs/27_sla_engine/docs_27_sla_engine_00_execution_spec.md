@@ -23,16 +23,34 @@ Architects, Technical Leads
   : slas - id (UUID, PK) - name (varchar 255, required) - tier (enum:
   bronze, silver, gold, custom) - description (text) - version_number
   (int, required) - status (enum: draft, published, deprecated,
-  archived) - response_time_target_minutes (int, required) -
-  resolution_time_target_minutes (int, required) - calendar_id (UUID, FK
-  required) - created_at (datetime) - updated_at (datetime)
+  archived) - response_time_target_minutes (int, nullable — NULL for
+  tiered SLAs) - resolution_time_target_minutes (int, nullable — NULL
+  for tiered SLAs) - calendar_id (UUID, FK, nullable — NULL for tiered
+  SLAs) - tier_transition_cap_percent (int, default 80) - created_at
+  (datetime) - updated_at (datetime)
 
 Unique constraint: (name, version_number)
 
-Table: sla_escalation_rules - id (UUID, PK) - sla_id (UUID, FK) -
-threshold_percent (int, required) \# e.g. 80 = 80% of SLA window -
+For flat response/resolution targets: retained for single-tier backward
+compatibility. For tiered SLAs: targets live in `sla_tiers` table.
+See docs_27_sla_engine_08_tiered_sla_spec.md for full tiered model.
+
+Table: sla_tiers - id (UUID, PK) - sla_id (UUID, FK) - priority (int,
+required) - calendar_id (UUID, FK, required) -
+response_target_minutes (int, required) - resolution_target_minutes
+(int, required). Unique constraint: (sla_id, priority)
+
+Table: sla_escalation_rules - id (UUID, PK) - sla_id (UUID, FK,
+nullable — for single-tier SLAs) - sla_tier_id (UUID, FK, nullable —
+for tiered SLAs) - threshold_percent (int, required) -
 escalation_role_id (UUID) - escalation_level (int) - notify_method
 (enum: email, sms, internal)
+
+Table: sla_clock_tier_transitions - id (UUID, PK) - ticket_id
+(UUID, FK) - from_tier_priority (int) - to_tier_priority (int) -
+actual_percent_at_transition (decimal 5,2) - carried_percent
+(decimal 5,2) - override_reason (text, nullable) - transitioned_at
+(datetime, UTC)
 
 Table: sla_exclusions - id (UUID, PK) - sla_id (UUID, FK) -
 exclusion_type (enum: public_holiday, customer_delay, third_party) -
@@ -80,14 +98,26 @@ Aggregation interval configurable (daily/monthly)
 Input: - Ticket created_at - First response_at - Resolution_at - SLA
 snapshot - Calendar engine
 
-Steps: 1. Calculate business minutes between created_at and response_at.
-2. Compare to response_time_target_minutes. 3. Calculate business
-minutes between created_at and resolution_at. 4. Compare to
-resolution_time_target_minutes. 5. Compute percent_of_target = elapsed /
-target. 6. If percent \>= escalation threshold → trigger escalation
-event. 7. If percent \>= 100% → record breach.
+For single-tier SLAs:
+1. Calculate business minutes between created_at and response_at.
+2. Compare to response_time_target_minutes.
+3. Calculate business minutes between created_at and resolution_at.
+4. Compare to resolution_time_target_minutes.
+5. Compute percent_of_target = elapsed / target.
+6. If percent \>= escalation threshold → trigger escalation event.
+7. If percent \>= 100% → record breach.
 
-Time calculation MUST use SLA calendar and UTC normalization.
+For tiered SLAs:
+1. Determine active tier (see docs_27_sla_engine_08_tiered_sla_spec.md §3).
+2. Calculate business minutes using the **active tier's calendar**.
+3. At tier boundary crossings, apply carry-forward algorithm with
+   configurable cap (default 80%).
+4. Escalation thresholds evaluate against current tier's target.
+5. Breach at 100% of current tier → logged per tier. Multiple breaches
+   possible across tier transitions.
+
+Time calculation MUST use SLA calendar (or active tier calendar) and
+UTC normalization.
 
   -----------------------
   6\. ESCALATION ENGINE
@@ -124,8 +154,9 @@ publish without calendar - Cannot modify published SLA
   8\. UX CONTRACT
   -----------------
 
-SLA Builder: Sections: - Overview - Targets - Operating Calendar -
-Escalations - Exclusions - Service Credits
+SLA Builder: Sections: - Overview - Targets (or Tiers for tiered SLAs) -
+Operating Calendar(s) - Escalations (per tier) - Exclusions -
+Service Credits - Tier Transition Cap (tiered SLAs only)
 
 Warnings: - Publishing creates immutable version. - Deprecated SLAs
 cannot be used in new quotes. - Archived SLAs hidden but retained
@@ -156,6 +187,10 @@ Finance: - View service credit exposure
 4.  Ticket exceeds 100% → breach logged.
 5.  SLA deprecated → cannot attach to new Quote.
 6.  Contract termination → SLA snapshot remains for history.
+7.  Tiered SLA: ticket crosses tier boundary → carry-forward applied.
+8.  Tiered SLA: breach in tier 1, transition to tier 2 at cap%.
+9.  Tiered SLA: publish with calendar coverage gap → blocked.
+10. Tiered SLA: manual tier override → logged with reason.
 
   ---------------------------
   11\. IMPLEMENTATION ORDER

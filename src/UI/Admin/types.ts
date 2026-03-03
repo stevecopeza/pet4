@@ -239,6 +239,17 @@ export interface TimeEntry {
   archivedAt?: string | null;
 }
 
+export interface SlaTier {
+  id?: number | null;
+  priority: number;
+  label: string;
+  calendar_id: number;
+  calendar_name?: string | null;
+  response_target_minutes: number;
+  resolution_target_minutes: number;
+  escalation_rules: EscalationRule[];
+}
+
 export interface Sla {
   id: number;
   name: string;
@@ -247,7 +258,11 @@ export interface Sla {
   target_response_minutes?: number;
   target_resolution_minutes?: number;
   calendar_id?: number;
+  calendar_name?: string | null;
   escalation_rules?: EscalationRule[];
+  is_tiered?: boolean;
+  tier_transition_cap_percent?: number;
+  tiers?: SlaTier[];
 }
 
 export interface ContactAffiliation {
@@ -451,6 +466,7 @@ export interface Calendar {
   name: string;
   timezone: string;
   is_default: boolean;
+  is_24x7: boolean;
   exclude_public_holidays: boolean;
   public_holiday_country: string | null;
   working_windows: WorkingWindow[];

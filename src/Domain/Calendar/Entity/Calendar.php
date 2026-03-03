@@ -13,6 +13,7 @@ class Calendar
     private array $workingWindows; // Array of WorkingWindow
     private array $holidays;       // Array of Holiday
     private bool $isDefault;
+    private bool $is24x7;
     private bool $excludePublicHolidays;
     private ?string $publicHolidayCountry;
 
@@ -24,6 +25,7 @@ class Calendar
         bool $isDefault = false,
         ?int $id = null,
         ?string $uuid = null,
+        bool $is24x7 = false,
         bool $excludePublicHolidays = false,
         ?string $publicHolidayCountry = null
     ) {
@@ -34,6 +36,7 @@ class Calendar
         $this->workingWindows = $workingWindows;
         $this->holidays = $holidays;
         $this->isDefault = $isDefault;
+        $this->is24x7 = $is24x7;
         $this->excludePublicHolidays = $excludePublicHolidays;
         $this->publicHolidayCountry = $publicHolidayCountry;
 
@@ -122,6 +125,11 @@ class Calendar
     public function isDefault(): bool
     {
         return $this->isDefault;
+    }
+
+    public function is24x7(): bool
+    {
+        return $this->is24x7;
     }
 
     public function excludePublicHolidays(): bool

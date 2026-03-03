@@ -17,14 +17,34 @@ const DAYS_OF_WEEK = [
   { id: 0, name: 'Sunday' },
 ];
 
+const ALL_DAY_WINDOWS: WorkingWindow[] = DAYS_OF_WEEK.map(d => ({
+  day_of_week: d.id,
+  start_time: '00:00',
+  end_time: '23:59',
+}));
+
 const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onCancel }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [timezone, setTimezone] = useState(initialData?.timezone || 'UTC');
   const [isDefault, setIsDefault] = useState(initialData?.is_default || false);
+  const [is24x7, setIs24x7] = useState(initialData?.is_24x7 || false);
   const [excludePublicHolidays, setExcludePublicHolidays] = useState(initialData?.exclude_public_holidays || false);
   const [publicHolidayCountry, setPublicHolidayCountry] = useState(initialData?.public_holiday_country || '');
   const [workingWindows, setWorkingWindows] = useState<WorkingWindow[]>(initialData?.working_windows || []);
+  const [savedWindows, setSavedWindows] = useState<WorkingWindow[]>(initialData?.working_windows || []);
   const [holidays, setHolidays] = useState<Holiday[]>(initialData?.holidays || []);
+
+  const handleToggle24x7 = (checked: boolean) => {
+    setIs24x7(checked);
+    if (checked) {
+      setSavedWindows(workingWindows);
+      setWorkingWindows(ALL_DAY_WINDOWS);
+      setExcludePublicHolidays(false);
+      setPublicHolidayCountry('');
+    } else {
+      setWorkingWindows(savedWindows);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,8 +74,9 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onC
           name,
           timezone,
           is_default: isDefault,
-          exclude_public_holidays: excludePublicHolidays,
-          public_holiday_country: excludePublicHolidays ? publicHolidayCountry || null : null,
+          is_24x7: is24x7,
+          exclude_public_holidays: is24x7 ? false : excludePublicHolidays,
+          public_holiday_country: !is24x7 && excludePublicHolidays ? publicHolidayCountry || null : null,
           working_windows: workingWindows,
           holidays: holidays,
         }),
@@ -157,8 +178,20 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onC
           <label>
             <input 
               type="checkbox" 
+              checked={is24x7} 
+              onChange={e => handleToggle24x7(e.target.checked)} 
+            />
+            {' '}24/7 Calendar
+          </label>
+        </div>
+
+        <div className="form-group" style={{ marginTop: '15px' }}>
+          <label style={{ color: is24x7 ? '#999' : undefined }}>
+            <input 
+              type="checkbox" 
               checked={excludePublicHolidays} 
               onChange={e => setExcludePublicHolidays(e.target.checked)} 
+              disabled={is24x7}
             />
             {' '}Exclude Public Holidays
           </label>
@@ -211,6 +244,8 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onC
                         type="time" 
                         value={window.start_time} 
                         onChange={e => updateWorkingWindow(day.id, 'start_time', e.target.value)}
+                        disabled={is24x7}
+                        style={is24x7 ? { color: '#999', background: '#f0f0f0' } : undefined}
                       />
                     </td>
                     <td>
@@ -218,6 +253,8 @@ const CalendarForm: React.FC<CalendarFormProps> = ({ initialData, onSuccess, onC
                         type="time" 
                         value={window.end_time} 
                         onChange={e => updateWorkingWindow(day.id, 'end_time', e.target.value)}
+                        disabled={is24x7}
+                        style={is24x7 ? { color: '#999', background: '#f0f0f0' } : undefined}
                       />
                     </td>
                   </tr>

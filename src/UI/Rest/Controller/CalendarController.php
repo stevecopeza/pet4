@@ -130,6 +130,7 @@ class CalendarController
             'name' => $calendar->name(),
             'timezone' => $calendar->timezone(),
             'is_default' => $calendar->isDefault(),
+            'is_24x7' => $calendar->is24x7(),
             'exclude_public_holidays' => $calendar->excludePublicHolidays(),
             'public_holiday_country' => $calendar->publicHolidayCountry(),
             'working_windows' => array_map(function (WorkingWindow $w) {
@@ -180,6 +181,7 @@ class CalendarController
             (bool)($data['is_default'] ?? false),
             $id,
             $uuid,
+            (bool)($data['is_24x7'] ?? false),
             (bool)($data['exclude_public_holidays'] ?? false),
             $data['public_holiday_country'] ?? null
         );

@@ -60,10 +60,14 @@ class SqlSlaClockStateRepository implements SlaClockStateRepository
             'sla_version_id' => $state->getSlaVersionId(),
             'paused_flag' => $state->isPaused() ? 1 : 0,
             'escalation_stage' => $state->getEscalationStage(),
+            'active_tier_priority' => $state->getActiveTierPriority(),
+            'tier_elapsed_business_minutes' => $state->getTierElapsedBusinessMinutes(),
+            'carried_forward_percent' => $state->getCarriedForwardPercent(),
+            'total_transitions' => $state->getTotalTransitions(),
         ];
 
         // Format for wpdb
-        $format = ['%d', '%s', '%s', '%d', '%d', '%d'];
+        $format = ['%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%f', '%d'];
 
         $existing = $this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $table WHERE ticket_id = %d", $state->getTicketId()));
 
@@ -101,7 +105,11 @@ class SqlSlaClockStateRepository implements SlaClockStateRepository
             $row->last_evaluated_at ? new \DateTimeImmutable($row->last_evaluated_at) : null,
             (int)$row->sla_version_id,
             (bool)$row->paused_flag,
-            (int)$row->escalation_stage
+            (int)$row->escalation_stage,
+            isset($row->active_tier_priority) ? (int)$row->active_tier_priority : null,
+            (int)($row->tier_elapsed_business_minutes ?? 0),
+            isset($row->carried_forward_percent) ? (float)$row->carried_forward_percent : null,
+            (int)($row->total_transitions ?? 0)
         );
     }
 }

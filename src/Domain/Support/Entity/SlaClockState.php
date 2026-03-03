@@ -13,14 +13,22 @@ class SlaClockState
     private int $slaVersionId;
     private bool $paused;
     private int $escalationStage;
+    private ?int $activeTierPriority;
+    private int $tierElapsedBusinessMinutes;
+    private ?float $carriedForwardPercent;
+    private int $totalTransitions;
 
     public function __construct(
         int $ticketId,
         string $lastEventDispatched = 'none',
-        ? \DateTimeImmutable $lastEvaluatedAt = null,
+        ?\DateTimeImmutable $lastEvaluatedAt = null,
         int $slaVersionId = 0,
         bool $paused = false,
-        int $escalationStage = 0
+        int $escalationStage = 0,
+        ?int $activeTierPriority = null,
+        int $tierElapsedBusinessMinutes = 0,
+        ?float $carriedForwardPercent = null,
+        int $totalTransitions = 0
     ) {
         $this->ticketId = $ticketId;
         $this->lastEventDispatched = $lastEventDispatched;
@@ -28,6 +36,10 @@ class SlaClockState
         $this->slaVersionId = $slaVersionId;
         $this->paused = $paused;
         $this->escalationStage = $escalationStage;
+        $this->activeTierPriority = $activeTierPriority;
+        $this->tierElapsedBusinessMinutes = $tierElapsedBusinessMinutes;
+        $this->carriedForwardPercent = $carriedForwardPercent;
+        $this->totalTransitions = $totalTransitions;
     }
 
     public function getLastEventDispatched(): string
@@ -78,5 +90,47 @@ class SlaClockState
     public function setPaused(bool $paused): void
     {
         $this->paused = $paused;
+    }
+
+    // Tier-tracking accessors
+
+    public function getActiveTierPriority(): ?int
+    {
+        return $this->activeTierPriority;
+    }
+
+    public function setActiveTierPriority(?int $priority): void
+    {
+        $this->activeTierPriority = $priority;
+    }
+
+    public function getTierElapsedBusinessMinutes(): int
+    {
+        return $this->tierElapsedBusinessMinutes;
+    }
+
+    public function setTierElapsedBusinessMinutes(int $minutes): void
+    {
+        $this->tierElapsedBusinessMinutes = $minutes;
+    }
+
+    public function getCarriedForwardPercent(): ?float
+    {
+        return $this->carriedForwardPercent;
+    }
+
+    public function setCarriedForwardPercent(?float $percent): void
+    {
+        $this->carriedForwardPercent = $percent;
+    }
+
+    public function getTotalTransitions(): int
+    {
+        return $this->totalTransitions;
+    }
+
+    public function incrementTransitions(): void
+    {
+        $this->totalTransitions++;
     }
 }

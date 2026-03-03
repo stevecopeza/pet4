@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Sla } from '../types';
 import { DataTable, Column } from './DataTable';
 import SlaDefinitionForm from './SlaDefinitionForm';
+import KebabMenu from './KebabMenu';
+import ConversationPanel from './ConversationPanel';
 
 const SlaDefinitions = () => {
   const [slas, setSlas] = useState<Sla[]>([]);
@@ -9,6 +11,7 @@ const SlaDefinitions = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingSla, setEditingSla] = useState<Sla | null>(null);
+  const [discussingSla, setDiscussingSla] = useState<Sla | null>(null);
 
   const fetchSlas = async () => {
     try {
@@ -104,30 +107,31 @@ const SlaDefinitions = () => {
   if (loading) return <div>Loading SLAs...</div>;
   if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
 
-  if (showForm) {
-    return (
-      <SlaDefinitionForm 
-        initialData={editingSla || undefined}
-        onSave={handleSave}
-        onCancel={() => setShowForm(false)}
-      />
-    );
-  }
-
   const columns: Column<Sla>[] = [
-    { key: 'name', header: 'Name', render: (val) => <strong>{val as string}</strong> },
-    { key: 'target_response_minutes', header: 'Response Target (mins)' },
-    { key: 'target_resolution_minutes', header: 'Resolution Target (mins)' },
-    { 
-      key: 'id', 
-      header: 'Actions', 
-      render: (_, item) => (
-        <div>
-          <button onClick={() => handleEdit(item)} style={{ marginRight: '10px' }}>Edit</button>
-          <button onClick={() => handleDelete(item.id)} style={{ color: 'red' }}>Delete</button>
-        </div>
-      )
-    },
+    { key: 'name', header: 'Name', render: (val, item) => (
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(item); }}
+        style={{ fontWeight: 'bold', background: 'none', border: 'none', padding: 0, margin: 0, color: '#2271b1', cursor: 'pointer' }}
+        className="button-link"
+      >
+        {String(val)}
+      </button>
+    ) },
+    { key: 'is_tiered', header: 'Mode', render: (_val, item) => {
+      if (item.is_tiered && item.tiers) {
+        return <span>{item.tiers.length} tier{item.tiers.length !== 1 ? 's' : ''}</span>;
+      }
+      return <span>Single</span>;
+    } },
+    { key: 'target_response_minutes', header: 'Response Target (mins)', render: (val, item) => {
+      if (item.is_tiered) return <span style={{ color: '#999' }}>—</span>;
+      return <span>{String(val)}</span>;
+    } },
+    { key: 'target_resolution_minutes', header: 'Resolution Target (mins)', render: (val, item) => {
+      if (item.is_tiered) return <span style={{ color: '#999' }}>—</span>;
+      return <span>{String(val)}</span>;
+    } },
   ];
 
   return (
@@ -136,19 +140,56 @@ const SlaDefinitions = () => {
         <h2>SLA Definitions</h2>
         <button 
           onClick={handleCreate}
-          style={{
-            background: '#007cba',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
+          className="button button-primary"
         >
           Add SLA Definition
         </button>
       </div>
-      <DataTable columns={columns} data={slas} />
+
+      {showForm && (
+        <SlaDefinitionForm
+          initialData={editingSla || undefined}
+          onSave={handleSave}
+          onCancel={() => { setShowForm(false); setEditingSla(null); }}
+        />
+      )}
+
+      <DataTable
+        columns={columns}
+        data={slas}
+        emptyMessage="No SLA definitions found."
+        actions={(item) => (
+          <KebabMenu items={[
+            { type: 'action', label: 'Discuss', onClick: () => setDiscussingSla(item) },
+            { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+            { type: 'divider' },
+            { type: 'action', label: 'Delete', onClick: () => handleDelete(item.id), danger: true },
+          ]} />
+        )}
+      />
+
+      {discussingSla && (
+        <div className="pet-modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div className="pet-modal-content" style={{
+            background: 'white', padding: '20px', borderRadius: '5px', width: '800px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0 }}>Discuss: {discussingSla.name}</h3>
+              <button onClick={() => setDiscussingSla(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2em' }}>&times;</button>
+            </div>
+            <ConversationPanel
+              contextType="sla"
+              contextId={String(discussingSla.id)}
+              defaultSubject={`SLA: ${discussingSla.name}`}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

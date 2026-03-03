@@ -12,22 +12,26 @@ class SlaSnapshot
     private int $slaOriginalId;
     private int $slaVersionAtBinding;
     private string $slaNameAtBinding;
-    private int $responseTargetMinutes;
-    private int $resolutionTargetMinutes;
+    private ?int $responseTargetMinutes;
+    private ?int $resolutionTargetMinutes;
     private array $calendarSnapshotJson;
     private \DateTimeImmutable $boundAt;
+    private ?array $tierSnapshots;
+    private ?int $tierTransitionCapPercent;
 
     public function __construct(
         ?int $projectId,
         int $slaOriginalId,
         int $slaVersionAtBinding,
         string $slaNameAtBinding,
-        int $responseTargetMinutes,
-        int $resolutionTargetMinutes,
+        ?int $responseTargetMinutes,
+        ?int $resolutionTargetMinutes,
         array $calendarSnapshotJson,
         ?string $uuid = null,
         ?int $id = null,
-        ?\DateTimeImmutable $boundAt = null
+        ?\DateTimeImmutable $boundAt = null,
+        ?array $tierSnapshots = null,
+        ?int $tierTransitionCapPercent = null
     ) {
         $this->id = $id;
         $this->uuid = $uuid ?? $this->generateUuid();
@@ -39,6 +43,8 @@ class SlaSnapshot
         $this->resolutionTargetMinutes = $resolutionTargetMinutes;
         $this->calendarSnapshotJson = $calendarSnapshotJson;
         $this->boundAt = $boundAt ?? new \DateTimeImmutable();
+        $this->tierSnapshots = $tierSnapshots;
+        $this->tierTransitionCapPercent = $tierTransitionCapPercent;
     }
 
     private function generateUuid(): string
@@ -66,12 +72,17 @@ class SlaSnapshot
         return $this->calendarSnapshotJson;
     }
     
-    public function responseTargetMinutes(): int
+    public function isTiered(): bool
+    {
+        return !empty($this->tierSnapshots);
+    }
+
+    public function responseTargetMinutes(): ?int
     {
         return $this->responseTargetMinutes;
     }
     
-    public function resolutionTargetMinutes(): int
+    public function resolutionTargetMinutes(): ?int
     {
         return $this->resolutionTargetMinutes;
     }
@@ -79,6 +90,26 @@ class SlaSnapshot
     public function projectId(): ?int
     {
         return $this->projectId;
+    }
+
+    public function tierSnapshots(): ?array { return $this->tierSnapshots; }
+    public function tierTransitionCapPercent(): ?int { return $this->tierTransitionCapPercent; }
+
+    /**
+     * Find a specific tier snapshot by priority.
+     * @return array|null The tier snapshot data or null if not found
+     */
+    public function findTierByPriority(int $priority): ?array
+    {
+        if ($this->tierSnapshots === null) {
+            return null;
+        }
+        foreach ($this->tierSnapshots as $tier) {
+            if (($tier['priority'] ?? 0) === $priority) {
+                return $tier;
+            }
+        }
+        return null;
     }
 
     public function id(): ?int { return $this->id; }

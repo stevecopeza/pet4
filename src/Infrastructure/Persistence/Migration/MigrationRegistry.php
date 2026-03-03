@@ -87,6 +87,9 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddLeadIdToQuotes::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreatePulsewayIntegrationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddPublicHolidayFieldsToCalendars::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddIs24x7ToCalendars::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTieredSlaSupport::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTierTrackingToClockState::class,
         ];
     }
 }

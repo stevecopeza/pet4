@@ -22,11 +22,13 @@ Defines the standard interaction patterns for managing lists of entities (People
 ### 3. Row Actions
 - **Clickable Primary Column**: The primary identifier column (e.g., Name, ID) MUST be clickable and trigger the primary action (Edit or View).
 - **Location**: The last column of the table is reserved for "Actions".
-- **Format**:
+- **Delivery**: Row actions are rendered via the **KebabMenu** (⋯ dropdown) component for all entities with more than one action. See [KebabMenu Row Actions](docs_22_ui_components_06_kebab_menu_actions.md) for full specification.
+- **Standard Actions** (in order):
   - **View/Tasks**: Primary navigation action.
   - **Edit**: Opens the entity for modification in the reusable Form component.
-  - **Archive**: Soft-deletes the item (with confirmation).
-- **Consistency**: All entity lists (Customers, Projects, Quotes, Employees, Knowledge) share this pattern.
+  - **Divider**: Separates non-destructive from destructive actions.
+  - **Archive/Delete**: Destructive action, rendered with `danger: true`.
+- **Consistency**: All entity lists share this pattern. Entities with only a single action (Skills, Certifications, KPI Definitions) use a plain button instead of KebabMenu.
 
 ## UI/UX Standards
 
@@ -41,14 +43,24 @@ Defines the standard interaction patterns for managing lists of entities (People
 - **Restoration**: Archived items are filtered out by default but exist in the database.
 
 ## Implementation Status
-This pattern is fully implemented for:
+This pattern is fully implemented for (all using KebabMenu delivery):
+- **Contacts**: `Contacts.tsx` (Edit, Archive)
 - **Customers**: `Customers.tsx` (Edit, Archive, Bulk Archive)
-- **Projects**: `Projects.tsx` (Edit, Archive, Bulk Archive)
-- **Quotes**: `Quotes.tsx` (Edit [Draft only], Archive, Bulk Archive)
+- **Sites**: `Sites.tsx` (Edit, Archive)
+- **Leads**: `Leads.tsx` (Edit, Convert, Archive)
 - **Employees**: `Employees.tsx` (Edit, Archive, Bulk Archive)
+- **Teams**: `Teams.tsx` (View, Edit, Archive, Bulk Archive)
+- **Quotes**: `Quotes.tsx` (Edit [Draft only], Archive, Bulk Archive)
+- **Projects**: `Projects.tsx` (Edit, Archive, Bulk Archive)
+- **Calendars**: `Calendars.tsx` (Edit, Delete)
 - **Knowledge**: `Knowledge.tsx` (Edit, Archive, Bulk Archive)
 - **Support**: `Support.tsx` (View/Edit, Archive, Bulk Archive)
 - **Time Entries**: `TimeEntries.tsx` (Edit, Delete, Bulk Delete)
-- **Teams**: `Teams.tsx` (View, Edit, Archive, Bulk Archive)
+- **Finance**: `Finance.tsx` (View, Edit)
+
+Entities with single action (plain button, no KebabMenu):
+- **Skills**: `Skills.tsx` (Edit)
+- **Certifications**: `Certifications.tsx` (Edit)
+- **KPI Definitions**: `KpiDefinitions.tsx` (Edit)
 
 **Authority**: Normative

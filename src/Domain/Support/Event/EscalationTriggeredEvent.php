@@ -11,12 +11,14 @@ class EscalationTriggeredEvent implements DomainEvent, SourcedEvent
 {
     private int $ticketId;
     private int $stage;
+    private ?int $tierPriority;
     private \DateTimeImmutable $occurredAt;
 
-    public function __construct(int $ticketId, int $stage)
+    public function __construct(int $ticketId, int $stage, ?int $tierPriority = null)
     {
         $this->ticketId = $ticketId;
         $this->stage = $stage;
+        $this->tierPriority = $tierPriority;
         $this->occurredAt = new \DateTimeImmutable();
     }
 
@@ -28,6 +30,11 @@ class EscalationTriggeredEvent implements DomainEvent, SourcedEvent
     public function stage(): int
     {
         return $this->stage;
+    }
+
+    public function tierPriority(): ?int
+    {
+        return $this->tierPriority;
     }
 
     public function occurredAt(): \DateTimeImmutable
@@ -55,6 +62,7 @@ class EscalationTriggeredEvent implements DomainEvent, SourcedEvent
         return [
             'ticket_id' => $this->ticketId,
             'stage' => $this->stage,
+            'tier_priority' => $this->tierPriority,
         ];
     }
 }
