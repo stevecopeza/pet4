@@ -68,6 +68,16 @@ class FeatureFlagService
         return $this->isEnabled('pet_resilience_indicators_enabled');
     }
 
+    public function isPulsewayEnabled(): bool
+    {
+        return $this->isEnabled('pet_pulseway_enabled');
+    }
+
+    public function isPulsewayTicketCreationEnabled(): bool
+    {
+        return $this->isEnabled('pet_pulseway_ticket_creation_enabled');
+    }
+
     private function isEnabled(string $key): bool
     {
         $setting = $this->settings->findByKey($key);

@@ -64,6 +64,8 @@ class ApiRegistry
             \Pet\UI\Rest\Controller\LeaveController::class,
             \Pet\UI\Rest\Controller\ConversationController::class,
             \Pet\UI\Rest\Controller\LogController::class,
+            \Pet\UI\Rest\Controller\PulsewayController::class,
+            \Pet\UI\Rest\Controller\HealthHistoryController::class,
         ];
 
         foreach ($controllers as $controllerClass) {

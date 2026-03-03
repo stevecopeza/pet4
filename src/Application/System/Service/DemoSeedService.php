@@ -44,6 +44,8 @@ final class DemoSeedService
         $summary['project_enrichment'] = $this->seedProjectEnrichment($seedRunId, $seedProfile, $recentDate);
         $summary['billing'] = $this->seedBilling($seedRunId, $seedProfile, $recentDate);
         $summary['event_backbone'] = $this->seedEventBackboneExpectations($seedRunId, $seedProfile, $recentDate);
+        $summary['pulseway'] = $this->seedPulseway($seedRunId, $seedProfile, $recentDate);
+        $summary['health_history'] = $this->seedHealthHistory($seedRunId, $seedProfile, $recentDate);
 
         // Registry entries for tables without JSON metadata
         $this->registerSeedRunEntities($seedRunId, $recentDate);
@@ -2759,9 +2761,375 @@ final class DemoSeedService
         return ['exports' => $exports, 'invoices' => $invoices, 'payments' => $payments];
     }
 
+    private function seedPulseway(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        // Table names match migration: CreatePulsewayIntegrationTables
+        $intTable = $wpdb->prefix . 'pet_pulseway_integrations';
+        $notifTable = $wpdb->prefix . 'pet_external_notifications';
+        $devTable = $wpdb->prefix . 'pet_external_assets';
+        $orgTable = $wpdb->prefix . 'pet_pulseway_org_mappings';
+        $rulesTable = $wpdb->prefix . 'pet_pulseway_ticket_rules';
+        $settingsTable = $wpdb->prefix . 'pet_settings';
+
+        // Skip if Pulseway tables don't exist yet
+        if ($wpdb->get_var("SHOW TABLES LIKE '$intTable'") !== $intTable) {
+            return ['skipped' => true, 'reason' => 'pulseway tables not yet migrated'];
+        }
+
+        // Enable Pulseway feature flags
+        foreach (['pet_pulseway_enabled', 'pet_pulseway_ticket_creation_enabled'] as $flag) {
+            $existing = $wpdb->get_var($wpdb->prepare("SELECT setting_key FROM $settingsTable WHERE setting_key = %s", $flag));
+            if (!$existing) {
+                $wpdb->insert($settingsTable, [
+                    'setting_key' => $flag,
+                    'setting_value' => '1',
+                    'setting_type' => 'boolean',
+                    'description' => 'Pulseway RMM integration flag (demo seed)',
+                    'updated_at' => $seededAt,
+                ]);
+            } else {
+                $wpdb->update($settingsTable, ['setting_value' => '1', 'updated_at' => $seededAt], ['setting_key' => $flag]);
+            }
+        }
+
+        // --- Integration record (schema: uuid, label, api_base_url, token_id_encrypted, token_secret_encrypted) ---
+        $wpdb->insert($intTable, [
+            'uuid' => $this->uuid(),
+            'label' => 'Demo Pulseway Instance',
+            'api_base_url' => 'https://api.pulseway.com/v3/',
+            'token_id_encrypted' => base64_encode('demo_token_id'),
+            'token_secret_encrypted' => base64_encode('demo_token_secret'),
+            'is_active' => 1,
+            'poll_interval_seconds' => 300,
+            'last_poll_at' => $seededAt,
+            'last_success_at' => $seededAt,
+            'consecutive_failures' => 0,
+            'created_at' => $seededAt,
+            'updated_at' => $seededAt,
+        ]);
+        $integrationId = (int)$wpdb->insert_id;
+        $this->registryAdd($seedRunId, $intTable, (string)$integrationId);
+
+        // --- Devices (schema: pet_external_assets — external_asset_id, display_name, platform, status, external_org/site/group_id) ---
+        $devices = [
+            ['hostname' => 'DC-SVR-01',   'os' => 'Windows Server 2022', 'group' => 'Servers',      'site' => 'RPM Cape Town',     'status' => 'online',  'ip' => '10.0.1.10'],
+            ['hostname' => 'DC-SVR-02',   'os' => 'Windows Server 2019', 'group' => 'Servers',      'site' => 'RPM Johannesburg',  'status' => 'online',  'ip' => '10.0.2.10'],
+            ['hostname' => 'FW-EDGE-01',  'os' => 'pfSense 2.7',        'group' => 'Network',      'site' => 'RPM Cape Town',     'status' => 'online',  'ip' => '10.0.1.1'],
+            ['hostname' => 'WS-MKT-PC03', 'os' => 'Windows 11 Pro',     'group' => 'Workstations', 'site' => 'Acme Stellenbosch', 'status' => 'offline', 'ip' => '192.168.5.103'],
+            ['hostname' => 'APP-WEB-01',  'os' => 'Ubuntu 22.04 LTS',   'group' => 'Servers',      'site' => 'Nexus Cape Town',   'status' => 'online',  'ip' => '10.0.3.20'],
+        ];
+        $deviceIds = [];
+        foreach ($devices as $d) {
+            $wpdb->insert($devTable, [
+                'integration_id' => $integrationId,
+                'external_system' => 'pulseway',
+                'external_asset_id' => 'pw_' . strtolower(str_replace('-', '_', $d['hostname'])),
+                'external_org_id' => null,
+                'external_site_id' => $d['site'],
+                'external_group_id' => $d['group'],
+                'display_name' => $d['hostname'],
+                'platform' => $d['os'],
+                'status' => $d['status'],
+                'last_seen_at' => $seededAt,
+                'raw_snapshot_json' => json_encode(array_merge($d, ['ip_address' => $d['ip']])),
+                'snapshot_updated_at' => $seededAt,
+                'created_at' => $seededAt,
+                'updated_at' => $seededAt,
+            ]);
+            $deviceIds[] = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $devTable, (string)$wpdb->insert_id);
+        }
+
+        // --- Org Mappings (Pulseway org → PET customer) ---
+        $rpmCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%RPM%' LIMIT 1");
+        $acmeCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%Acme%' LIMIT 1");
+        $nexusCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%Nexus%' LIMIT 1");
+
+        $orgMaps = [
+            ['pulseway_org' => 'RPM Resources',    'customer_id' => $rpmCustId],
+            ['pulseway_org' => 'Acme Manufacturing', 'customer_id' => $acmeCustId],
+            ['pulseway_org' => 'Nexus Labs',        'customer_id' => $nexusCustId],
+        ];
+        foreach ($orgMaps as $om) {
+            if ($om['customer_id'] > 0) {
+                $wpdb->insert($orgTable, [
+                    'integration_id' => $integrationId,
+                    'pulseway_org_id' => strtolower(str_replace(' ', '_', $om['pulseway_org'])),
+                    'pet_customer_id' => $om['customer_id'],
+                    'is_active' => 1,
+                    'created_at' => $seededAt,
+                    'updated_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $orgTable, (string)$wpdb->insert_id);
+            }
+        }
+
+        // --- Ticket Rules (schema: rule_name, not name) ---
+        $wpdb->insert($rulesTable, [
+            'integration_id' => $integrationId,
+            'rule_name' => 'Critical Server Alerts',
+            'match_severity' => 'critical',
+            'match_category' => null,
+            'output_ticket_kind' => 'incident',
+            'output_priority' => 'critical',
+            'output_queue_id' => 'support',
+            'sort_order' => 1,
+            'is_active' => 1,
+            'created_at' => $seededAt,
+            'updated_at' => $seededAt,
+        ]);
+        $this->registryAdd($seedRunId, $rulesTable, (string)$wpdb->insert_id);
+        $wpdb->insert($rulesTable, [
+            'integration_id' => $integrationId,
+            'rule_name' => 'Network Warnings',
+            'match_severity' => 'elevated',
+            'match_category' => 'network',
+            'output_ticket_kind' => 'alert',
+            'output_priority' => 'high',
+            'output_queue_id' => 'support',
+            'sort_order' => 2,
+            'is_active' => 1,
+            'created_at' => $seededAt,
+            'updated_at' => $seededAt,
+        ]);
+        $this->registryAdd($seedRunId, $rulesTable, (string)$wpdb->insert_id);
+
+        // --- Notifications (schema: pet_external_notifications — external_notification_id, message, device_external_id) ---
+        $notifications = [
+            ['title' => 'CPU usage above 95% on DC-SVR-01',         'severity' => 'critical', 'category' => 'performance', 'device_idx' => 0, 'routing' => 'routed'],
+            ['title' => 'Disk space below 5% on DC-SVR-02',         'severity' => 'critical', 'category' => 'storage',     'device_idx' => 1, 'routing' => 'routed'],
+            ['title' => 'Firewall policy update failed on FW-EDGE-01', 'severity' => 'elevated', 'category' => 'network',  'device_idx' => 2, 'routing' => 'routed'],
+            ['title' => 'Offline: WS-MKT-PC03 not responding',      'severity' => 'elevated', 'category' => 'availability', 'device_idx' => 3, 'routing' => 'routed'],
+            ['title' => 'SSL certificate expiring in 7 days on APP-WEB-01', 'severity' => 'low', 'category' => 'security', 'device_idx' => 4, 'routing' => 'pending'],
+            ['title' => 'Windows Update available on DC-SVR-01',     'severity' => 'informational', 'category' => 'patch',  'device_idx' => 0, 'routing' => 'skipped'],
+            ['title' => 'Backup job completed with warnings',       'severity' => 'low',     'category' => 'backup',       'device_idx' => 1, 'routing' => 'pending'],
+            ['title' => 'High memory usage on APP-WEB-01',          'severity' => 'elevated', 'category' => 'performance', 'device_idx' => 4, 'routing' => 'pending'],
+        ];
+        $notifIds = [];
+        foreach ($notifications as $i => $n) {
+            $ts = (new \DateTimeImmutable())->modify('-' . (count($notifications) - $i) . ' hours')->format('Y-m-d H:i:s');
+            $deviceExternalId = 'pw_' . strtolower(str_replace('-', '_', $devices[$n['device_idx']]['hostname']));
+            $wpdb->insert($notifTable, [
+                'integration_id' => $integrationId,
+                'external_system' => 'pulseway',
+                'external_notification_id' => 'pw_notif_' . ($i + 1001),
+                'title' => $n['title'],
+                'message' => 'Alert details for: ' . $n['title'],
+                'severity' => $n['severity'],
+                'category' => $n['category'],
+                'device_external_id' => $deviceExternalId,
+                'routing_status' => $n['routing'],
+                'dedupe_key' => 'demo_dedupe_' . ($i + 1001),
+                'occurred_at' => $ts,
+                'received_at' => $ts,
+                'created_at' => $ts,
+            ]);
+            $notifIds[] = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $notifTable, (string)$wpdb->insert_id);
+        }
+
+        // --- Pulseway-sourced tickets (via CreateTicketHandler so all projectors fire) ---
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $createTicket = $c->get(\Pet\Application\Support\Command\CreateTicketHandler::class);
+
+        $pulsewayTickets = [
+            ['cust' => $rpmCustId,   'subject' => 'CRITICAL: CPU usage above 95% on DC-SVR-01',         'pri' => 'critical', 'notif_idx' => 0],
+            ['cust' => $rpmCustId,   'subject' => 'CRITICAL: Disk space below 5% on DC-SVR-02',         'pri' => 'critical', 'notif_idx' => 1],
+            ['cust' => $rpmCustId,   'subject' => 'ALERT: Firewall policy update failed on FW-EDGE-01', 'pri' => 'high',     'notif_idx' => 2],
+            ['cust' => $acmeCustId,  'subject' => 'ALERT: Offline — WS-MKT-PC03 not responding',        'pri' => 'high',     'notif_idx' => 3],
+        ];
+        $ticketCount = 0;
+        foreach ($pulsewayTickets as $pt) {
+            if ($pt['cust'] <= 0) continue;
+            $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
+                $pt['cust'],
+                null,
+                null,
+                $pt['subject'],
+                'Auto-created from Pulseway RMM notification. Device alert detected by monitoring agent.',
+                $pt['pri'],
+                [
+                    'intake_source' => 'pulseway',
+                    'queue_id' => 'support',
+                    'category' => 'monitoring',
+                ]
+            ));
+            $ticketCount++;
+
+            // Link notification → ticket via ticket_links for dedupe fidelity
+            $newTicketId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_tickets ORDER BY id DESC LIMIT 1");
+            if ($newTicketId && isset($notifIds[$pt['notif_idx']])) {
+                $linksTable = $wpdb->prefix . 'pet_ticket_links';
+                if ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable) {
+                    $wpdb->insert($linksTable, [
+                        'ticket_id' => $newTicketId,
+                        'link_type' => 'external',
+                        'linked_id' => 'demo_dedupe_' . ($pt['notif_idx'] + 1001),
+                        'created_at' => $seededAt,
+                    ]);
+                    $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
+                }
+            }
+        }
+
+        return [
+            'integration' => 1,
+            'devices' => count($deviceIds),
+            'notifications' => count($notifIds),
+            'org_mappings' => count(array_filter($orgMaps, fn($m) => $m['customer_id'] > 0)),
+            'ticket_rules' => 2,
+            'pulseway_tickets' => $ticketCount,
+        ];
+    }
+
     private function seedEventBackboneExpectations(string $seedRunId, string $seedProfile, string $seededAt): array
     {
         return ['events' => 'ok'];
+    }
+
+    /**
+     * Seed feed events with real entity IDs so the health-history endpoint
+     * can detect "was_red" / "was_amber" for recovery dots on completed items.
+     */
+    private function seedHealthHistory(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $feedTable = $wpdb->prefix . 'pet_feed_events';
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+
+        // Resolved / closed tickets that should show recovery dots
+        $closedTickets = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE status IN ('resolved','closed') ORDER BY id ASC LIMIT 3");
+        // Active tickets that had SLA issues (for amber history on open items)
+        $openTickets = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE status NOT IN ('resolved','closed') ORDER BY id ASC LIMIT 5");
+        // Projects
+        $projIds = $wpdb->get_col("SELECT id FROM $projectsTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3");
+
+        $count = 0;
+
+        // Closed tickets that were previously breached or warned
+        foreach ($closedTickets as $i => $tid) {
+            // First closed ticket: was both red and amber
+            if ($i === 0) {
+                $wpdb->insert($feedTable, [
+                    'id' => $this->uuid(),
+                    'event_type' => 'sla_breached',
+                    'source_engine' => 'support',
+                    'source_entity_id' => (string)$tid,
+                    'classification' => 'critical',
+                    'title' => 'SLA Breached (historical)',
+                    'summary' => 'Ticket was breached before resolution',
+                    'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                    'audience_scope' => 'global',
+                    'audience_reference_id' => null,
+                    'pinned_flag' => 0,
+                    'expires_at' => null,
+                    'created_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+                $count++;
+            }
+            // All closed tickets: were amber at some point
+            $wpdb->insert($feedTable, [
+                'id' => $this->uuid(),
+                'event_type' => 'sla_warning',
+                'source_engine' => 'support',
+                'source_entity_id' => (string)$tid,
+                'classification' => 'critical',
+                'title' => 'SLA Warning (historical)',
+                'summary' => 'Ticket had SLA warning before resolution',
+                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'audience_scope' => 'global',
+                'audience_reference_id' => null,
+                'pinned_flag' => 0,
+                'expires_at' => null,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+
+        // Some open tickets with breach/warning history
+        if (isset($openTickets[3])) {
+            $wpdb->insert($feedTable, [
+                'id' => $this->uuid(),
+                'event_type' => 'sla_breached',
+                'source_engine' => 'support',
+                'source_entity_id' => (string)$openTickets[3],
+                'classification' => 'critical',
+                'title' => 'SLA Breached',
+                'summary' => 'Resolution SLA breached',
+                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'audience_scope' => 'global',
+                'audience_reference_id' => null,
+                'pinned_flag' => 0,
+                'expires_at' => null,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+        if (isset($openTickets[2])) {
+            $wpdb->insert($feedTable, [
+                'id' => $this->uuid(),
+                'event_type' => 'sla_warning',
+                'source_engine' => 'support',
+                'source_entity_id' => (string)$openTickets[2],
+                'classification' => 'critical',
+                'title' => 'SLA Warning',
+                'summary' => 'Approaching SLA breach',
+                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'audience_scope' => 'global',
+                'audience_reference_id' => null,
+                'pinned_flag' => 0,
+                'expires_at' => null,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+
+        // Projects: Acme project was amber (at risk)
+        if (isset($projIds[1])) {
+            $wpdb->insert($feedTable, [
+                'id' => $this->uuid(),
+                'event_type' => 'project.health_amber',
+                'source_engine' => 'delivery',
+                'source_entity_id' => (string)$projIds[1],
+                'classification' => 'critical',
+                'title' => 'Project At Risk',
+                'summary' => 'Acme project flagged as at risk due to burn rate',
+                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'audience_scope' => 'global',
+                'audience_reference_id' => null,
+                'pinned_flag' => 0,
+                'expires_at' => null,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $count++;
+
+            $wpdb->insert($feedTable, [
+                'id' => $this->uuid(),
+                'event_type' => 'project.health_red',
+                'source_engine' => 'delivery',
+                'source_entity_id' => (string)$projIds[1],
+                'classification' => 'critical',
+                'title' => 'Project Critical',
+                'summary' => 'Acme project went over budget',
+                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'audience_scope' => 'global',
+                'audience_reference_id' => null,
+                'pinned_flag' => 0,
+                'expires_at' => null,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+
+        return ['health_events' => $count];
     }
 
     private function uuid(): string

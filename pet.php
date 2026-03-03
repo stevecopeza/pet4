@@ -216,6 +216,48 @@ if (\defined('WP_CLI') && \constant('WP_CLI')) {
         }
     });
 
+    \call_user_func('WP_CLI::add_command', 'pet pulseway:poll', function () {
+        try {
+            $container = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+
+            // Phase A: Ingest notifications
+            $ingestionService = $container->get(\Pet\Application\Integration\Pulseway\Service\NotificationIngestionService::class);
+            $ingestionResults = $ingestionService->pollAll();
+            \call_user_func('WP_CLI::log', 'Ingestion: ' . \json_encode($ingestionResults, JSON_PRETTY_PRINT));
+
+            // Phase B: Process pending notifications into tickets (if enabled)
+            $ticketService = $container->get(\Pet\Application\Integration\Pulseway\Service\PulsewayTicketCreationService::class);
+            $featureFlags = $container->get(\Pet\Application\System\Service\FeatureFlagService::class);
+            if ($featureFlags->isPulsewayTicketCreationEnabled()) {
+                $repo = $container->get(\Pet\Infrastructure\Persistence\Repository\Pulseway\SqlPulsewayIntegrationRepository::class);
+                $integrations = $repo->findActiveIntegrations();
+                $ticketResults = [];
+                foreach ($integrations as $integration) {
+                    $ticketResults[(int)$integration['id']] = $ticketService->processPendingNotifications((int)$integration['id']);
+                }
+                \call_user_func('WP_CLI::log', 'Ticket creation: ' . \json_encode($ticketResults, JSON_PRETTY_PRINT));
+            } else {
+                \call_user_func('WP_CLI::log', 'Ticket creation: disabled (pet_pulseway_ticket_creation_enabled = false)');
+            }
+
+            \call_user_func('WP_CLI::success', 'Pulseway poll cycle complete');
+        } catch (\Throwable $e) {
+            \call_user_func('WP_CLI::error', 'Pulseway poll failed: ' . $e->getMessage());
+        }
+    });
+
+    \call_user_func('WP_CLI::add_command', 'pet pulseway:sync-devices', function () {
+        try {
+            $container = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+            $service = $container->get(\Pet\Application\Integration\Pulseway\Service\DeviceSnapshotService::class);
+            $results = $service->syncAll();
+            \call_user_func('WP_CLI::log', \json_encode($results, JSON_PRETTY_PRINT));
+            \call_user_func('WP_CLI::success', 'Pulseway device sync complete');
+        } catch (\Throwable $e) {
+            \call_user_func('WP_CLI::error', 'Pulseway device sync failed: ' . $e->getMessage());
+        }
+    });
+
     \call_user_func('WP_CLI::add_command', 'pet reset', function () {
         try {
             // Force a current user

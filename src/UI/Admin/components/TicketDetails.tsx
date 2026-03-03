@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Ticket, Customer, WorkItem, ActivityLog, Employee } from '../types';
 import ConversationPanel from './ConversationPanel';
+import { computeTicketHealth } from '../healthCompute';
 
 interface TicketDetailsProps {
   ticket: Ticket;
@@ -378,8 +379,14 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack, initialSh
     }
   };
 
+  // Compute UHB health for this ticket
+  const ticketHealth = computeTicketHealth(
+    { status },
+    workItem?.sla_time_remaining ?? null,
+  );
+
   return (
-    <div className="pet-ticket-details">
+    <div className={`pet-ticket-details ${ticketHealth.className}`}>
       <div style={{ marginBottom: '20px' }}>
         <button 
           type="button" 
@@ -418,9 +425,19 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack, initialSh
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <div>
-          <h2 style={{ marginTop: 0 }}>{ticket.subject}</h2>
-          <div style={{ color: '#666', fontSize: '1.1em' }}>
+          <h2 style={{ marginTop: 0 }}>
+            {ticket.subject}
+            {ticketHealth.reasons.map((r, i) => (
+              <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+            ))}
+          </h2>
+          <div style={{ color: '#666', fontSize: '1.1em', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             #{ticket.id} &bull; {ticket.createdAt}
+            {ticket.intake_source === 'pulseway' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#e8f4fd', color: '#0073aa', padding: '2px 10px', borderRadius: '10px', fontSize: '0.85em', fontWeight: 600 }}>
+                {'\u{1F5A5}\uFE0F'} Pulseway RMM
+              </span>
+            )}
           </div>
           {ticket.malleableData && ticket.malleableData.source === 'quote' && (
             <div style={{ marginTop: '6px', fontSize: '0.95em', color: '#555' }}>
@@ -673,6 +690,20 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack, initialSh
                     </button>
                   )}
               </>
+            )}
+            {ticket.intake_source === 'pulseway' && (
+              <div style={{ marginBottom: '10px' }}>
+                <button
+                  type="button"
+                  className="button button-large"
+                  disabled
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: '#0073aa', color: '#fff', borderColor: '#0073aa', opacity: 0.6, cursor: 'not-allowed' }}
+                  title="Remote Connect will be available when Pulseway agent access is configured"
+                >
+                  {'\u{1F517}'} Remote Connect
+                </button>
+                <div style={{ fontSize: '0.78em', color: '#888', marginTop: '4px', textAlign: 'center' }}>Requires Pulseway agent access</div>
+              </div>
             )}
             <button type="button" className="button button-large" disabled style={{ width: '100%', marginBottom: '10px' }}>
               Reply

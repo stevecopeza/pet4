@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import '../dashboard-styles.css';
+import { computeTicketHealth, computeProjectHealth, computeQuoteHealth, computeLeadHealth, HealthResult, HealthHistory } from '../healthCompute';
 
 /* ============================================================
    Types
@@ -214,14 +215,31 @@ const AttentionCard: React.FC<{
   timerClass?: string;
   statusLabel?: string;
   pulse?: boolean;
+  isPulseway?: boolean;
+  uhbClass?: string;
+  reasons?: { label: string; color: string }[];
+  recoveryHistory?: HealthHistory | null;
   onClick?: () => void;
-}> = ({ subject, meta, severity, timer, timerClass, statusLabel, pulse, onClick }) => (
+}> = ({ subject, meta, severity, timer, timerClass, statusLabel, pulse, isPulseway, uhbClass, reasons, recoveryHistory, onClick }) => (
   <div
-    className={`pd-attention-card severity-${severity} ${pulse ? 'pd-pulse' : ''} ${onClick ? 'pd-clickable' : ''}`}
+    className={`pd-attention-card ${uhbClass || `severity-${severity}`} ${pulse ? 'pd-pulse' : ''} ${onClick ? 'pd-clickable' : ''} ${recoveryHistory ? 'uhb-has-recovery' : ''}`}
     onClick={onClick}
   >
+    {/* Recovery indicator dots for completed items */}
+    {recoveryHistory && (recoveryHistory.was_red || recoveryHistory.was_amber) && (
+      <div className="uhb-recovery-dots">
+        {recoveryHistory.was_red && <span className="uhb-dot uhb-dot-red" title="Was critical during lifecycle" />}
+        {recoveryHistory.was_amber && <span className="uhb-dot uhb-dot-amber" title="Was at-risk during lifecycle" />}
+      </div>
+    )}
     <div className="pd-attention-body">
-      <div className="pd-attention-subject">{subject}</div>
+      <div className="pd-attention-subject">
+        {isPulseway && <span className="pd-pulseway-tag">{`\u{1F5A5}\uFE0F`} PW</span>}
+        {subject}
+        {reasons && reasons.length > 0 && reasons.map((r, i) => (
+          <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+        ))}
+      </div>
       <div className="pd-attention-meta">{meta}</div>
     </div>
     {(timer || statusLabel) && (
@@ -359,7 +377,7 @@ const ManagerView: React.FC<{
 
   // Needs attention: breached, warnings, unassigned
   const ticketMap = new Map(tickets.map(t => [String(t.id), t]));
-  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; sort: number }[] = [];
+  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; isPulseway?: boolean; uhbClass?: string; reasons?: { label: string; color: string }[]; sort: number }[] = [];
 
   workItems
     .filter(wi => wi.source_type === 'ticket')
@@ -367,6 +385,7 @@ const ManagerView: React.FC<{
       const ticket = ticketMap.get(wi.source_id);
       if (!ticket || ['closed', 'resolved'].includes(ticket.status)) return;
       const custName = customers.get(ticket.customerId) || `Customer #${ticket.customerId}`;
+      const health = computeTicketHealth(ticket, wi.sla_time_remaining);
 
       if (wi.sla_time_remaining !== null && wi.sla_time_remaining < 0) {
         attentionItems.push({
@@ -377,6 +396,9 @@ const ManagerView: React.FC<{
           timerClass: 'red',
           statusLabel: 'BREACHED',
           pulse: true,
+          isPulseway: ticket.intake_source === 'pulseway',
+          uhbClass: health.className,
+          reasons: health.reasons,
           sort: 0,
         });
       } else if (wi.sla_time_remaining !== null && wi.sla_time_remaining < 60) {
@@ -387,6 +409,9 @@ const ManagerView: React.FC<{
           timer: formatMinutes(wi.sla_time_remaining),
           timerClass: 'amber',
           statusLabel: 'WARNING',
+          isPulseway: ticket.intake_source === 'pulseway',
+          uhbClass: health.className,
+          reasons: health.reasons,
           sort: 1,
         });
       }
@@ -397,6 +422,8 @@ const ManagerView: React.FC<{
           meta: `${custName} · No one assigned`,
           severity: 'unassigned',
           statusLabel: 'UNASSIGNED',
+          isPulseway: ticket.intake_source === 'pulseway',
+          uhbClass: health.className,
           sort: 2,
         });
       }
@@ -416,6 +443,7 @@ const ManagerView: React.FC<{
         <KpiCard value={`${slaHealth}%`} label="SLA Health" color={slaHealth >= 80 ? 'green' : slaHealth >= 50 ? 'amber' : 'red'} />
         <KpiCard value={`${overview.utilizationRate}%`} label="Utilisation" color="purple" />
         <KpiCard value={openTickets.length} label="Open Tickets" color="teal" />
+        <KpiCard value={tickets.filter(t => t.intake_source === 'pulseway' && !['closed','resolved'].includes(t.status)).length} label={'\u{1F5A5}\uFE0F Pulseway Alerts'} color="purple" />
         <KpiCard value={overview.pendingQuotes} label="Pending Quotes" color="amber" />
       </div>
 
@@ -481,6 +509,8 @@ const SupportView: React.FC<{
       const breached = wi.sla_time_remaining !== null && wi.sla_time_remaining < 0;
       const warning = wi.sla_time_remaining !== null && wi.sla_time_remaining > 0 && wi.sla_time_remaining <= 60;
 
+      const health = computeTicketHealth(ticket, wi.sla_time_remaining);
+
       return {
         ticketId: ticket.id,
         subject: ticket.subject,
@@ -490,6 +520,9 @@ const SupportView: React.FC<{
         timerClass: timerColor(wi.sla_time_remaining),
         statusLabel: breached ? 'BREACHED' : warning ? 'DUE SOON' : 'ON TRACK',
         pulse: breached,
+        isPulseway: ticket.intake_source === 'pulseway',
+        uhbClass: health.className,
+        reasons: health.reasons,
         sort: wi.sla_time_remaining ?? 9999,
       };
     })
@@ -499,6 +532,7 @@ const SupportView: React.FC<{
   const unassignedAttention = unassignedTickets.map(wi => {
     const ticket = ticketMap.get(wi.source_id)!;
     const custName = customers.get(ticket.customerId) || `Customer #${ticket.customerId}`;
+    const health = computeTicketHealth(ticket, wi.sla_time_remaining);
     return {
       ticketId: ticket.id,
       subject: ticket.subject,
@@ -508,6 +542,9 @@ const SupportView: React.FC<{
       timerClass: timerColor(wi.sla_time_remaining),
       statusLabel: 'UNASSIGNED',
       pulse: false,
+      isPulseway: ticket.intake_source === 'pulseway',
+      uhbClass: health.className,
+      reasons: health.reasons,
       sort: wi.sla_time_remaining ?? 9999,
     };
   });
@@ -523,6 +560,7 @@ const SupportView: React.FC<{
         <KpiCard value={myBreached.length} label="Breached (Mine)" color={myBreached.length > 0 ? 'red' : 'green'} />
         <KpiCard value={dueWithinHour.length} label="Due Within 1hr" color={dueWithinHour.length > 0 ? 'amber' : 'green'} />
         <KpiCard value={unassignedTickets.length} label="Unassigned Queue" color={unassignedTickets.length > 0 ? 'amber' : 'teal'} />
+        <KpiCard value={tickets.filter(t => t.intake_source === 'pulseway' && !['closed','resolved'].includes(t.status)).length} label={'\u{1F5A5}\uFE0F Pulseway Alerts'} color="purple" />
       </div>
 
       <div className="pd-attention-panel">
@@ -572,16 +610,6 @@ const daysUntil = (dateStr?: string): number | null => {
   return Math.ceil(diff / 86400000);
 };
 
-const stateColor = (state: string): string => {
-  switch (state) {
-    case 'active': return 'blue';
-    case 'planned': return 'purple';
-    case 'on_hold': return 'amber';
-    case 'completed': return 'green';
-    default: return 'teal';
-  }
-};
-
 /* ============================================================
    SALES VIEW — "What do I need to focus on today to sell more?"
    ============================================================ */
@@ -596,51 +624,58 @@ const SalesView: React.FC<{
 
   // Attention items
   const now = Date.now();
-  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; sort: number }[] = [];
+  const attentionItems: { subject: string; meta: string; severity: string; timer?: string; timerClass?: string; statusLabel?: string; pulse?: boolean; uhbClass?: string; reasons?: { label: string; color: string }[]; sort: number }[] = [];
 
-  // Aging sent quotes (>3 days)
+  // Sent quotes needing follow-up
   quotes.filter(q => q.state === 'sent').forEach(q => {
+    const health = computeQuoteHealth(q);
+    if (health.state === 'green') return; // healthy, no attention needed
     const sentAge = q.updatedAt ? Math.floor((now - new Date(q.updatedAt).getTime()) / 86400000) : 0;
     const custName = customers.get(q.customerId) || `Customer #${q.customerId}`;
-    if (sentAge > 3) {
-      attentionItems.push({
-        subject: q.title,
-        meta: `${custName} · Sent ${sentAge}d ago · $${q.totalValue.toLocaleString()}`,
-        severity: sentAge > 7 ? 'breached' : 'warning',
-        timer: `${sentAge}d`,
-        timerClass: sentAge > 7 ? 'red' : 'amber',
-        statusLabel: 'FOLLOW UP',
-        pulse: sentAge > 7,
-        sort: sentAge > 7 ? 0 : 1,
-      });
-    }
+    attentionItems.push({
+      subject: q.title,
+      meta: `${custName} · Sent ${sentAge}d ago · $${q.totalValue.toLocaleString()}`,
+      severity: health.state === 'red' ? 'breached' : 'warning',
+      timer: `${sentAge}d`,
+      timerClass: health.state === 'red' ? 'red' : 'amber',
+      statusLabel: 'FOLLOW UP',
+      pulse: health.state === 'red',
+      uhbClass: health.className,
+      reasons: health.reasons,
+      sort: health.state === 'red' ? 0 : 1,
+    });
   });
 
-  // Stale leads (>7 days with no update)
+  // Stale / cooling leads
   leads.filter(l => l.status === 'new' || l.status === 'qualified').forEach(l => {
+    const health = computeLeadHealth(l);
+    if (health.state === 'green') return; // healthy, no attention needed
     const age = Math.floor((now - new Date(l.updatedAt || l.createdAt).getTime()) / 86400000);
     const custName = customers.get(l.customerId) || `Customer #${l.customerId}`;
-    if (age > 7) {
-      attentionItems.push({
-        subject: l.subject,
-        meta: `${custName} · ${l.status} · ${age}d stale`,
-        severity: 'warning',
-        timer: `${age}d`,
-        timerClass: 'amber',
-        statusLabel: 'STALE LEAD',
-        sort: 2,
-      });
-    }
+    attentionItems.push({
+      subject: l.subject,
+      meta: `${custName} · ${l.status} · ${age}d stale`,
+      severity: health.state === 'red' ? 'breached' : 'warning',
+      timer: `${age}d`,
+      timerClass: health.state === 'red' ? 'red' : 'amber',
+      statusLabel: health.reasons[0]?.label || 'STALE LEAD',
+      uhbClass: health.className,
+      reasons: health.reasons,
+      sort: health.state === 'red' ? 0 : 2,
+    });
   });
 
-  // Draft quotes ready to send
+  // Aging draft quotes
   quotes.filter(q => q.state === 'draft' && q.totalValue > 0).forEach(q => {
+    const health = computeQuoteHealth(q);
     const custName = customers.get(q.customerId) || `Customer #${q.customerId}`;
     attentionItems.push({
       subject: q.title,
       meta: `${custName} · $${q.totalValue.toLocaleString()} · Ready to send`,
-      severity: 'info',
-      statusLabel: 'SEND QUOTE',
+      severity: health.state === 'amber' ? 'warning' : 'info',
+      statusLabel: health.reasons[0]?.label || 'SEND QUOTE',
+      uhbClass: health.className,
+      reasons: health.reasons,
       sort: 3,
     });
   });
@@ -719,33 +754,28 @@ const PMView: React.FC<{
   // Projects at risk: overdue, over-budget, or burn-ahead
   const attentionItems = activeProjects
     .map(p => {
+      const health = computeProjectHealth(p);
+      if (health.state === 'green' || health.state === 'grey') return null;
+
       const taskCount = p.tasks.length;
       const completedCount = p.tasks.filter(t => t.completed).length;
-      const progress = taskCount > 0 ? pct(completedCount, taskCount) : 0;
       const hoursUsed = p.malleableData?.hours_used ?? 0;
       const soldH = p.soldHours || 0;
       const burnPct = soldH > 0 ? Math.round((hoursUsed / soldH) * 100) : 0;
-      const isOverBudget = soldH > 0 && hoursUsed > soldH;
       const isOverdue = p.endDate ? new Date(p.endDate) < now : false;
-      const isBurnAhead = burnPct > 80 && progress < 80 && !isOverBudget;
       const custName = customers.get(p.customerId) || '';
-
-      if (!isOverBudget && !isOverdue && !isBurnAhead) return null;
-
-      const reasons: string[] = [];
-      if (isOverdue) reasons.push('OVERDUE');
-      if (isOverBudget) reasons.push('OVER BUDGET');
-      if (isBurnAhead && !isOverBudget) reasons.push('AT RISK');
 
       return {
         subject: p.name,
         meta: `${custName ? custName + ' · ' : ''}${completedCount}/${taskCount} tasks · ${hoursUsed}h / ${soldH}h`,
-        severity: isOverBudget || isOverdue ? 'breached' as const : 'warning' as const,
+        severity: health.state === 'red' ? 'breached' as const : 'warning' as const,
         timer: isOverdue ? `${Math.abs(daysUntil(p.endDate)!)}d overdue` : `${burnPct}% burn`,
-        timerClass: isOverBudget || isOverdue ? 'red' : 'amber',
-        statusLabel: reasons.join(' · '),
-        pulse: isOverBudget || isOverdue,
-        sort: isOverBudget ? 0 : isOverdue ? 1 : 2,
+        timerClass: health.state === 'red' ? 'red' : 'amber',
+        statusLabel: health.reasons.map(r => r.label).join(' · '),
+        pulse: health.state === 'red',
+        uhbClass: health.className,
+        reasons: health.reasons,
+        sort: health.state === 'red' ? 0 : 1,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
@@ -799,11 +829,17 @@ const PMView: React.FC<{
             const isOverdue = days !== null && days < 0;
             const custName = customers.get(p.customerId) || `Customer #${p.customerId}`;
             const pm = p.malleableData?.pm || '--';
+            const projHealth = computeProjectHealth(p);
 
             return (
-              <div key={p.id} className={`pd-project-card ${isOverdue ? 'pd-project-overdue' : ''}`}>
+              <div key={p.id} className={`pd-project-card ${projHealth.className}`}>
                 <div className="pd-project-card-header">
-                  <div className="pd-project-card-title">{p.name}</div>
+                  <div className="pd-project-card-title">
+                    {p.name}
+                    {projHealth.reasons.length > 0 && projHealth.reasons.map((r, ri) => (
+                      <span key={ri} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+                    ))}
+                  </div>
                   <span className={`pd-project-state-badge state-${p.state}`}>{p.state.replace('_', ' ')}</span>
                 </div>
                 <div className="pd-project-customer">{custName}</div>
@@ -1115,6 +1151,11 @@ const TicketDetailPanel: React.FC<{
             <span className={`pd-ticket-badge status-${ticket.status}`}>{ticket.status}</span>
             <span className={`pd-ticket-badge priority-${ticket.priority}`}>{ticket.priority}</span>
             {ticket.category && <span className="pd-ticket-badge cat">{ticket.category}</span>}
+            {ticket.intake_source === 'pulseway' && (
+              <span className="pd-ticket-badge" style={{ background: '#e8f4fd', color: '#0073aa', fontWeight: 600 }}>
+                {'\u{1F5A5}\uFE0F'} Pulseway RMM
+              </span>
+            )}
           </div>
         </div>
         <div className="pd-ticket-header-right">
@@ -1439,7 +1480,26 @@ const TicketDetailPanel: React.FC<{
               {ticket.intake_source && (
                 <div className="pd-ticket-field">
                   <span className="pd-ticket-field-label">Source</span>
-                  <span className="pd-ticket-field-value">{ticket.intake_source}</span>
+                  <span className="pd-ticket-field-value">
+                    {ticket.intake_source === 'pulseway' ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#e8f4fd', color: '#0073aa', padding: '2px 8px', borderRadius: '10px', fontSize: '0.85em', fontWeight: 600 }}>
+                        {'\u{1F5A5}\uFE0F'} Pulseway RMM
+                      </span>
+                    ) : ticket.intake_source}
+                  </span>
+                </div>
+              )}
+              {ticket.intake_source === 'pulseway' && (
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    className="pd-log-work-btn"
+                    style={{ width: '100%', opacity: 0.6, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 12px', background: '#0073aa', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 600, fontSize: '0.9em' }}
+                    disabled
+                    title="Remote Connect will be available when Pulseway agent access is configured"
+                  >
+                    {'\u{1F517}'} Remote Connect
+                  </button>
+                  <div style={{ fontSize: '0.78em', color: '#888', marginTop: '4px', textAlign: 'center' }}>Requires Pulseway agent access</div>
                 </div>
               )}
               {ticket.subcategory && (

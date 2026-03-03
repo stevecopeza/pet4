@@ -3,6 +3,7 @@ import { Quote, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import QuoteForm from './QuoteForm';
 import QuoteDetails, { computeQuoteTotals } from './QuoteDetails';
+import { computeQuoteHealth } from '../healthCompute';
 
 const Quotes = () => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -303,6 +304,15 @@ const Quotes = () => {
               selection={{
                 selectedIds,
                 onSelectionChange: setSelectedIds
+              }}
+              rowClassName={(q) => {
+                const qa = q as any;
+                return computeQuoteHealth({
+                  state: q.state,
+                  totalValue: q.totalValue,
+                  createdAt: qa.createdAt || new Date().toISOString(),
+                  updatedAt: qa.updatedAt || null,
+                }).className;
               }}
               actions={(quote) => (
                 <div className="pet-actions">

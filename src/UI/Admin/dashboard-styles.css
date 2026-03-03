@@ -267,6 +267,25 @@
   margin-top: 2px;
 }
 
+/* Pulseway RMM indicator on cards */
+.pd-pulseway-card {
+  border-left-color: #6f42c1 !important;
+}
+.pd-pulseway-tag {
+  display: inline-block;
+  background: #6f42c1;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* Pulse animation for breached items */
 .pd-pulse {
   animation: pdPulse 2s ease-in-out infinite;

@@ -21,7 +21,7 @@ interface SettingWithId extends Setting {
 }
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<'general' | 'schemas' | 'calendars' | 'slas' | 'logs'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'schemas' | 'calendars' | 'slas' | 'healthBorders' | 'logs'>('general');
   const [settings, setSettings] = useState<SettingWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -239,6 +239,21 @@ const Settings = () => {
           SLA Definitions
         </button>
         <button
+          onClick={() => setActiveTab('healthBorders')}
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            background: activeTab === 'healthBorders' ? '#fff' : 'transparent',
+            borderBottom: activeTab === 'healthBorders' ? '2px solid #007cba' : 'none',
+            cursor: 'pointer',
+            fontWeight: activeTab === 'healthBorders' ? 'bold' : 'normal',
+            color: activeTab === 'healthBorders' ? '#000' : '#555',
+            fontSize: '14px'
+          }}
+        >
+          Health Borders
+        </button>
+        <button
           onClick={() => setActiveTab('logs')}
           style={{
             padding: '10px 20px',
@@ -309,6 +324,8 @@ const Settings = () => {
       {activeTab === 'calendars' && <Calendars />}
       {activeTab === 'slas' && <SlaDefinitions />}
 
+      {activeTab === 'healthBorders' && <HealthBordersSettings />}
+
       {activeTab === 'logs' && (
         <div className="pet-logs-viewer">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -352,6 +369,127 @@ const Settings = () => {
           <p className="description">Showing last 200 entries.</p>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ================================================================
+   Health Borders Settings sub-component
+   ================================================================ */
+const UHB_KEYS: { key: string; label: string; unit: string; defaultVal: string }[] = [
+  { key: 'uhb_ticket_sla_warning_minutes', label: 'Ticket SLA Warning Threshold', unit: 'minutes', defaultVal: '60' },
+  { key: 'uhb_quote_stale_days', label: 'Quote Stale (Sent, No Response)', unit: 'days', defaultVal: '7' },
+  { key: 'uhb_quote_followup_days', label: 'Quote Follow-Up Threshold', unit: 'days', defaultVal: '3' },
+  { key: 'uhb_quote_aging_draft_days', label: 'Quote Aging Draft Threshold', unit: 'days', defaultVal: '14' },
+  { key: 'uhb_lead_cold_days', label: 'Lead Cold Threshold (No Update)', unit: 'days', defaultVal: '14' },
+  { key: 'uhb_lead_cooling_days', label: 'Lead Cooling Threshold (No Update)', unit: 'days', defaultVal: '7' },
+];
+
+const HealthBordersSettings: React.FC = () => {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${window.petSettings.apiUrl}/settings`, {
+          headers: { 'X-WP-Nonce': window.petSettings.nonce },
+        });
+        const data: { key: string; value: string }[] = await res.json();
+        const map: Record<string, string> = {};
+        UHB_KEYS.forEach(k => {
+          const found = data.find(d => d.key === k.key);
+          map[k.key] = found ? found.value : k.defaultVal;
+        });
+        setValues(map);
+      } catch (_) {
+        // Use defaults
+        const map: Record<string, string> = {};
+        UHB_KEYS.forEach(k => { map[k.key] = k.defaultVal; });
+        setValues(map);
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      for (const k of UHB_KEYS) {
+        await fetch(`${window.petSettings.apiUrl}/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.petSettings.nonce },
+          body: JSON.stringify({ key: k.key, value: values[k.key] || k.defaultVal, type: 'integer', description: k.label }),
+        });
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      alert('Failed to save thresholds');
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <div>Loading thresholds...</div>;
+
+  return (
+    <div>
+      <h2>Health Borders — Thresholds</h2>
+      <p style={{ color: '#666', marginBottom: '20px' }}>Configure when items transition between health states (Red / Amber / Green).</p>
+
+      {/* Colour legend */}
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        {[
+          { color: '#dc3545', label: 'Red — Critical' },
+          { color: '#f0ad4e', label: 'Amber — At Risk' },
+          { color: '#28a745', label: 'Green — On Track' },
+          { color: '#0d6efd', label: 'Blue — Complete' },
+          { color: '#adb5bd', label: 'Grey — Unscored' },
+        ].map(c => (
+          <span key={c.color} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85em' }}>
+            <span style={{ width: '14px', height: '14px', borderRadius: '3px', background: c.color, display: 'inline-block' }} />
+            {c.label}
+          </span>
+        ))}
+      </div>
+
+      <table className="widefat fixed striped" style={{ maxWidth: '700px' }}>
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th style={{ width: '120px' }}>Value</th>
+            <th style={{ width: '80px' }}>Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {UHB_KEYS.map(k => (
+            <tr key={k.key}>
+              <td><strong>{k.label}</strong></td>
+              <td>
+                <input
+                  type="number"
+                  min="1"
+                  value={values[k.key] || k.defaultVal}
+                  onChange={e => setValues(prev => ({ ...prev, [k.key]: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </td>
+              <td style={{ color: '#888' }}>{k.unit}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button className="button button-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Thresholds'}
+        </button>
+        {saved && <span style={{ color: '#28a745', fontWeight: 600 }}>Saved!</span>}
+      </div>
     </div>
   );
 };

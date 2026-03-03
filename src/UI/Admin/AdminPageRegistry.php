@@ -50,6 +50,7 @@ class AdminPageRegistry
             'pet-roles' => 'Roles & Capabilities',
             'pet-activity' => 'Activity',
             'pet-settings' => 'Settings',
+            'pet-pulseway' => 'Pulseway RMM',
             'pet-shortcodes' => 'Shortcodes',
             'pet-demo-tools' => 'Demo Tools',
         ];

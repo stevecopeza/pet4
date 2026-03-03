@@ -1,0 +1,67 @@
+/* ==========================================================================
+   Universal Health Border (UHB) — Shared visual health vocabulary
+   ==========================================================================
+   Colour meaning:
+     Red    #dc3545  — Critical / breached / overdue / over-budget
+     Amber  #f0ad4e  — Warning / off-track / at-risk
+     Green  #28a745  — On-track / healthy
+     Blue   #0d6efd  — Complete / resolved / closed / won
+     Grey   #adb5bd  — Unscored / no health signal
+   ========================================================================== */
+
+/* --- Health border + background tint (applied to cards, rows, panels) --- */
+.uhb-red    { border-left: 4px solid #dc3545 !important; background-color: #fff5f5 !important; }
+.uhb-amber  { border-left: 4px solid #f0ad4e !important; background-color: #fffbf0 !important; }
+.uhb-green  { border-left: 4px solid #28a745 !important; background-color: #f6fff6 !important; }
+.uhb-blue   { border-left: 4px solid #0d6efd !important; background-color: #f0f7ff !important; }
+.uhb-grey   { border-left: 4px solid #adb5bd !important; background-color: #fafbfc !important; }
+
+/* --- Reason tag pills (inline labels explaining WHY a colour was assigned) --- */
+.uhb-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.uhb-tag-red   { background: #dc3545; color: #fff; }
+.uhb-tag-amber { background: #f0ad4e; color: #fff; }
+.uhb-tag-green { background: #28a745; color: #fff; }
+.uhb-tag-blue  { background: #0d6efd; color: #fff; }
+.uhb-tag-grey  { background: #adb5bd; color: #fff; }
+
+/* --- Recovery Indicator dots (top-right of completed items) --- */
+.uhb-recovery-dots {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.uhb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.uhb-dot-red   { background: #dc3545; }
+.uhb-dot-amber { background: #f0ad4e; }
+
+/* Tooltip on hover for dots */
+.uhb-dot[title] {
+  cursor: help;
+}
+
+/* --- Ensure cards with recovery dots have relative positioning --- */
+.uhb-has-recovery {
+  position: relative;
+}

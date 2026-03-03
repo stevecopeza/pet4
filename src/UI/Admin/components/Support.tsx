@@ -3,6 +3,7 @@ import { Ticket, Employee } from '../types';
 import { DataTable, Column } from './DataTable';
 import TicketForm from './TicketForm';
 import TicketDetails from './TicketDetails';
+import { computeTicketHealth } from '../healthCompute';
 
 const Support = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -238,6 +239,13 @@ const Support = () => {
       key: 'malleableData', 
       header: 'Source', 
       render: (_val, item) => {
+        if (item.intake_source === 'pulseway') {
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#e8f4fd', color: '#0073aa', padding: '2px 8px', borderRadius: '10px', fontSize: '0.85em', fontWeight: 600 }}>
+              <span style={{ fontSize: '1em' }}>{'\u{1F5A5}\uFE0F'}</span> Pulseway RMM
+            </span>
+          );
+        }
         const data = item.malleableData || {};
         if (data.source === 'quote') {
           const quoteId = data.quote_id;
@@ -378,6 +386,14 @@ const Support = () => {
         selection={{
           selectedIds,
           onSelectionChange: setSelectedIds
+        }}
+        rowClassName={(ticket) => {
+          // Map sla_status → approximate SLA minutes for health compute
+          const slaMinutes = ticket.sla_status === 'breached' ? -1
+            : ticket.sla_status === 'warning' ? 30
+            : ticket.sla_status === 'achieved' ? null
+            : 120; // default healthy
+          return computeTicketHealth(ticket, slaMinutes).className;
         }}
         actions={(item) => (
           <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>

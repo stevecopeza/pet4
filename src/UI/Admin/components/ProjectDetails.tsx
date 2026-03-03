@@ -3,6 +3,7 @@ import { Project, Task } from '../types';
 import { DataTable, Column } from './DataTable';
 import LogTimeModal from './LogTimeModal';
 import ConversationPanel from './ConversationPanel';
+import { computeProjectHealth } from '../healthCompute';
 
 interface ProjectDetailsProps {
   projectId: number;
@@ -104,8 +105,10 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
   if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
   if (!project) return <div>Project not found</div>;
 
+  const projHealth = project ? computeProjectHealth(project) : null;
+
   return (
-    <div className="pet-project-details">
+    <div className={`pet-project-details ${projHealth?.className || ''}`}>
       <div style={{ marginBottom: '20px' }}>
         <button className="button" onClick={onBack}>&larr; Back to Projects</button>
         <button 
@@ -129,7 +132,12 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
       )}
 
       <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
-        <h2>{project.name}</h2>
+        <h2>
+          {project.name}
+          {projHealth && projHealth.reasons.map((r, i) => (
+            <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+          ))}
+        </h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <p><strong>Customer ID:</strong> {project.customerId}</p>

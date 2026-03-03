@@ -43,24 +43,24 @@ class SqlTicketRepository implements TicketRepository
         ];
 
         $formats = [
-            '%d',
-            '%d',
-            '%d',
-            '%s',
-            '%s',
-            '%s',
-            '%s',
-            '%d',
-            '%s',
-            '%s',
-            '%s',
-            '%s',
-            '%d',
-            '%s',
-            '%s',
-            '%s',
+            '%d',  // customer_id
+            '%d',  // site_id
+            '%d',  // sla_id
+            '%s',  // subject
+            '%s',  // description
+            '%s',  // status
+            '%s',  // priority
+            '%d',  // malleable_schema_version
+            '%s',  // malleable_data
+            '%s',  // created_at
+            '%s',  // opened_at
+            '%s',  // closed_at
+            '%s',  // resolved_at
+            '%d',  // sla_snapshot_id
+            '%s',  // response_due_at
+            '%s',  // resolution_due_at
+            '%s',  // responded_at
         ];
-
         $this->conditionallyAddColumn($data, $formats, 'queue_id', $ticket->queueId(), '%s');
         $this->conditionallyAddColumn($data, $formats, 'owner_user_id', $ticket->ownerUserId(), '%s');
         $this->conditionallyAddColumn($data, $formats, 'category', $ticket->category(), '%s');

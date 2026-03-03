@@ -520,6 +520,19 @@ class ContainerFactory
                 global $wpdb;
                 return new \Pet\Application\System\Service\TouchedTracker($wpdb);
             },
+
+            // ── Pulseway RMM Integration ──
+            \Pet\Infrastructure\Integration\Pulseway\CredentialEncryptionService::class => \DI\create(\Pet\Infrastructure\Integration\Pulseway\CredentialEncryptionService::class),
+            \Pet\Infrastructure\Persistence\Repository\Pulseway\SqlPulsewayIntegrationRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\Pulseway\SqlPulsewayIntegrationRepository($wpdb);
+            },
+            \Pet\Application\Integration\Pulseway\Service\NotificationIngestionService::class => \DI\autowire(\Pet\Application\Integration\Pulseway\Service\NotificationIngestionService::class),
+            \Pet\Application\Integration\Pulseway\Service\DeviceSnapshotService::class => \DI\autowire(\Pet\Application\Integration\Pulseway\Service\DeviceSnapshotService::class),
+            \Pet\Application\Integration\Pulseway\Service\TicketRuleEngine::class => \DI\autowire(\Pet\Application\Integration\Pulseway\Service\TicketRuleEngine::class),
+            \Pet\Application\Integration\Pulseway\Service\PulsewayTicketCreationService::class => \DI\autowire(\Pet\Application\Integration\Pulseway\Service\PulsewayTicketCreationService::class),
+            \Pet\UI\Rest\Controller\PulsewayController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\HealthHistoryController::class => \DI\create(\Pet\UI\Rest\Controller\HealthHistoryController::class),
         ];
     }
 }

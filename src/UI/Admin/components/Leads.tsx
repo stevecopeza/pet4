@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Lead } from '../types';
 import { DataTable, Column } from './DataTable';
 import LeadForm from './LeadForm';
+import { computeLeadHealth } from '../healthCompute';
 
 const Leads = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -142,6 +143,7 @@ const Leads = () => {
           selectedIds,
           onSelectionChange: setSelectedIds
         }}
+        rowClassName={(lead) => computeLeadHealth(lead).className}
         actions={(lead) => (
           <>
             <button 

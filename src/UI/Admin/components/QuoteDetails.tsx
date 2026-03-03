@@ -14,6 +14,7 @@ const flattenTeams = (nodes: Team[]): Team[] => {
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 import AddCostAdjustmentForm from './AddCostAdjustmentForm';
 import ConversationPanel from './ConversationPanel';
+import { computeQuoteHealth } from '../healthCompute';
 
 interface MarkdownTextareaProps {
   value: string;
@@ -1623,15 +1624,28 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
   const isReady = readinessIssues.length === 0;
 
+  const qa = quote as any;
+  const quoteHealthResult = computeQuoteHealth({
+    state: quote.state,
+    totalValue: quoteTotal,
+    createdAt: qa.createdAt || new Date().toISOString(),
+    updatedAt: qa.updatedAt || null,
+  });
+
   return (
-    <div className="pet-quote-details">
+    <div className={`pet-quote-details ${quoteHealthResult.className}`}>
       <div style={{ marginBottom: '20px' }}>
         <button className="button" onClick={onBack}>&larr; Back to Quotes</button>
       </div>
 
       <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <h2>Quote #{quote.id} (v{quote.version})</h2>
+          <h2>
+            Quote #{quote.id} (v{quote.version})
+            {quoteHealthResult.reasons.map((r, i) => (
+              <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+            ))}
+          </h2>
           <button
             className="button"
             onClick={() => setConversationContext({

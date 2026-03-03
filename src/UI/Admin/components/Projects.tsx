@@ -3,6 +3,7 @@ import { Project } from '../types';
 import { DataTable, Column } from './DataTable';
 import ProjectForm from './ProjectForm';
 import ProjectDetails from './ProjectDetails';
+import { computeProjectHealth } from '../healthCompute';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -213,6 +214,7 @@ const Projects = () => {
           selectedIds,
           onSelectionChange: setSelectedIds
         }}
+        rowClassName={(p) => computeProjectHealth(p).className}
         actions={(item) => (
           <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
             <button 

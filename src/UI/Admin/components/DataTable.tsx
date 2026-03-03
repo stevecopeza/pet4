@@ -18,6 +18,8 @@ interface DataTableProps<T> {
   };
   actions?: (item: T) => React.ReactNode;
   rowDetails?: (item: T) => React.ReactNode;
+  /** Optional callback to add CSS class(es) to each row's <tr> */
+  rowClassName?: (item: T) => string;
 }
 
 export function DataTable<T extends { id: string | number }>({ 
@@ -27,7 +29,8 @@ export function DataTable<T extends { id: string | number }>({
   emptyMessage = 'No data found.',
   selection,
   actions,
-  rowDetails
+  rowDetails,
+  rowClassName
 }: DataTableProps<T>) {
   const [expandedIds, setExpandedIds] = React.useState<(string | number)[]>([]);
 
@@ -104,6 +107,7 @@ export function DataTable<T extends { id: string | number }>({
           {data.map((item) => (
             <React.Fragment key={item.id}>
               <tr
+                className={rowClassName ? rowClassName(item) : undefined}
                 onClick={rowDetails ? () => toggleRowExpanded(item.id) : undefined}
                 style={rowDetails ? { cursor: 'pointer' } : undefined}
               >
