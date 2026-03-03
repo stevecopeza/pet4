@@ -113,7 +113,7 @@ add_action('plugins_loaded', function () {
 add_filter('cron_schedules', function ($schedules) {
     $schedules['pet_five_minutes'] = [
         'interval' => 300,
-        'display' => __('Every 5 Minutes')
+        'display' => __('Every 5 Minutes', 'pet')
     ];
     return $schedules;
 });

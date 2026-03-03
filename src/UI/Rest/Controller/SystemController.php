@@ -35,7 +35,9 @@ class SystemController implements RestController
         register_rest_route('pet/v1', '/system/pre-demo-check', [
             'methods' => 'GET',
             'callback' => [$this, 'runPreFlightCheck'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
         ]);
         register_rest_route('pet/v1', '/system/seed-demo', [
             'methods' => 'POST',
@@ -61,7 +63,9 @@ class SystemController implements RestController
         register_rest_route('pet/v1', '/system/seed_full', [
             'methods' => 'POST',
             'callback' => [$this, 'seedFull'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
         ]);
         register_rest_route('pet/v1', '/system/accept-quote', [
             'methods' => 'POST',
@@ -92,7 +96,9 @@ class SystemController implements RestController
         register_rest_route('pet/v1', '/system/purge', [
             'methods' => 'POST',
             'callback' => [$this, 'purge'],
-            'permission_callback' => '__return_true',
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
             'args' => [
                 'seed_run_id' => [
                     'required' => true,
