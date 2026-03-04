@@ -401,6 +401,41 @@ final class DemoSeedService
         }
 
         $this->wpdb->insert($t, $data);
+
+        // --- Additional calendars for tiered SLA demo ---
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        /** @var \Pet\Infrastructure\Persistence\Repository\SqlCalendarRepository $calRepo */
+        $calRepo = $c->get(\Pet\Domain\Calendar\Repository\CalendarRepository::class);
+
+        // Out of Hours: Mon-Fri 17:00-22:00 + Sat-Sun 08:00-18:00
+        $oohWindows = [];
+        foreach (['monday','tuesday','wednesday','thursday','friday'] as $day) {
+            $oohWindows[] = new \Pet\Domain\Calendar\Entity\WorkingWindow($day, '17:00', '22:00', 'overtime', 1.5);
+        }
+        $oohWindows[] = new \Pet\Domain\Calendar\Entity\WorkingWindow('saturday', '08:00', '18:00', 'overtime', 1.5);
+        $oohWindows[] = new \Pet\Domain\Calendar\Entity\WorkingWindow('sunday', '08:00', '18:00', 'overtime', 2.0);
+        $oohCal = new \Pet\Domain\Calendar\Entity\Calendar(
+            'Out of Hours',
+            'Africa/Johannesburg',
+            $oohWindows,
+            [],
+            false
+        );
+        $calRepo->save($oohCal);
+
+        // 24/7 Coverage: all days 00:00-23:59
+        $allDayCal = new \Pet\Domain\Calendar\Entity\Calendar(
+            '24/7 Coverage',
+            'Africa/Johannesburg',
+            [], // empty windows — is24x7 flag handles it
+            [],
+            false,
+            null,
+            null,
+            true // is24x7
+        );
+        $calRepo->save($allDayCal);
+
         return ['calendars' => (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $t")];
     }
 
@@ -1321,6 +1356,60 @@ final class DemoSeedService
         ], 'draft', 1);
         $slaRepo->save($compliance);
 
+        // --- Tiered SLA Definitions ---
+        $calTable = $wpdb->prefix . 'pet_calendars';
+        $oohCalId = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $calTable WHERE name = %s LIMIT 1", 'Out of Hours'));
+        $allDayCalId = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $calTable WHERE name = %s LIMIT 1", '24/7 Coverage'));
+        $defaultCalId = $calendar->id() ?? 0;
+
+        // 5. Premium Tiered (2-tier: Office Hours + Out of Hours) — published
+        if ($oohCalId) {
+            $premiumTiered = new \Pet\Domain\Sla\Entity\SlaDefinition(
+                'Premium Tiered',
+                null, null, null, [],
+                'published', 1, null, null,
+                [
+                    new \Pet\Domain\Sla\Entity\SlaTier(1, 'Office Hours', $defaultCalId, 30, 240, [
+                        new \Pet\Domain\Sla\Entity\EscalationRule(50, 'warn'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(75, 'escalate'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+                    ]),
+                    new \Pet\Domain\Sla\Entity\SlaTier(2, 'Out of Hours', $oohCalId, 120, 960, [
+                        new \Pet\Domain\Sla\Entity\EscalationRule(75, 'warn'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+                    ]),
+                ],
+                80
+            );
+            $slaRepo->save($premiumTiered);
+        }
+
+        // 6. Enterprise 24/7 (3-tier: Office Hours + After Hours + 24/7 Fallback) — published
+        if ($oohCalId && $allDayCalId) {
+            $enterprise247 = new \Pet\Domain\Sla\Entity\SlaDefinition(
+                'Enterprise 24/7',
+                null, null, null, [],
+                'published', 1, null, null,
+                [
+                    new \Pet\Domain\Sla\Entity\SlaTier(1, 'Business Hours', $defaultCalId, 15, 120, [
+                        new \Pet\Domain\Sla\Entity\EscalationRule(50, 'warn'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(75, 'escalate'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+                    ]),
+                    new \Pet\Domain\Sla\Entity\SlaTier(2, 'After Hours', $oohCalId, 60, 480, [
+                        new \Pet\Domain\Sla\Entity\EscalationRule(75, 'warn'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+                    ]),
+                    new \Pet\Domain\Sla\Entity\SlaTier(3, '24/7 Fallback', $allDayCalId, 30, 240, [
+                        new \Pet\Domain\Sla\Entity\EscalationRule(80, 'warn'),
+                        new \Pet\Domain\Sla\Entity\EscalationRule(100, 'breach'),
+                    ]),
+                ],
+                75
+            );
+            $slaRepo->save($enterprise247);
+        }
+
         // --- Per-project snapshots ---
         $premiumSnap = $premium->createSnapshot((int)$rpmProject->id);
         $premiumSnapId = $slaRepo->saveSnapshot($premiumSnap);
@@ -1518,7 +1607,8 @@ final class DemoSeedService
             // Remaining tickets (~6) left fully unassigned — demo shows "no assignment" state
         }
         $ticketsCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $ticketsTable");
-        return ['tickets' => $ticketsCount, 'sla_definitions' => 4, 'sla_snapshots' => 3, 'sla' => 'ok'];
+        $slaDefCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}pet_sla_definitions");
+        return ['tickets' => $ticketsCount, 'sla_definitions' => $slaDefCount, 'sla_snapshots' => 3, 'sla' => 'ok'];
     }
 
     /**

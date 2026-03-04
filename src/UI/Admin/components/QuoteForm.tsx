@@ -157,8 +157,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ onSuccess, onCancel, initialData 
 
       <div onKeyDown={(e) => e.key === 'Enter' && handleSubmit(e)}>
         <div className="pet-field">
-          <label>Customer</label>
+          <label htmlFor="pet-quote-customer">Customer</label>
           <select
+            id="pet-quote-customer"
             className="regular-text"
             value={customerId}
             onChange={(e) => setCustomerId(e.target.value)}
@@ -172,8 +173,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ onSuccess, onCancel, initialData 
         </div>
 
         <div className="pet-field">
-          <label>Quote Title</label>
+          <label htmlFor="pet-quote-title">Quote Title</label>
           <input
+            id="pet-quote-title"
             type="text"
             className="regular-text"
             value={title}
@@ -184,8 +186,9 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ onSuccess, onCancel, initialData 
         </div>
 
         <div className="pet-field">
-          <label>Description (Optional)</label>
+          <label htmlFor="pet-quote-description">Description (Optional)</label>
           <textarea
+            id="pet-quote-description"
             className="large-text"
             rows={3}
             value={description}

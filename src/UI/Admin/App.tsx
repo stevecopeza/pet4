@@ -49,6 +49,7 @@ const App = () => {
       case 'pet-settings': return 'Settings';
       case 'pet-finance': return 'Finance';
       case 'pet-conversations': return 'Conversations';
+      case 'pet-approvals': return 'Approvals';
       case 'pet-escalation-rules': return 'Escalation Rules';
       case 'pet-pulseway': return 'Pulseway RMM';
       default: return 'PET';

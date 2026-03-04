@@ -103,8 +103,9 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSuccess, onCancel, initialD
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Title:</label>
+          <label htmlFor="pet-article-title" style={{ display: 'block', marginBottom: '5px' }}>Title:</label>
           <input 
+            id="pet-article-title"
             type="text" 
             value={title} 
             onChange={(e) => setTitle(e.target.value)} 
@@ -114,8 +115,9 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSuccess, onCancel, initialD
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
+          <label htmlFor="pet-article-category" style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
           <select 
+            id="pet-article-category"
             value={category} 
             onChange={(e) => setCategory(e.target.value)}
             style={{ width: '100%', maxWidth: '400px' }}
@@ -128,8 +130,9 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSuccess, onCancel, initialD
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+          <label htmlFor="pet-article-status" style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
           <select 
+            id="pet-article-status"
             value={status} 
             onChange={(e) => setStatus(e.target.value)}
             style={{ width: '100%', maxWidth: '400px' }}
@@ -152,8 +155,9 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSuccess, onCancel, initialD
         )}
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Content:</label>
+          <label htmlFor="pet-article-content" style={{ display: 'block', marginBottom: '5px' }}>Content:</label>
           <textarea 
+            id="pet-article-content"
             value={content} 
             onChange={(e) => setContent(e.target.value)} 
             required 

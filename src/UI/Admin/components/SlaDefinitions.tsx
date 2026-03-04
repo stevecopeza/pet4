@@ -124,11 +124,11 @@ const SlaDefinitions = () => {
       }
       return <span>Single</span>;
     } },
-    { key: 'target_response_minutes', header: 'Response Target (mins)', render: (val, item) => {
+    { key: 'response_target_minutes', header: 'Response Target (mins)', render: (val, item) => {
       if (item.is_tiered) return <span style={{ color: '#999' }}>—</span>;
       return <span>{String(val)}</span>;
     } },
-    { key: 'target_resolution_minutes', header: 'Resolution Target (mins)', render: (val, item) => {
+    { key: 'resolution_target_minutes', header: 'Resolution Target (mins)', render: (val, item) => {
       if (item.is_tiered) return <span style={{ color: '#999' }}>—</span>;
       return <span>{String(val)}</span>;
     } },

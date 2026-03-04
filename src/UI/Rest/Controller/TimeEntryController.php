@@ -72,6 +72,11 @@ class TimeEntryController implements RestController
                     'isBillable' => V::requiredBoolArg(),
                 ],
             ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => [$this, 'archiveEntry'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
         ]);
 
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/correct', [
@@ -181,6 +186,25 @@ class TimeEntryController implements RestController
             return new WP_REST_Response(['error' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function archiveEntry(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+
+        try {
+            $entry = $this->timeEntryRepository->findById($id);
+            if (!$entry) {
+                return new WP_REST_Response(['error' => 'Time entry not found'], 404);
+            }
+
+            $entry->archive();
+            $this->timeEntryRepository->save($entry);
+
+            return new WP_REST_Response(['message' => 'Time entry archived'], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 500);
         }
     }
 

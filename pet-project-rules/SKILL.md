@@ -30,6 +30,7 @@ description: >
 
 - Admin UI is a single React SPA at `src/UI/Admin/`. Routing driven by `window.petSettings.currentPage` (set by WordPress), not client-side router. Each admin page = one top-level component in `src/UI/Admin/components/`.
 - API communication via REST at `/wp-json/pet/v1/`. Auth: `X-WP-Nonce` header from `window.petSettings.nonce`. Base URL: `window.petSettings.apiUrl`.
+- **Site URL:** Always use `https://pet4.cope.zone/` as the PET project site URL. Never use `localhost` or any local development URL.
 
 ## Git & Workflow
 
@@ -44,6 +45,9 @@ description: >
 ## Testing
 
 - Unit tests in `tests/Unit/` mirror `src/` structure. Domain tests must be pure PHP — no WordPress or DB dependencies. Integration tests in `tests/Integration/` may use WP test harness.
+- E2E tests in `tests/e2e/` use Playwright against a live WordPress instance. Config: `playwright.config.ts`. Run: `npx playwright test`. Env vars in `.env` (see `.env.example`).
+- CRUD E2E tests use `test.describe.serial()` and clean up via `afterAll`. Test data uses `E2E Test` prefix.
+- Form components must use `htmlFor`/`id` pairs with convention `id="pet-{form}-{field}"` to support `getByLabel()` locators.
 
 ## Immutability Principle
 

@@ -135,8 +135,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Project Name:</label>
+          <label htmlFor="pet-project-name" style={{ display: 'block', marginBottom: '5px' }}>Project Name:</label>
           <input 
+            id="pet-project-name"
             type="text" 
             value={name} 
             onChange={(e) => setName(e.target.value)} 
@@ -145,11 +146,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Customer:</label>
+          <label htmlFor="pet-project-customer" style={{ display: 'block', marginBottom: '5px' }}>Customer:</label>
           {loadingCustomers ? (
             <div>Loading customers...</div>
           ) : (
             <select 
+              id="pet-project-customer"
               value={customerId} 
               onChange={(e) => setCustomerId(e.target.value)}
               required
@@ -163,8 +165,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           )}
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+          <label htmlFor="pet-project-status" style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
           <select 
+            id="pet-project-status"
             value={status} 
             onChange={(e) => setStatus(e.target.value)} 
             required 
@@ -178,8 +181,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           </select>
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Sold Hours:</label>
+          <label htmlFor="pet-project-sold-hours" style={{ display: 'block', marginBottom: '5px' }}>Sold Hours:</label>
           <input 
+            id="pet-project-sold-hours"
             type="number" 
             step="0.1"
             value={soldHours} 
@@ -189,8 +193,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Sold Value:</label>
+          <label htmlFor="pet-project-sold-value" style={{ display: 'block', marginBottom: '5px' }}>Sold Value:</label>
           <input 
+            id="pet-project-sold-value"
             type="number" 
             step="0.01"
             value={soldValue} 
@@ -199,8 +204,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Start Date:</label>
+          <label htmlFor="pet-project-start-date" style={{ display: 'block', marginBottom: '5px' }}>Start Date:</label>
           <input 
+            id="pet-project-start-date"
             type="date" 
             value={startDate} 
             onChange={(e) => setStartDate(e.target.value)} 
@@ -208,8 +214,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSuccess, onCan
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>End Date:</label>
+          <label htmlFor="pet-project-end-date" style={{ display: 'block', marginBottom: '5px' }}>End Date:</label>
           <input 
+            id="pet-project-end-date"
             type="date" 
             value={endDate} 
             onChange={(e) => setEndDate(e.target.value)} 

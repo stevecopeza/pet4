@@ -21,8 +21,8 @@ const SlaDefinitionForm: React.FC<SlaDefinitionFormProps> = ({ initialData, onSa
   const [isTiered, setIsTiered] = useState(initialData?.is_tiered || false);
   const [tierTransitionCap, setTierTransitionCap] = useState(initialData?.tier_transition_cap_percent || 80);
   const [tiers, setTiers] = useState<SlaTier[]>(initialData?.tiers || []);
-  const [responseTarget, setResponseTarget] = useState(initialData?.target_response_minutes || 60);
-  const [resolutionTarget, setResolutionTarget] = useState(initialData?.target_resolution_minutes || 240);
+  const [responseTarget, setResponseTarget] = useState(initialData?.response_target_minutes || 60);
+  const [resolutionTarget, setResolutionTarget] = useState(initialData?.resolution_target_minutes || 240);
   const [calendarId, setCalendarId] = useState(initialData?.calendar_id || 0);
   const [escalationRules, setEscalationRules] = useState<EscalationRule[]>(initialData?.escalation_rules || []);
   
@@ -61,8 +61,8 @@ const SlaDefinitionForm: React.FC<SlaDefinitionFormProps> = ({ initialData, onSa
     } else {
       onSave({
         name,
-        target_response_minutes: Number(responseTarget),
-        target_resolution_minutes: Number(resolutionTarget),
+        response_target_minutes: Number(responseTarget),
+        resolution_target_minutes: Number(resolutionTarget),
         calendar_id: Number(calendarId),
         escalation_rules: escalationRules,
       });

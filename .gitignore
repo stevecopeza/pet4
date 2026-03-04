@@ -20,3 +20,8 @@ composer.phar
 
 # Environment
 .env
+
+# Playwright
+.auth/
+playwright-report/
+test-results/

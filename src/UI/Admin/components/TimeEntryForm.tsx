@@ -137,11 +137,12 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Employee:</label>
+          <label htmlFor="pet-time-employee" style={{ display: 'block', marginBottom: '5px' }}>Employee:</label>
           {loadingData ? (
             <div>Loading...</div>
           ) : (
             <select 
+              id="pet-time-employee"
               value={employeeId} 
               onChange={(e) => setEmployeeId(e.target.value)}
               required
@@ -156,8 +157,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Ticket:</label>
+          <label htmlFor="pet-time-ticket" style={{ display: 'block', marginBottom: '5px' }}>Ticket:</label>
           <select 
+            id="pet-time-ticket"
             value={ticketId} 
             onChange={(e) => setTicketId(e.target.value)}
             required
@@ -173,8 +175,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Start Time:</label>
+          <label htmlFor="pet-time-start" style={{ display: 'block', marginBottom: '5px' }}>Start Time:</label>
           <input 
+            id="pet-time-start"
             type="datetime-local" 
             value={start} 
             onChange={(e) => setStart(e.target.value)} 
@@ -184,8 +187,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>End Time:</label>
+          <label htmlFor="pet-time-end" style={{ display: 'block', marginBottom: '5px' }}>End Time:</label>
           <input 
+            id="pet-time-end"
             type="datetime-local" 
             value={end} 
             onChange={(e) => setEnd(e.target.value)} 
@@ -195,8 +199,9 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Description:</label>
+          <label htmlFor="pet-time-description" style={{ display: 'block', marginBottom: '5px' }}>Description:</label>
           <textarea 
+            id="pet-time-description"
             value={description} 
             onChange={(e) => setDescription(e.target.value)} 
             rows={3}

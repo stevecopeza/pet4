@@ -119,8 +119,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ onSuccess, onCancel, initia
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Name:</label>
+          <label htmlFor="pet-customer-name" style={{ display: 'block', marginBottom: '5px' }}>Name:</label>
           <input 
+            id="pet-customer-name"
             type="text" 
             value={name} 
             onChange={(e) => setName(e.target.value)} 
@@ -129,8 +130,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ onSuccess, onCancel, initia
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Legal Name:</label>
+          <label htmlFor="pet-customer-legal-name" style={{ display: 'block', marginBottom: '5px' }}>Legal Name:</label>
           <input 
+            id="pet-customer-legal-name"
             type="text" 
             value={legalName} 
             onChange={(e) => setLegalName(e.target.value)} 
@@ -138,8 +140,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ onSuccess, onCancel, initia
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Contact Email:</label>
+          <label htmlFor="pet-customer-email" style={{ display: 'block', marginBottom: '5px' }}>Contact Email:</label>
           <input 
+            id="pet-customer-email"
             type="email" 
             value={contactEmail} 
             onChange={(e) => setContactEmail(e.target.value)} 
@@ -148,8 +151,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ onSuccess, onCancel, initia
           />
         </div>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+          <label htmlFor="pet-customer-status" style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
           <select 
+            id="pet-customer-status"
             value={status} 
             onChange={(e) => setStatus(e.target.value)} 
             required 

@@ -298,11 +298,12 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Customer:</label>
+          <label htmlFor="pet-ticket-customer" style={{ display: 'block', marginBottom: '5px' }}>Customer:</label>
           {loadingCustomers ? (
             <div>Loading customers...</div>
           ) : (
             <select 
+              id="pet-ticket-customer"
               value={customerId} 
               onChange={(e) => setCustomerId(e.target.value)}
               required
@@ -318,11 +319,12 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
 
         {customerId && (
           <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Site (Optional):</label>
+            <label htmlFor="pet-ticket-site" style={{ display: 'block', marginBottom: '5px' }}>Site (Optional):</label>
             {loadingSites ? (
               <div>Loading sites...</div>
             ) : (
               <select 
+                id="pet-ticket-site"
                 value={siteId} 
                 onChange={(e) => setSiteId(e.target.value)}
                 style={{ width: '100%', maxWidth: '400px' }}
@@ -337,26 +339,28 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         )}
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>SLA (Optional):</label>
+          <label htmlFor="pet-ticket-sla" style={{ display: 'block', marginBottom: '5px' }}>SLA (Optional):</label>
           {loadingSlas ? (
             <div>Loading SLAs...</div>
           ) : (
             <select
+              id="pet-ticket-sla"
               value={slaId}
               onChange={(e) => setSlaId(e.target.value)}
               style={{ width: '100%', maxWidth: '400px' }}
             >
               <option value="">Select SLA</option>
               {slas.map(s => (
-                <option key={s.id} value={s.id}>{s.name} ({s.target_response_hours}h / {s.target_resolution_hours}h)</option>
+                <option key={s.id} value={s.id}>{s.name} ({s.response_target_minutes != null ? Math.round(s.response_target_minutes / 60) : '—'}h / {s.resolution_target_minutes != null ? Math.round(s.resolution_target_minutes / 60) : '—'}h)</option>
               ))}
             </select>
           )}
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Subject:</label>
+          <label htmlFor="pet-ticket-subject" style={{ display: 'block', marginBottom: '5px' }}>Subject:</label>
           <input 
+            id="pet-ticket-subject"
             type="text" 
             value={subject} 
             onChange={(e) => setSubject(e.target.value)} 
@@ -366,8 +370,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
+          <label htmlFor="pet-ticket-category" style={{ display: 'block', marginBottom: '5px' }}>Category:</label>
           <input
+            id="pet-ticket-category"
             type="text"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -376,8 +381,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Subcategory:</label>
+          <label htmlFor="pet-ticket-subcategory" style={{ display: 'block', marginBottom: '5px' }}>Subcategory:</label>
           <input
+            id="pet-ticket-subcategory"
             type="text"
             value={subcategory}
             onChange={(e) => setSubcategory(e.target.value)}
@@ -386,8 +392,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Source:</label>
+          <label htmlFor="pet-ticket-source" style={{ display: 'block', marginBottom: '5px' }}>Source:</label>
           <select
+            id="pet-ticket-source"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             required
@@ -402,8 +409,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Contact (Optional):</label>
+          <label htmlFor="pet-ticket-contact" style={{ display: 'block', marginBottom: '5px' }}>Contact (Optional):</label>
           <select
+            id="pet-ticket-contact"
             value={contactId}
             onChange={(e) => setContactId(e.target.value)}
             style={{ width: '100%', maxWidth: '400px' }}
@@ -423,8 +431,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Assignment:</label>
+          <label htmlFor="pet-ticket-assignment" style={{ display: 'block', marginBottom: '5px' }}>Assignment:</label>
           <select
+            id="pet-ticket-assignment"
             value={assignment}
             onChange={(e) => setAssignment(e.target.value)}
             style={{ width: '100%', maxWidth: '400px' }}
@@ -452,8 +461,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Priority:</label>
+          <label htmlFor="pet-ticket-priority" style={{ display: 'block', marginBottom: '5px' }}>Priority:</label>
           <select 
+            id="pet-ticket-priority"
             value={priority} 
             onChange={(e) => setPriority(e.target.value)}
             style={{ width: '100%', maxWidth: '400px' }}
@@ -467,8 +477,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
 
         {isEditMode && (
           <div style={{ marginBottom: '10px' }}>
-            <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+            <label htmlFor="pet-ticket-status" style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
             <select 
+              id="pet-ticket-status"
               value={status} 
               onChange={(e) => setStatus(e.target.value)}
               style={{ width: '100%', maxWidth: '400px' }}
@@ -483,8 +494,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
         )}
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Description:</label>
+          <label htmlFor="pet-ticket-description" style={{ display: 'block', marginBottom: '5px' }}>Description:</label>
           <textarea 
+            id="pet-ticket-description"
             value={description} 
             onChange={(e) => setDescription(e.target.value)} 
             required 

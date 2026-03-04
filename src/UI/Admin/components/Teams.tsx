@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Team } from '../types';
+import { Team, Employee } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import TeamForm from './TeamForm';

@@ -253,10 +253,8 @@ export interface SlaTier {
 export interface Sla {
   id: number;
   name: string;
-  target_response_hours: number;
-  target_resolution_hours: number;
-  target_response_minutes?: number;
-  target_resolution_minutes?: number;
+  response_target_minutes: number | null;
+  resolution_target_minutes: number | null;
   calendar_id?: number;
   calendar_name?: string | null;
   escalation_rules?: EscalationRule[];

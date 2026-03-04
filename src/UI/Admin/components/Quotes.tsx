@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Quote } from '../types';
+import { Quote, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import QuoteForm from './QuoteForm';
