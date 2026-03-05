@@ -39,16 +39,22 @@ A Quote is composed of **line groups**, each representing a commercial intent.
 ### Line Group Types
 
 1. **Product**
-   - Software licenses
-   - Hardware items
+   - Software licenses, hardware items
+   - Sourced from `CatalogProduct` (products-only catalog)
+   - Pricing: `quantity × unit_price` (snapshotted from catalog at line creation)
 
-2. **Project / Implementation**
+2. **Project / Implementation (Labour)**
    - Structured work delivered over time
+   - Sourced from Role + ServiceType + RateCard resolution
+   - Pricing: `hours × sell_rate` (snapshotted from RateCard); cost = `hours × base_internal_rate` (snapshotted from Role)
 
-3. **Service / Support**
+3. **Service / Support (Labour)**
    - SLA‑backed or ad‑hoc services
+   - Same economics as Project labour (Role + RateCard)
 
 Each group has independent pricing logic but contributes to a single obligation.
+
+> **Authoritative pricing model:** See `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md` for full entity specifications, rate card resolution algorithm, and snapshot rules.
 
 ---
 

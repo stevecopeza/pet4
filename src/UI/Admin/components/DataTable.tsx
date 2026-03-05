@@ -20,17 +20,20 @@ interface DataTableProps<T> {
   rowDetails?: (item: T) => React.ReactNode;
   /** Optional callback to add CSS class(es) to each row's <tr> */
   rowClassName?: (item: T) => string;
+  /** Optional callback when a row is clicked */
+  onRowClick?: (item: T) => void;
 }
 
-export function DataTable<T extends { id: string | number }>({ 
-  columns, 
-  data, 
-  loading = false, 
+export function DataTable<T extends { id: string | number }>({
+  columns,
+  data,
+  loading = false,
   emptyMessage = 'No data found.',
   selection,
   actions,
   rowDetails,
-  rowClassName
+  rowClassName,
+  onRowClick
 }: DataTableProps<T>) {
   const [expandedIds, setExpandedIds] = React.useState<(string | number)[]>([]);
 
@@ -108,8 +111,14 @@ export function DataTable<T extends { id: string | number }>({
             <React.Fragment key={item.id}>
               <tr
                 className={rowClassName ? rowClassName(item) : undefined}
-                onClick={rowDetails ? () => toggleRowExpanded(item.id) : undefined}
-                style={rowDetails ? { cursor: 'pointer' } : undefined}
+                onClick={
+                  rowDetails
+                    ? () => toggleRowExpanded(item.id)
+                    : onRowClick
+                    ? () => onRowClick(item)
+                    : undefined
+                }
+                style={rowDetails || onRowClick ? { cursor: 'pointer' } : undefined}
               >
                 {selection && (
                   <th scope="row" className="check-column" style={{ padding: '8px' }}>

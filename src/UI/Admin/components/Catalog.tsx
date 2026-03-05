@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
+import KebabMenu from './KebabMenu';
 
 interface CatalogItem {
   id: number;
@@ -23,6 +24,7 @@ const Catalog = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<'all' | 'product' | 'service'>('all');
 
@@ -83,43 +85,101 @@ const Catalog = () => {
     setNewWbsTemplate(newWbsTemplate.filter((_, i) => i !== index));
   };
 
-  const handleAddItem = async (e: React.FormEvent) => {
+  // Check if the entered SKU already exists (excluding the item being edited)
+  const skuIsDuplicate =
+    newSku.trim() !== '' &&
+    items.some(
+      (item) =>
+        item.sku !== null &&
+        item.sku.toLowerCase() === newSku.trim().toLowerCase() &&
+        item.id !== editingItemId
+    );
+
+  const resetForm = () => {
+    setNewName('');
+    setNewSku('');
+    setNewDesc('');
+    setNewCategory('');
+    setNewType('product');
+    setNewPrice(0);
+    setNewCost(0);
+    setNewWbsTemplate([]);
+    setEditingItemId(null);
+  };
+
+  const openEditForm = (item: CatalogItem) => {
+    setNewName(item.name);
+    setNewSku(item.sku || '');
+    setNewDesc(item.description || '');
+    setNewCategory(item.category || '');
+    setNewType(item.type || 'product');
+    setNewPrice(item.unit_price);
+    setNewCost(item.unit_cost);
+    setNewWbsTemplate(item.wbs_template || []);
+    setEditingItemId(item.id);
+    setShowAddForm(true);
+  };
+
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (skuIsDuplicate) return;
+
+    const payload = {
+      name: newName,
+      sku: newSku || null,
+      description: newDesc || null,
+      category: newCategory || null,
+      type: newType,
+      unit_price: newPrice,
+      unit_cost: newCost,
+      wbs_template: newWbsTemplate,
+    };
+
     try {
-      const response = await fetch(`${window.petSettings.apiUrl}/catalog-items`, {
-        method: 'POST',
+      const url = editingItemId
+        ? `${window.petSettings.apiUrl}/catalog-items/${editingItemId}`
+        : `${window.petSettings.apiUrl}/catalog-items`;
+      const method = editingItemId ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
-          'X-WP-Nonce': window.petSettings.nonce
+          'X-WP-Nonce': window.petSettings.nonce,
         },
-        body: JSON.stringify({
-          name: newName,
-          sku: newSku || null,
-          description: newDesc || null,
-          category: newCategory || null,
-          type: newType,
-          unit_price: newPrice,
-          unit_cost: newCost,
-          wbs_template: newWbsTemplate
-        })
+        body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error('Failed to create item');
-      
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || `Failed to ${editingItemId ? 'update' : 'create'} item`);
+      }
+
       setShowAddForm(false);
-      // Reset form
-      setNewName('');
-      setNewSku('');
-      setNewDesc('');
-      setNewCategory('');
-      setNewType('product');
-      setNewPrice(0);
-      setNewCost(0);
-      setNewWbsTemplate([]);
-      
+      resetForm();
       fetchItems();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error creating item');
+      alert(err instanceof Error ? err.message : 'Error saving item');
+    }
+  };
+
+  const handleDeleteItem = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this catalog item?')) return;
+    try {
+      const response = await fetch(
+        `${window.petSettings.apiUrl}/catalog-items/${id}`,
+        {
+          method: 'DELETE',
+          headers: { 'X-WP-Nonce': window.petSettings.nonce },
+        }
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to delete item');
+      }
+      fetchItems();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error deleting item');
     }
   };
 
@@ -139,22 +199,47 @@ const Catalog = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
         <h3>Catalog Items</h3>
-        <button className="button button-primary" onClick={() => setShowAddForm(!showAddForm)}>
+        <button
+          className="button button-primary"
+          onClick={() => {
+            if (showAddForm) {
+              setShowAddForm(false);
+              resetForm();
+            } else {
+              resetForm();
+              setShowAddForm(true);
+            }
+          }}
+        >
           {showAddForm ? 'Cancel' : 'Add Item'}
         </button>
       </div>
 
       {showAddForm && (
         <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#f0f0f1', border: '1px solid #ccd0d4' }}>
-          <h4>New Catalog Item</h4>
-          <form onSubmit={handleAddItem} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <h4>{editingItemId ? 'Edit Catalog Item' : 'New Catalog Item'}</h4>
+          <form onSubmit={handleSaveItem} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>Name *</label>
               <input type="text" className="regular-text" style={{ width: '100%' }} value={newName} onChange={e => setNewName(e.target.value)} required />
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>SKU</label>
-              <input type="text" className="regular-text" style={{ width: '100%' }} value={newSku} onChange={e => setNewSku(e.target.value)} />
+              <input
+                type="text"
+                className="regular-text"
+                style={{
+                  width: '100%',
+                  ...(skuIsDuplicate ? { border: '2px solid #d63638', boxShadow: '0 0 0 1px #d63638' } : {}),
+                }}
+                value={newSku}
+                onChange={(e) => setNewSku(e.target.value)}
+              />
+              {skuIsDuplicate && (
+                <span style={{ color: '#d63638', fontSize: '12px', marginTop: '2px', display: 'block' }}>
+                  This SKU already exists
+                </span>
+              )}
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '5px' }}>Category</label>
@@ -209,13 +294,29 @@ const Catalog = () => {
             )}
 
             <div style={{ gridColumn: '1 / -1', marginTop: '10px' }}>
-              <button type="submit" className="button button-primary">Save Item</button>
+              <button type="submit" className="button button-primary" disabled={skuIsDuplicate}>
+                {editingItemId ? 'Update Item' : 'Save Item'}
+              </button>
             </div>
           </form>
         </div>
       )}
 
-      <DataTable columns={columns} data={filteredItems} emptyMessage="No items in catalog." />
+      <DataTable
+        columns={columns}
+        data={filteredItems}
+        emptyMessage="No items in catalog."
+        onRowClick={(item) => openEditForm(item)}
+        actions={(item) => (
+          <KebabMenu
+            items={[
+              { type: 'action', label: 'Edit', onClick: () => openEditForm(item) },
+              { type: 'divider' },
+              { type: 'action', label: 'Delete', onClick: () => handleDeleteItem(item.id), danger: true },
+            ]}
+          />
+        )}
+      />
     </div>
   );
 };

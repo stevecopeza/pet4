@@ -35,17 +35,24 @@ This is a Domain-layer change, not just a database change.
   2\. Catalog Distinction (Products vs Services)
   ------------------------------------------------
 
-Adding a `type` column (product \| service) is acceptable ONLY if domain
-constraints are enforced.
+> **UPDATE:** The `type` column approach described below has been superseded.
+> The catalog is now **products only** (`pet_catalog_products`). Labour/service
+> economics are modelled via **Role** (`base_internal_rate`), **ServiceType**
+> (classification), and **RateCard** (sell pricing). See
+> `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`.
 
-If type = service: - base_internal_rate NOT NULL - recommended_sell_rate
-NOT NULL - department_id NOT NULL
+~~Adding a `type` column (product | service) is acceptable ONLY if domain
+constraints are enforced.~~
 
-If type = product: - rate fields NULL - supplier linkage required (if
-applicable)
+The refactored model enforces:
 
-The Service Catalog is economic in nature and must enforce rate
-integrity.
+- CatalogProduct: no rate fields, no role references — products only
+- Role: carries `base_internal_rate` (internal cost); no sell rate
+- RateCard: maps (role, service_type, optional contract) → sell_rate with date validity
+- ServiceType: classification only, no pricing data
+
+The Service Catalog entity (`ServiceCatalogItem`) no longer exists. Rate
+integrity is enforced via the RateCard resolution algorithm.
 
   ------------------------------------------------
   3\. Section-Based Builder (Replace Line Items)

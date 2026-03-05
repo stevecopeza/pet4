@@ -9,6 +9,7 @@ use Pet\Domain\Commercial\Entity\CatalogItem;
 interface CatalogItemRepository
 {
     public function findById(int $id): ?CatalogItem;
+    public function findBySku(string $sku): ?CatalogItem;
     public function findAll(): array;
     public function save(CatalogItem $item): void;
     public function delete(int $id): void;

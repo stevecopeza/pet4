@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import '../dashboard-styles.css';
 import { computeTicketHealth, computeProjectHealth, computeQuoteHealth, computeLeadHealth, HealthResult, HealthHistory } from '../healthCompute';
+import type { JourneyData } from '../healthCompute';
+import JourneyBar from './JourneyBar';
 
 /* ============================================================
    Types
@@ -881,6 +883,22 @@ const PMView: React.FC<{
 }> = ({ projects, workItems, activity, customers }) => {
   const now = new Date();
   const activeProjects = projects.filter(p => p.state === 'active' || p.state === 'planned');
+
+  // Fetch journey data for all active projects
+  const [journeyMap, setJourneyMap] = useState<Record<number, JourneyData>>({});
+  useEffect(() => {
+    if (activeProjects.length === 0) return;
+    const ids = activeProjects.map(p => p.id).join(',');
+    api(`health-history/journey?project_ids=${ids}`)
+      .then((data: Record<string, JourneyData>) => {
+        const map: Record<number, JourneyData> = {};
+        for (const [k, v] of Object.entries(data)) {
+          map[Number(k)] = v;
+        }
+        setJourneyMap(map);
+      })
+      .catch(() => { /* fall back to no journey data */ });
+  }, [projects.length]); // re-fetch when project count changes
   const totalSold = activeProjects.reduce((sum, p) => sum + (p.soldHours || 0), 0);
   const totalHoursUsed = activeProjects.reduce((sum, p) => sum + (p.malleableData?.hours_used ?? 0), 0);
   const totalTasks = activeProjects.reduce((sum, p) => sum + p.tasks.length, 0);
@@ -967,6 +985,28 @@ const PMView: React.FC<{
             const pm = p.malleableData?.pm || '--';
             const projHealth = computeProjectHealth(p);
 
+            // Trajectory indicator: compare actual burn rate vs planned burn rate
+            let trajLabel = '\u2192'; // → stable
+            let trajClass = 'jb-traj-stable';
+            if (p.startDate && p.endDate && soldH > 0) {
+              const totalDays = Math.max((new Date(p.endDate).getTime() - new Date(p.startDate).getTime()) / 86400000, 1);
+              const elapsedDays = Math.max((Date.now() - new Date(p.startDate).getTime()) / 86400000, 1);
+              const plannedRate = soldH / totalDays;
+              const actualRate = hoursUsed / elapsedDays;
+              const paceRatio = actualRate / plannedRate;
+              if (paceRatio > 1.15) { trajLabel = '\u25BC'; trajClass = 'jb-traj-down'; } // ▼ slipping
+              else if (paceRatio < 0.85) { trajLabel = '\u25B2'; trajClass = 'jb-traj-up'; } // ▲ improving
+            }
+
+            // Burn variance
+            const burnVariance = soldH > 0 ? Math.round(((hoursUsed - soldH) / soldH) * 100) : null;
+
+            // Last activity: find most recent feed event for this project
+            const projActivity = activity.filter(a => a.reference_id === String(p.id) && a.reference_type === 'project');
+            const lastEvent = projActivity.length > 0 ? projActivity.reduce((latest, a) => new Date(a.occurred_at) > new Date(latest.occurred_at) ? a : latest) : null;
+            const lastActivityStr = lastEvent ? timeAgo(lastEvent.occurred_at) : null;
+            const lastActivityDays = lastEvent ? Math.floor((Date.now() - new Date(lastEvent.occurred_at).getTime()) / 86400000) : null;
+
             return (
               <div key={p.id} className={`pd-project-card ${projHealth.className}`}>
                 <div className="pd-project-card-header">
@@ -980,16 +1020,14 @@ const PMView: React.FC<{
                 </div>
                 <div className="pd-project-customer">{custName}</div>
 
-                {/* Progress bar */}
-                <div className="pd-project-progress-row">
-                  <div className="pd-project-progress-bar-bg">
-                    <div
-                      className={`pd-project-progress-bar-fill ${progress >= 80 ? 'fill-green' : progress >= 40 ? 'fill-blue' : 'fill-teal'}`}
-                      style={{ width: `${Math.min(progress, 100)}%` }}
-                    />
-                  </div>
-                  <span className="pd-project-progress-label">{progress}%</span>
-                </div>
+                {/* Journey Timeline Bar + Trajectory */}
+                <JourneyBar
+                  segments={journeyMap[p.id]?.segments || []}
+                  progress={progress}
+                  trajectoryLabel={trajLabel}
+                  trajectoryClass={trajClass}
+                  trajectoryTitle={trajClass === 'jb-traj-down' ? 'Slipping — burning faster than plan' : trajClass === 'jb-traj-up' ? 'Improving — burning slower than plan' : 'Stable'}
+                />
 
                 {/* Meta grid */}
                 <div className="pd-project-meta-grid">
@@ -999,7 +1037,14 @@ const PMView: React.FC<{
                   </div>
                   <div className="pd-project-meta-item">
                     <span className="pd-project-meta-label">Hours</span>
-                    <span className={`pd-project-meta-value ${burnPct > 100 ? 'pd-over-budget' : ''}`}>{hoursUsed}/{soldH}h</span>
+                    <span className={`pd-project-meta-value ${burnPct > 100 ? 'pd-over-budget' : ''}`}>
+                      {hoursUsed}/{soldH}h
+                      {burnVariance !== null && burnVariance !== 0 && (
+                        <span className={`pd-burn-variance ${burnVariance > 0 ? 'pd-burn-over' : 'pd-burn-under'}`}>
+                          {' '}({burnVariance > 0 ? '+' : ''}{burnVariance}%)
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <div className="pd-project-meta-item">
                     <span className="pd-project-meta-label">Deadline</span>
@@ -1011,6 +1056,12 @@ const PMView: React.FC<{
                     <span className="pd-project-meta-label">PM</span>
                     <span className="pd-project-meta-value">{pm}</span>
                   </div>
+                  {lastActivityStr && (
+                    <div className="pd-project-meta-item">
+                      <span className="pd-project-meta-label">Last</span>
+                      <span className={`pd-project-meta-value ${lastActivityDays !== null && lastActivityDays > 5 ? 'pd-stale-activity' : ''}`}>{lastActivityStr}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );

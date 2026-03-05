@@ -12,6 +12,7 @@ class UpdateRoleCommand
     private $description;
     private $successCriteria;
     private $requiredSkills;
+    private ?float $baseInternalRate;
 
     public function __construct(
         int $id,
@@ -19,7 +20,8 @@ class UpdateRoleCommand
         string $level,
         string $description,
         string $successCriteria,
-        array $requiredSkills
+        array $requiredSkills,
+        ?float $baseInternalRate = null
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -27,6 +29,7 @@ class UpdateRoleCommand
         $this->description = $description;
         $this->successCriteria = $successCriteria;
         $this->requiredSkills = $requiredSkills;
+        $this->baseInternalRate = $baseInternalRate;
     }
 
     public function id(): int
@@ -57,5 +60,10 @@ class UpdateRoleCommand
     public function requiredSkills(): array
     {
         return $this->requiredSkills;
+    }
+
+    public function baseInternalRate(): ?float
+    {
+        return $this->baseInternalRate;
     }
 }

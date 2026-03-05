@@ -1432,6 +1432,156 @@
   font-weight: 700;
 }
 
+/* --- Journey Bar (Project Health Timeline) --- */
+.jb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.jb-bar {
+  flex: 1;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+}
+
+.jb-filled {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  transition: width 0.4s ease;
+}
+
+.jb-unfilled {
+  height: 100%;
+  background: #e9ecef;
+}
+
+.jb-segment {
+  height: 100%;
+  position: relative;
+  min-width: 2px;
+  transition: opacity 0.15s;
+}
+
+.jb-segment:hover {
+  opacity: 0.85;
+}
+
+.jb-segment.jb-clickable {
+  cursor: pointer;
+}
+
+.jb-progress-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #495057;
+  min-width: 36px;
+  text-align: right;
+}
+
+.jb-tooltip {
+  position: fixed;
+  z-index: 10000;
+  transform: translateX(-50%) translateY(-100%);
+  background: #1a1a2e;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.jb-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1a2e;
+}
+
+.jb-tooltip-state {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.jb-tooltip-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.jb-tooltip-dates {
+  color: #b0b8c4;
+}
+
+.jb-tooltip-duration {
+  color: #b0b8c4;
+}
+
+.jb-tooltip-reason {
+  margin-top: 4px;
+  color: #d4d8dd;
+  font-style: italic;
+  max-width: 280px;
+  white-space: normal;
+}
+
+/* --- Trajectory Indicator --- */
+.jb-traj {
+  margin-left: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: default;
+}
+
+.jb-traj-up {
+  color: #28a745;
+}
+
+.jb-traj-down {
+  color: #dc3545;
+}
+
+.jb-traj-stable {
+  color: #adb5bd;
+}
+
+/* --- Burn Variance Badge --- */
+.pd-burn-variance {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.pd-burn-over {
+  color: #dc3545;
+}
+
+.pd-burn-under {
+  color: #28a745;
+}
+
+/* --- Stale Activity Warning --- */
+.pd-stale-activity {
+  color: #dc3545;
+  font-weight: 700;
+}
+
 /* ============================================================
    Timesheet tables + bars
    ============================================================ */

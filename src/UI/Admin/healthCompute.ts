@@ -233,6 +233,31 @@ export function RecoveryDots({ history }: { history?: HealthHistory | null }) {
   return null; // Placeholder — actual JSX component is below
 }
 
+/* ------------------------------------------------------------------
+   Journey Timeline Types
+   ------------------------------------------------------------------ */
+export interface JourneySegment {
+  state: 'green' | 'amber' | 'red';
+  start_at: string;
+  end_at: string | null;
+  duration_days: number;
+  reason: string | null;
+}
+
+export interface JourneyTotals {
+  days_green: number;
+  days_amber: number;
+  days_red: number;
+  pct_green: number;
+  pct_amber: number;
+  pct_red: number;
+}
+
+export interface JourneyData {
+  segments: JourneySegment[];
+  totals: JourneyTotals;
+}
+
 /* Inline React component for recovery dots (use in .tsx consumers) */
 export const recoveryDotsMarkup = (history?: HealthHistory | null): string => {
   if (!history) return '';

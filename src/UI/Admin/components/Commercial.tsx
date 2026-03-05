@@ -2,11 +2,17 @@ import React, { useState } from 'react';
 import Leads from './Leads';
 import Quotes from './Quotes';
 import Catalog from './Catalog';
+import ServiceTypes from './ServiceTypes';
+import RateCards from './RateCards';
+import CatalogProducts from './CatalogProducts';
 
 const tabs = [
   { key: 'leads', label: 'Leads' },
   { key: 'quotes', label: 'Quotes' },
   { key: 'catalog', label: 'Catalog' },
+  { key: 'products', label: 'Products' },
+  { key: 'service-types', label: 'Service Types' },
+  { key: 'rate-cards', label: 'Rate Cards' },
 ] as const;
 
 type TabKey = typeof tabs[number]['key'];
@@ -36,6 +42,9 @@ const Commercial = () => {
         <Quotes initialQuoteId={pendingQuoteId} onInitialQuoteConsumed={() => setPendingQuoteId(null)} />
       )}
       {activeTab === 'catalog' && <Catalog />}
+      {activeTab === 'products' && <CatalogProducts />}
+      {activeTab === 'service-types' && <ServiceTypes />}
+      {activeTab === 'rate-cards' && <RateCards />}
     </div>
   );
 };

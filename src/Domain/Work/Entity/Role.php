@@ -13,6 +13,7 @@ class Role
     private string $level;
     private string $description;
     private string $successCriteria;
+    private ?float $baseInternalRate;
     private array $requiredSkills; // Array of [skillId => [minLevel, weight]]
     private ?\DateTimeImmutable $createdAt;
     private ?\DateTimeImmutable $publishedAt;
@@ -27,13 +28,15 @@ class Role
         string $status = 'draft',
         array $requiredSkills = [],
         ?\DateTimeImmutable $createdAt = null,
-        ?\DateTimeImmutable $publishedAt = null
+        ?\DateTimeImmutable $publishedAt = null,
+        ?float $baseInternalRate = null
     ) {
         $this->id = $id;
         $this->name = $name;
         $this->level = $level;
         $this->description = $description;
         $this->successCriteria = $successCriteria;
+        $this->baseInternalRate = $baseInternalRate;
         $this->version = $version;
         $this->status = $status;
         $this->requiredSkills = $requiredSkills;
@@ -91,10 +94,18 @@ class Role
         return $this->publishedAt;
     }
 
+    public function baseInternalRate(): ?float
+    {
+        return $this->baseInternalRate;
+    }
+
     public function publish(): void
     {
         if ($this->status === 'published') {
             throw new \DomainException('Role is already published.');
+        }
+        if ($this->baseInternalRate === null) {
+            throw new \DomainException('Cannot publish a role without a base internal rate.');
         }
         $this->status = 'published';
         $this->publishedAt = new \DateTimeImmutable();
@@ -105,7 +116,8 @@ class Role
         string $level,
         string $description,
         string $successCriteria,
-        array $requiredSkills
+        array $requiredSkills,
+        ?float $baseInternalRate = null
     ): void {
         if ($this->status === 'published') {
             throw new \DomainException('Cannot update a published role. Create a new version instead.');
@@ -115,5 +127,6 @@ class Role
         $this->description = $description;
         $this->successCriteria = $successCriteria;
         $this->requiredSkills = $requiredSkills;
+        $this->baseInternalRate = $baseInternalRate;
     }
 }

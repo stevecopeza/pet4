@@ -66,6 +66,9 @@ class ApiRegistry
             \Pet\UI\Rest\Controller\LogController::class,
             \Pet\UI\Rest\Controller\PulsewayController::class,
             \Pet\UI\Rest\Controller\HealthHistoryController::class,
+            \Pet\UI\Rest\Controller\ServiceTypeController::class,
+            \Pet\UI\Rest\Controller\RateCardController::class,
+            \Pet\UI\Rest\Controller\CatalogProductController::class,
         ];
 
         foreach ($controllers as $controllerClass) {

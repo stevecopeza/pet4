@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Pet\Application\Commercial\Command;
 
 use Pet\Application\System\Service\TransactionManager;
+use Pet\Application\Commercial\Service\RateCardResolver;
 
 use Pet\Domain\Commercial\Repository\QuoteRepository;
 use Pet\Domain\Commercial\Repository\CatalogItemRepository;
+use Pet\Domain\Work\Repository\RoleRepository;
 use Pet\Domain\Sla\Repository\SlaRepository;
 use Pet\Domain\Commercial\Entity\Component\CatalogComponent;
 use Pet\Domain\Commercial\Entity\Component\QuoteCatalogItem;
@@ -24,17 +26,23 @@ class AddComponentHandler
     private QuoteRepository $quoteRepository;
     private CatalogItemRepository $catalogItemRepository;
     private SlaRepository $slaRepository;
+    private RateCardResolver $rateCardResolver;
+    private RoleRepository $roleRepository;
 
     public function __construct(
         TransactionManager $transactionManager, 
         QuoteRepository $quoteRepository,
         CatalogItemRepository $catalogItemRepository,
-        SlaRepository $slaRepository
+        SlaRepository $slaRepository,
+        RateCardResolver $rateCardResolver,
+        RoleRepository $roleRepository
     ) {
         $this->transactionManager = $transactionManager;
         $this->quoteRepository = $quoteRepository;
         $this->catalogItemRepository = $catalogItemRepository;
         $this->slaRepository = $slaRepository;
+        $this->rateCardResolver = $rateCardResolver;
+        $this->roleRepository = $roleRepository;
     }
 
     public function handle(AddComponentCommand $command): void
@@ -97,13 +105,45 @@ class AddComponentHandler
             foreach ($data['milestones'] ?? [] as $mData) {
                 $tasks = [];
                 foreach ($mData['tasks'] ?? [] as $tData) {
-                    $tasks[] = new QuoteTask(
-                        $tData['description'],
-                        (float) $tData['duration_hours'],
-                        (int) $tData['complexity'],
-                        (float) ($tData['internal_cost'] ?? 0.0),
-                        (float) $tData['sell_rate']
-                    );
+                    // New model: resolve rates via RateCardResolver when role_id + service_type_id provided
+                    if (isset($tData['role_id']) && isset($tData['service_type_id'])) {
+                        $roleId = (int) $tData['role_id'];
+                        $serviceTypeId = (int) $tData['service_type_id'];
+                        $effectiveDate = new \DateTimeImmutable();
+
+                        $rateCard = $this->rateCardResolver->resolve(
+                            $roleId,
+                            $serviceTypeId,
+                            $quote->contractId(),
+                            $effectiveDate
+                        );
+
+                        $role = $this->roleRepository->findById($roleId);
+                        if (!$role) {
+                            throw new \DomainException("Role not found: {$roleId}");
+                        }
+
+                        $tasks[] = new QuoteTask(
+                            $tData['description'],
+                            (float) $tData['duration_hours'],
+                            $roleId,
+                            $role->baseInternalRate() ?? 0.0,
+                            $rateCard->sellRate(),
+                            null,
+                            null,
+                            $serviceTypeId,
+                            $rateCard->id()
+                        );
+                    } else {
+                        // Legacy path: hardcoded rates (backward compat for seed Q1-Q7)
+                        $tasks[] = new QuoteTask(
+                            $tData['description'],
+                            (float) $tData['duration_hours'],
+                            (int) $tData['complexity'],
+                            (float) ($tData['internal_cost'] ?? 0.0),
+                            (float) $tData['sell_rate']
+                        );
+                    }
                 }
                 $milestones[] = new QuoteMilestone($mData['description'], $tasks);
             }

@@ -10,9 +10,11 @@ class QuoteTask
     private string $title;
     private ?string $description;
     private float $durationHours;
-    private int $roleId; // Reference to Role Catalog Item
+    private int $roleId; // Reference to Role
     private float $baseInternalRate; // Snapshot
     private float $sellRate; // Snapshot
+    private ?int $serviceTypeId; // Reference to ServiceType (nullable for legacy)
+    private ?int $rateCardId; // Reference to RateCard used (nullable for legacy)
 
     public function __construct(
         string $title,
@@ -21,7 +23,9 @@ class QuoteTask
         float $baseInternalRate,
         float $sellRate,
         ?string $description = null,
-        ?int $id = null
+        ?int $id = null,
+        ?int $serviceTypeId = null,
+        ?int $rateCardId = null
     ) {
         $this->title = $title;
         $this->durationHours = $durationHours;
@@ -30,6 +34,8 @@ class QuoteTask
         $this->sellRate = $sellRate;
         $this->description = $description;
         $this->id = $id;
+        $this->serviceTypeId = $serviceTypeId;
+        $this->rateCardId = $rateCardId;
     }
 
     public function id(): ?int
@@ -75,5 +81,15 @@ class QuoteTask
     public function internalCost(): float
     {
         return $this->durationHours * $this->baseInternalRate;
+    }
+
+    public function serviceTypeId(): ?int
+    {
+        return $this->serviceTypeId;
+    }
+
+    public function rateCardId(): ?int
+    {
+        return $this->rateCardId;
     }
 }

@@ -90,6 +90,13 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddIs24x7ToCalendars::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddTieredSlaSupport::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddTierTrackingToClockState::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateServiceTypeTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateRateCardTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateCatalogProductsTable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddBaseInternalRateToRoles::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddServiceTypeAndRateCardToQuoteTasks::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddContractIdToQuotes::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateRoleTeamsTable::class,
         ];
     }
 }

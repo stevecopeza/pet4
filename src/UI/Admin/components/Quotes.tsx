@@ -3,7 +3,8 @@ import { Quote, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import QuoteForm from './QuoteForm';
-import QuoteDetails, { computeQuoteTotals } from './QuoteDetails';
+import QuoteDetails from './QuoteDetails';
+import { computeQuoteTotals } from '../utils/quoteTotals';
 import { computeQuoteHealth } from '../healthCompute';
 
 interface QuotesProps {

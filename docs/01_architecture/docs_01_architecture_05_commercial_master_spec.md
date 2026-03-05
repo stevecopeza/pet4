@@ -26,18 +26,35 @@ Instance separation
 
 ------------------------------------------------------------------------
 
-# 3. Service Catalog Domain
+# 3. Commercial Pricing Domain
 
-Defines sellable services and economic baselines.
+Defines sellable products and labour economics as separate concerns.
 
-## Entity: ServiceCatalogItem
+> **Authoritative specification:** `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
-Mandatory fields: - id (UUID) - name - department_id -
-base_internal_rate - recommended_sell_rate - status
+The previous `ServiceCatalogItem` entity has been replaced by four distinct entities:
 
-Rules: - Sell rate deviation triggers Approval Rule Engine. - Rates
-snapshotted when used in Quote. - Catalog edits never alter historical
-Quotes.
+## Entity: CatalogProduct
+Products only (hardware, licenses, subscriptions). Fields: id, sku, name, unit_price, unit_cost, status.
+Products remain in the Catalog domain.
+
+## Entity: Role (extended)
+People / Capability domain. Existing competency fields plus new `base_internal_rate` (hourly internal cost).
+Roles do NOT carry sell rates.
+
+## Entity: ServiceType (new)
+Classification of labour categories (Consulting, Support, Training, etc.).
+Enables pricing differentiation and reporting segmentation.
+
+## Entity: RateCard (new)
+Commercial pricing policy. Maps (role, service_type, optional contract) → sell_rate with date validity.
+Contract-specific rate cards override global defaults.
+
+Rules:
+- Sell rate deviation triggers Approval Rule Engine (via RateCard resolution).
+- Role `base_internal_rate` and RateCard `sell_rate` snapshotted when used in Quote.
+- Source entity edits never alter historical Quotes.
+- Rate cards are never edited once referenced by a quote — archive and create new.
 
 ------------------------------------------------------------------------
 

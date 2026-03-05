@@ -55,6 +55,7 @@ class SqlQuoteRepository implements QuoteRepository
         $data = [
             'customer_id' => $quote->customerId(),
             'lead_id' => $quote->leadId(),
+            'contract_id' => $quote->contractId(),
             'title' => $quote->title(),
             'description' => $quote->description(),
             'state' => $quote->state()->toString(),
@@ -69,7 +70,7 @@ class SqlQuoteRepository implements QuoteRepository
             'archived_at' => $this->formatDate($quote->archivedAt()),
         ];
 
-        $format = ['%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s'];
+        $format = ['%d', '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s'];
 
         if ($quote->id()) {
             $this->wpdb->update(
@@ -339,8 +340,10 @@ class SqlQuoteRepository implements QuoteRepository
                     'role_id' => $task->roleId(),
                     'base_internal_rate' => $task->baseInternalRate(),
                     'sell_rate' => $task->sellRate(),
+                    'service_type_id' => $task->serviceTypeId(),
+                    'rate_card_id' => $task->rateCardId(),
                 ],
-                ['%d', '%s', '%s', '%f', '%d', '%f', '%f']
+                ['%d', '%s', '%s', '%f', '%d', '%f', '%f', '%d', '%d']
             );
         }
     }
@@ -450,7 +453,8 @@ class SqlQuoteRepository implements QuoteRepository
             isset($row->malleable_data) ? json_decode($row->malleable_data, true) : [],
             $costAdjustments,
             $paymentSchedule,
-            isset($row->lead_id) && $row->lead_id ? (int)$row->lead_id : null
+            isset($row->lead_id) && $row->lead_id ? (int)$row->lead_id : null,
+            isset($row->contract_id) && $row->contract_id ? (int)$row->contract_id : null
         );
     }
 
@@ -679,7 +683,9 @@ class SqlQuoteRepository implements QuoteRepository
                 (float)$row->base_internal_rate,
                 (float)$row->sell_rate,
                 $row->description,
-                (int)$row->id
+                (int)$row->id,
+                isset($row->service_type_id) && $row->service_type_id ? (int)$row->service_type_id : null,
+                isset($row->rate_card_id) && $row->rate_card_id ? (int)$row->rate_card_id : null
             );
         }
 

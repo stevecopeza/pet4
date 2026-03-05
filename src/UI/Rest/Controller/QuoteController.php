@@ -48,6 +48,7 @@ use Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent;
 use Pet\Domain\Commercial\Entity\Component\Phase;
 use Pet\Domain\Commercial\Entity\Component\SimpleUnit;
 use Pet\Domain\Commercial\Entity\CostAdjustment;
+use Pet\Domain\Commercial\Entity\QuoteSection;
 use Pet\UI\Rest\Validation\InputValidation as V;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -262,10 +263,26 @@ class QuoteController implements RestController
             ],
         ]);
 
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/sections/reorder', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'reorderSections'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
+
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/sections/(?P<sectionId>[^/]+)/blocks', [
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addBlockToSection'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/blocks/reorder', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'reorderBlocks'],
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
@@ -601,6 +618,81 @@ class QuoteController implements RestController
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to clone section'], 500);
+        }
+    }
+
+    public function reorderSections(WP_REST_Request $request): WP_REST_Response
+    {
+        $quoteId = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+        $changes = isset($params['changes']) && is_array($params['changes']) ? $params['changes'] : [];
+
+        if (empty($changes)) {
+            return new WP_REST_Response(['error' => 'No changes provided'], 400);
+        }
+
+        try {
+            $sections = $this->quoteSectionRepository->findByQuoteId($quoteId);
+            $orderMap = [];
+            foreach ($changes as $change) {
+                $orderMap[(int) $change['id']] = (int) $change['orderIndex'];
+            }
+
+            $updated = [];
+            foreach ($sections as $section) {
+                if (isset($orderMap[$section->id()])) {
+                    $updated[] = new QuoteSection(
+                        $section->quoteId(),
+                        $section->name(),
+                        $orderMap[$section->id()],
+                        $section->showTotalValue(),
+                        $section->showItemCount(),
+                        $section->showTotalHours(),
+                        $section->id()
+                    );
+                }
+            }
+
+            $this->quoteSectionRepository->saveOrdering($quoteId, $updated);
+
+            $quote = $this->quoteRepository->findById($quoteId);
+
+            if (!$quote) {
+                return new WP_REST_Response(['error' => 'Quote not found'], 404);
+            }
+
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to reorder sections'], 500);
+        }
+    }
+
+    public function reorderBlocks(WP_REST_Request $request): WP_REST_Response
+    {
+        $quoteId = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+        $changes = isset($params['changes']) && is_array($params['changes']) ? $params['changes'] : [];
+
+        if (empty($changes)) {
+            return new WP_REST_Response(['error' => 'No changes provided'], 400);
+        }
+
+        try {
+            $this->quoteBlockRepository->reorder($quoteId, $changes);
+
+            $quote = $this->quoteRepository->findById($quoteId);
+
+            if (!$quote) {
+                return new WP_REST_Response(['error' => 'Quote not found'], 404);
+            }
+
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to reorder blocks'], 500);
         }
     }
 

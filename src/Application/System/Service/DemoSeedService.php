@@ -26,11 +26,17 @@ final class DemoSeedService
         $summary['employees'] = $this->seedEmployees($seedRunId, $seedProfile, $recentDate);
         $summary['customers_sites_contacts'] = $this->seedCustomersSitesContacts($seedRunId, $seedProfile, $recentDate);
         $summary['teams'] = $this->seedTeams($seedRunId, $seedProfile, $recentDate);
+        $summary['team_members'] = $this->seedTeamMembers($seedRunId, $seedProfile, $recentDate);
         $summary['calendar'] = $this->seedCalendar($seedRunId, $seedProfile, $recentDate);
         $summary['capability'] = $this->seedCapability($seedRunId, $seedProfile, $recentDate);
+        $summary['role_teams'] = $this->seedRoleTeams($seedRunId, $seedProfile, $recentDate);
         $summary['leave'] = $this->seedLeave($seedRunId, $seedProfile, $recentDate);
         $summary['catalog'] = $this->seedCatalog($seedRunId, $seedProfile, $recentDate);
+        $summary['service_types'] = $this->seedServiceTypes($seedRunId, $seedProfile, $recentDate);
+        $summary['rate_cards'] = $this->seedRateCards($seedRunId, $seedProfile, $recentDate);
+        $summary['catalog_products'] = $this->seedCatalogProducts($seedRunId, $seedProfile, $recentDate);
         $summary['commercial'] = $this->seedCommercial($seedRunId, $seedProfile, $recentDate);
+        $summary['block_quotes'] = $this->seedBlockBasedQuotes($seedRunId, $seedProfile, $recentDate);
         $summary['leads'] = $this->seedLeads($seedRunId, $seedProfile, $recentDate);
         $summary['delivery'] = $this->seedDelivery($seedRunId, $seedProfile, $recentDate);
         $summary['support'] = $this->seedSupport($seedRunId, $seedProfile, $recentDate);
@@ -178,6 +184,40 @@ final class DemoSeedService
         foreach ($this->wpdb->get_col("SELECT id FROM $qbInv ORDER BY id DESC LIMIT 3") as $id) $this->registryAdd($seedRunId, $qbInv, (string)$id);
         $qbPay = $this->wpdb->prefix . 'pet_qb_payments';
         foreach ($this->wpdb->get_col("SELECT id FROM $qbPay ORDER BY id DESC LIMIT 2") as $id) $this->registryAdd($seedRunId, $qbPay, (string)$id);
+
+        // Service types, rate cards, catalog products
+        $stTable = $this->wpdb->prefix . 'pet_service_types';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$stTable'") === $stTable) {
+            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $stTable WHERE created_at = %s", [$seededAt])) as $id) $this->registryAdd($seedRunId, $stTable, (string)$id);
+        }
+        $rcTable = $this->wpdb->prefix . 'pet_rate_cards';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$rcTable'") === $rcTable) {
+            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $rcTable WHERE created_at = %s", [$seededAt])) as $id) $this->registryAdd($seedRunId, $rcTable, (string)$id);
+        }
+        $cpTable = $this->wpdb->prefix . 'pet_catalog_products';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$cpTable'") === $cpTable) {
+            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $cpTable WHERE created_at = %s", [$seededAt])) as $id) $this->registryAdd($seedRunId, $cpTable, (string)$id);
+        }
+
+        // Quote sections and blocks
+        $sectionsTable = $this->wpdb->prefix . 'pet_quote_sections';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$sectionsTable'") === $sectionsTable) {
+            foreach ($this->wpdb->get_col("SELECT id FROM $sectionsTable") as $id) $this->registryAdd($seedRunId, $sectionsTable, (string)$id);
+        }
+        $blocksTable = $this->wpdb->prefix . 'pet_quote_blocks';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$blocksTable'") === $blocksTable) {
+            foreach ($this->wpdb->get_col("SELECT id FROM $blocksTable") as $id) $this->registryAdd($seedRunId, $blocksTable, (string)$id);
+        }
+
+        // Role-team mappings
+        $roleTeams = $this->wpdb->prefix . 'pet_role_teams';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$roleTeams'") === $roleTeams) {
+            foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $roleTeams WHERE created_at = %s", [$seededAt])) as $id) $this->registryAdd($seedRunId, $roleTeams, (string)$id);
+        }
+
+        // Team members
+        $teamMembers = $this->wpdb->prefix . 'pet_team_members';
+        foreach ($this->wpdb->get_col($this->wpdb->prepare("SELECT id FROM $teamMembers WHERE assigned_at = %s", [$seededAt])) as $id) $this->registryAdd($seedRunId, $teamMembers, (string)$id);
 
         // Feed and knowledge
         $feed = $this->wpdb->prefix . 'pet_feed_events';
@@ -343,13 +383,124 @@ final class DemoSeedService
     private function seedTeams(string $seedRunId, string $seedProfile, string $seededAt): array
     {
         $t = $this->wpdb->prefix . 'pet_teams';
-        $this->wpdb->insert($t, ['name' => 'Executive', 'created_at' => $seededAt]);
-        $this->registryAdd($seedRunId, $t, (string)$this->wpdb->insert_id);
-        $this->wpdb->insert($t, ['name' => 'Delivery', 'created_at' => $seededAt]);
-        $this->registryAdd($seedRunId, $t, (string)$this->wpdb->insert_id);
-        $this->wpdb->insert($t, ['name' => 'Support', 'created_at' => $seededAt]);
-        $this->registryAdd($seedRunId, $t, (string)$this->wpdb->insert_id);
-        return ['teams' => 3];
+        $names = ['Executive', 'Delivery', 'Support'];
+        $created = 0;
+        foreach ($names as $name) {
+            $existing = (int)$this->wpdb->get_var(
+                $this->wpdb->prepare("SELECT id FROM $t WHERE name = %s LIMIT 1", $name)
+            );
+            if ($existing > 0) {
+                continue;
+            }
+            $this->wpdb->insert($t, ['name' => $name, 'created_at' => $seededAt]);
+            $this->registryAdd($seedRunId, $t, (string)$this->wpdb->insert_id);
+            $created++;
+        }
+        $total = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $t");
+        return ['teams' => $total, 'created' => $created];
+    }
+
+    private function seedTeamMembers(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $tm = $this->wpdb->prefix . 'pet_team_members';
+        $empTable = $this->wpdb->prefix . 'pet_employees';
+        $teamsTable = $this->wpdb->prefix . 'pet_teams';
+
+        $emp = fn(string $firstName): int => (int)$this->wpdb->get_var(
+            $this->wpdb->prepare("SELECT id FROM $empTable WHERE first_name = %s LIMIT 1", $firstName)
+        );
+        $team = fn(string $name): int => (int)$this->wpdb->get_var(
+            $this->wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", $name)
+        );
+
+        $assignments = [
+            ['employee' => 'Steve',    'team' => 'Executive', 'role' => 'lead'],
+            ['employee' => 'Mia',      'team' => 'Delivery',  'role' => 'lead'],
+            ['employee' => 'Liam',     'team' => 'Support',   'role' => 'lead'],
+            ['employee' => 'Ava',      'team' => 'Delivery',  'role' => 'member'],
+            ['employee' => 'Noah',     'team' => 'Support',   'role' => 'member'],
+            ['employee' => 'Zoe',      'team' => 'Executive', 'role' => 'member'],
+            ['employee' => 'Ethan',    'team' => 'Delivery',  'role' => 'member'],
+            ['employee' => 'Ethan',    'team' => 'Support',   'role' => 'member'],
+            ['employee' => 'Isabella', 'team' => 'Delivery',  'role' => 'member'],
+        ];
+
+        $count = 0;
+        foreach ($assignments as $a) {
+            $empId = $emp($a['employee']);
+            $teamId = $team($a['team']);
+            if ($empId <= 0 || $teamId <= 0) continue;
+
+            $existing = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM $tm WHERE team_id = %d AND employee_id = %d AND removed_at IS NULL LIMIT 1",
+                $teamId, $empId
+            ));
+            if ($existing > 0) continue;
+
+            $this->wpdb->insert($tm, [
+                'team_id'     => $teamId,
+                'employee_id' => $empId,
+                'role'        => $a['role'],
+                'assigned_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $tm, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+
+        return ['team_members' => $count];
+    }
+
+    private function seedRoleTeams(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $rt = $this->wpdb->prefix . 'pet_role_teams';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$rt'") !== $rt) {
+            return ['role_teams' => 0, 'skipped' => 'table_missing'];
+        }
+
+        $rolesTable = $this->wpdb->prefix . 'pet_roles';
+        $teamsTable = $this->wpdb->prefix . 'pet_teams';
+
+        $roleName = fn(string $name): int => (int)$this->wpdb->get_var(
+            $this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name = %s LIMIT 1", $name)
+        );
+        $teamName = fn(string $name): int => (int)$this->wpdb->get_var(
+            $this->wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", $name)
+        );
+
+        $mappings = [
+            ['role' => 'Consultant',         'team' => 'Delivery', 'is_primary' => 1],
+            ['role' => 'Consultant',         'team' => 'Support',  'is_primary' => 0],
+            ['role' => 'Support Technician', 'team' => 'Support',  'is_primary' => 1],
+            ['role' => 'Project Manager',    'team' => 'Delivery', 'is_primary' => 1],
+            ['role' => 'Developer',          'team' => 'Delivery', 'is_primary' => 1],
+            ['role' => 'DevOps Engineer',    'team' => 'Delivery', 'is_primary' => 1],
+            ['role' => 'DevOps Engineer',    'team' => 'Support',  'is_primary' => 0],
+            ['role' => 'Security Analyst',   'team' => 'Delivery', 'is_primary' => 1],
+        ];
+
+        $count = 0;
+        foreach ($mappings as $m) {
+            $roleId = $roleName($m['role']);
+            $teamId = $teamName($m['team']);
+            if ($roleId <= 0 || $teamId <= 0) continue;
+
+            $existing = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM $rt WHERE role_id = %d AND team_id = %d",
+                $roleId, $teamId
+            ));
+            if ($existing > 0) continue;
+
+            $this->wpdb->insert($rt, [
+                'role_id'    => $roleId,
+                'team_id'    => $teamId,
+                'is_primary' => $m['is_primary'],
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $rt, (string)$this->wpdb->insert_id);
+            $count++;
+        }
+
+        return ['role_teams' => $count];
     }
 
     private function seedCalendar(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -524,6 +675,7 @@ final class DemoSeedService
                     $skillId('Architecture Review') => ['min_proficiency_level' => 4, 'importance_weight' => 3],
                     $skillId('PHP Backend') => ['min_proficiency_level' => 3, 'importance_weight' => 2],
                 ],
+                'base_internal_rate' => 120.0,
             ],
             [
                 'name' => 'Support Technician',
@@ -534,6 +686,7 @@ final class DemoSeedService
                     $skillId('Incident Handling') => ['min_proficiency_level' => 3, 'importance_weight' => 3],
                     $skillId('WordPress Admin') => ['min_proficiency_level' => 2, 'importance_weight' => 2],
                 ],
+                'base_internal_rate' => 80.0,
             ],
             [
                 'name' => 'Project Manager',
@@ -544,16 +697,59 @@ final class DemoSeedService
                     $skillId('SLA Design') => ['min_proficiency_level' => 3, 'importance_weight' => 2],
                     $skillId('React Frontend') => ['min_proficiency_level' => 2, 'importance_weight' => 1],
                 ],
+                'base_internal_rate' => 100.0,
+            ],
+            [
+                'name' => 'Developer',
+                'level' => 'Senior',
+                'desc' => 'Full-stack developer for project delivery and DevOps',
+                'criteria' => 'Delivers clean, tested, production-ready code',
+                'skills' => [
+                    $skillId('PHP Backend') => ['min_proficiency_level' => 4, 'importance_weight' => 3],
+                    $skillId('React Frontend') => ['min_proficiency_level' => 3, 'importance_weight' => 2],
+                ],
+                'base_internal_rate' => 110.0,
+            ],
+            [
+                'name' => 'DevOps Engineer',
+                'level' => 'Mid',
+                'desc' => 'Infrastructure automation and cloud operations',
+                'criteria' => 'Maintains uptime and deployment velocity',
+                'skills' => [
+                    $skillId('Architecture Review') => ['min_proficiency_level' => 3, 'importance_weight' => 2],
+                    $skillId('Incident Handling') => ['min_proficiency_level' => 2, 'importance_weight' => 1],
+                ],
+                'base_internal_rate' => 95.0,
+            ],
+            [
+                'name' => 'Security Analyst',
+                'level' => 'Senior',
+                'desc' => 'Security audits, compliance, and threat assessment',
+                'criteria' => 'Identifies and mitigates security risks proactively',
+                'skills' => [
+                    $skillId('Architecture Review') => ['min_proficiency_level' => 4, 'importance_weight' => 3],
+                    $skillId('SLA Design') => ['min_proficiency_level' => 3, 'importance_weight' => 2],
+                ],
+                'base_internal_rate' => 115.0,
             ],
         ];
         $roleIds = [];
+        $rolesTable = $this->wpdb->prefix . 'pet_roles';
         foreach ($roles as $r) {
+            $existingId = (int)$this->wpdb->get_var(
+                $this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name = %s LIMIT 1", $r['name'])
+            );
+            if ($existingId > 0) {
+                $roleIds[$r['name']] = $existingId;
+                continue;
+            }
             $roleId = $createRole->handle(new \Pet\Application\Work\Command\CreateRoleCommand(
                 $r['name'],
                 $r['level'],
                 $r['desc'],
                 $r['criteria'],
-                $r['skills']
+                $r['skills'],
+                $r['base_internal_rate'] ?? null
             ));
             $roleIds[$r['name']] = (int)$roleId;
             $publishRole->handle(new \Pet\Application\Work\Command\PublishRoleCommand((int)$roleId));
@@ -1155,8 +1351,551 @@ final class DemoSeedService
             $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q7Id));
         }
 
+        // ── Q8-Q10: New model quotes using RateCardResolver ──
+        $stTable = $this->wpdb->prefix . 'pet_service_types';
+        $devRoleId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name=%s LIMIT 1", 'Developer'));
+        $devopsRoleId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name=%s LIMIT 1", 'DevOps Engineer'));
+        $securityRoleId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $rolesTable WHERE name=%s LIMIT 1", 'Security Analyst'));
+        $securityStId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $stTable WHERE name=%s LIMIT 1", 'Security Services'));
+        $devopsStId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $stTable WHERE name=%s LIMIT 1", 'DevOps Engineering'));
+        $cloudStId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $stTable WHERE name=%s LIMIT 1", 'Cloud Infrastructure'));
+        $projectStId = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $stTable WHERE name=%s LIMIT 1", 'Project Delivery'));
+
+        $canSeedNewModel = $devRoleId > 0 && $securityRoleId > 0 && $devopsRoleId > 0 && $securityStId > 0;
+
+        // Q8: Security Assessment & Remediation (Implementation, new model) — draft
+        if ($canSeedNewModel) {
+            $q8Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q8 Security Assessment & Remediation'));
+            $q8New = $q8Existing <= 0;
+            $q8Id = $q8Existing > 0 ? $q8Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+                $govCustId, 'Q8 Security Assessment & Remediation', 'Rate-card-resolved implementation using new commercial model', 'USD'
+            ));
+            if ($q8New) {
+                $this->registryAdd($seedRunId, $quotesTable, (string)$q8Id);
+                $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q8Id, 'implementation', [
+                    'section' => 'Security',
+                    'description' => 'Security Assessment & Remediation',
+                    'milestones' => [
+                        [
+                            'description' => 'Assessment Phase',
+                            'tasks' => [
+                                ['description' => 'Vulnerability Scan & Pen Test', 'duration_hours' => 16, 'role_id' => $securityRoleId, 'service_type_id' => $securityStId],
+                                ['description' => 'Compliance Gap Analysis', 'duration_hours' => 12, 'role_id' => $securityRoleId, 'service_type_id' => $securityStId],
+                                ['description' => 'Risk Report & Recommendations', 'duration_hours' => 8, 'role_id' => $securityRoleId, 'service_type_id' => $securityStId],
+                            ]
+                        ],
+                        [
+                            'description' => 'Remediation Phase',
+                            'tasks' => [
+                                ['description' => 'Hardening & Patching', 'duration_hours' => 20, 'role_id' => $devRoleId, 'service_type_id' => $securityStId],
+                                ['description' => 'Firewall Rules & WAF Config', 'duration_hours' => 10, 'role_id' => $devRoleId, 'service_type_id' => $securityStId],
+                                ['description' => 'Verification Rescan', 'duration_hours' => 6, 'role_id' => $securityRoleId, 'service_type_id' => $securityStId],
+                            ]
+                        ],
+                    ]
+                ]));
+            }
+        }
+
+        // Q9: DevOps Transformation (Implementation, new model) — sent
+        if ($canSeedNewModel && $devopsStId > 0 && $cloudStId > 0) {
+            $q9Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q9 DevOps Transformation'));
+            $q9New = $q9Existing <= 0;
+            $q9Id = $q9Existing > 0 ? $q9Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+                $nexusId, 'Q9 DevOps Transformation', 'CI/CD pipeline and cloud-native migration using rate card model', 'USD'
+            ));
+            if ($q9New) {
+                $this->registryAdd($seedRunId, $quotesTable, (string)$q9Id);
+                $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q9Id, 'implementation', [
+                    'section' => 'Delivery',
+                    'description' => 'DevOps & Cloud Migration',
+                    'milestones' => [
+                        [
+                            'description' => 'CI/CD Pipeline Build',
+                            'tasks' => [
+                                ['description' => 'Pipeline Architecture', 'duration_hours' => 12, 'role_id' => $devopsRoleId, 'service_type_id' => $devopsStId],
+                                ['description' => 'Build & Test Automation', 'duration_hours' => 16, 'role_id' => $devopsRoleId, 'service_type_id' => $devopsStId],
+                                ['description' => 'Deployment Automation', 'duration_hours' => 10, 'role_id' => $devRoleId, 'service_type_id' => $devopsStId],
+                            ]
+                        ],
+                        [
+                            'description' => 'Cloud Migration',
+                            'tasks' => [
+                                ['description' => 'Infrastructure as Code', 'duration_hours' => 14, 'role_id' => $devopsRoleId, 'service_type_id' => $cloudStId],
+                                ['description' => 'Container Orchestration', 'duration_hours' => 12, 'role_id' => $devRoleId, 'service_type_id' => $cloudStId],
+                                ['description' => 'Monitoring & Observability', 'duration_hours' => 8, 'role_id' => $devopsRoleId, 'service_type_id' => $cloudStId],
+                            ]
+                        ],
+                    ]
+                ]));
+            }
+            $q9e = $quoteRepo->findById($q9Id);
+            if ($q9e && !$q9e->state()->isTerminal()) {
+                $q9Total = $q9e->totalValue();
+                $setPayment->handle(new \Pet\Application\Commercial\Command\SetPaymentScheduleCommand($q9Id, [
+                    ['title' => 'Upfront on signature', 'amount' => round($q9Total * 0.5, 2), 'dueDate' => null],
+                    ['title' => 'On delivery', 'amount' => round($q9Total * 0.5, 2), 'dueDate' => null],
+                ]));
+            }
+            $q9e = $quoteRepo->findById($q9Id);
+            if ($q9e && $q9e->state()->toString() === 'draft') {
+                $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q9Id));
+            }
+        }
+
+        // Q10: Managed Cloud Operations (Implementation + Recurring, new model) — accepted
+        if ($canSeedNewModel && $cloudStId > 0) {
+            $q10Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q10 Managed Cloud Operations'));
+            $q10New = $q10Existing <= 0;
+            $q10Id = $q10Existing > 0 ? $q10Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
+                $acmeId, 'Q10 Managed Cloud Operations', 'Cloud setup with ongoing managed services — rate card resolved', 'USD'
+            ));
+            if ($q10New) {
+                $this->registryAdd($seedRunId, $quotesTable, (string)$q10Id);
+                $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q10Id, 'implementation', [
+                    'section' => 'Delivery',
+                    'description' => 'Cloud Setup',
+                    'milestones' => [
+                        [
+                            'description' => 'Cloud Provisioning',
+                            'tasks' => [
+                                ['description' => 'Cloud Architecture Review', 'duration_hours' => 8, 'role_id' => $devopsRoleId, 'service_type_id' => $cloudStId],
+                                ['description' => 'Environment Provisioning', 'duration_hours' => 12, 'role_id' => $devopsRoleId, 'service_type_id' => $cloudStId],
+                                ['description' => 'Security Baseline Setup', 'duration_hours' => 6, 'role_id' => $securityRoleId, 'service_type_id' => $cloudStId],
+                            ]
+                        ],
+                    ]
+                ]));
+                $addComponent->handle(new \Pet\Application\Commercial\Command\AddComponentCommand($q10Id, 'recurring', [
+                    'section' => 'Managed Services',
+                    'description' => 'Ongoing Cloud Operations',
+                    'service_name' => 'Managed Cloud Ops',
+                    'cadence' => 'monthly',
+                    'term_months' => 12,
+                    'renewal_model' => 'auto_renew',
+                    'sell_price_per_period' => 1800.0,
+                    'internal_cost_per_period' => 950.0,
+                    'sla_snapshot' => ['name' => 'Standard', 'response_minutes' => 240, 'resolution_minutes' => 1440]
+                ]));
+            }
+            $q10e = $quoteRepo->findById($q10Id);
+            if ($q10e && !$q10e->state()->isTerminal()) {
+                $q10Total = $q10e->totalValue();
+                $setPayment->handle(new \Pet\Application\Commercial\Command\SetPaymentScheduleCommand($q10Id, [
+                    ['title' => 'Setup deposit', 'amount' => round($q10Total * 0.4, 2), 'dueDate' => null],
+                    ['title' => 'Balance on go-live', 'amount' => round($q10Total * 0.6, 2), 'dueDate' => null],
+                ]));
+            }
+            $accepted10 = $this->wpdb->get_var($this->wpdb->prepare("SELECT accepted_at FROM $quotesTable WHERE id = %d", $q10Id));
+            if (!$accepted10) {
+                $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q10Id));
+                $acceptQuote->handle(new \Pet\Application\Commercial\Command\AcceptQuoteCommand($q10Id));
+            }
+        }
+
         $totalQuotes = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $quotesTable");
         return ['quotes' => $totalQuotes];
+    }
+
+    private function seedBlockBasedQuotes(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $quotesTable = $wpdb->prefix . 'pet_quotes';
+        $sectionsTable = $wpdb->prefix . 'pet_quote_sections';
+        $blocksTable = $wpdb->prefix . 'pet_quote_blocks';
+
+        // Check tables exist
+        if ($wpdb->get_var("SHOW TABLES LIKE '$sectionsTable'") !== $sectionsTable
+            || $wpdb->get_var("SHOW TABLES LIKE '$blocksTable'") !== $blocksTable) {
+            return ['block_quotes' => 0, 'skipped' => 'tables_missing'];
+        }
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $createQuote = $c->get(\Pet\Application\Commercial\Command\CreateQuoteHandler::class);
+
+        // Lookup helpers
+        $rolesTable = $wpdb->prefix . 'pet_roles';
+        $teamsTable = $wpdb->prefix . 'pet_teams';
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $catTable = $wpdb->prefix . 'pet_catalog_items';
+
+        $roleId = fn(string $name): ?int => ($v = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $rolesTable WHERE name=%s LIMIT 1", $name))) > 0 ? $v : null;
+        $teamId = fn(string $name): ?int => ($v = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name=%s LIMIT 1", $name))) > 0 ? $v : null;
+        $empId = fn(string $firstName): ?int => ($v = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $empTable WHERE first_name=%s LIMIT 1", $firstName))) > 0 ? $v : null;
+        $empName = fn(string $firstName): string => (string)$wpdb->get_var($wpdb->prepare("SELECT CONCAT(first_name,' ',last_name) FROM $empTable WHERE first_name=%s LIMIT 1", $firstName)) ?: $firstName;
+        $catId = fn(string $sku): ?int => ($v = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $catTable WHERE sku=%s LIMIT 1", $sku))) > 0 ? $v : null;
+
+        $rpmId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'RPM Resources (Pty) Ltd' LIMIT 1");
+        $acmeId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Acme Manufacturing SA (Pty) Ltd' LIMIT 1");
+        $nexusId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
+        $govCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name = 'Government Digital Services' LIMIT 1");
+
+        // Role IDs
+        $rConsultant = $roleId('Consultant');
+        $rSupport = $roleId('Support Technician');
+        $rDeveloper = $roleId('Developer');
+        $rDevOps = $roleId('DevOps Engineer');
+        $rSecurity = $roleId('Security Analyst');
+        $rPM = $roleId('Project Manager');
+
+        // Team IDs
+        $tDelivery = $teamId('Delivery');
+        $tSupport = $teamId('Support');
+        $tExecutive = $teamId('Executive');
+
+        // Employee IDs and names
+        $eSteve = $empId('Steve');    $nSteve = $empName('Steve');
+        $eMia = $empId('Mia');        $nMia = $empName('Mia');
+        $eLiam = $empId('Liam');      $nLiam = $empName('Liam');
+        $eAva = $empId('Ava');        $nAva = $empName('Ava');
+        $eNoah = $empId('Noah');      $nNoah = $empName('Noah');
+        $eEthan = $empId('Ethan');    $nEthan = $empName('Ethan');
+        $eIsabella = $empId('Isabella'); $nIsabella = $empName('Isabella');
+
+        $created = 0;
+        $uid = 1; // running counter for unique phase/unit IDs
+
+        // Helper: insert section, return ID
+        $insertSection = function (int $quoteId, string $name, int $order, bool $showTotal = true, bool $showCount = false, bool $showHours = false) use ($wpdb, $sectionsTable, $seedRunId): int {
+            $wpdb->insert($sectionsTable, [
+                'quote_id' => $quoteId,
+                'name' => $name,
+                'order_index' => $order,
+                'show_total_value' => $showTotal ? 1 : 0,
+                'show_item_count' => $showCount ? 1 : 0,
+                'show_total_hours' => $showHours ? 1 : 0,
+            ]);
+            $id = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $sectionsTable, (string)$id);
+            return $id;
+        };
+
+        // Helper: insert block, return ID
+        $insertBlock = function (int $quoteId, ?int $sectionId, string $type, int $order, array $payload, bool $priced = true) use ($wpdb, $blocksTable, $seedRunId): int {
+            $wpdb->insert($blocksTable, [
+                'quote_id' => $quoteId,
+                'component_id' => null,
+                'section_id' => $sectionId,
+                'type' => $type,
+                'order_index' => $order,
+                'priced' => $priced ? 1 : 0,
+                'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            ]);
+            $id = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $blocksTable, (string)$id);
+            return $id;
+        };
+
+        // Helper: create quote if not exists
+        $ensureQuote = function (int $custId, string $title, string $desc) use ($wpdb, $quotesTable, $createQuote, $seedRunId): ?int {
+            $existing = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", $title));
+            if ($existing > 0) return null; // skip — already seeded
+            $id = $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand($custId, $title, $desc, 'USD'));
+            $this->registryAdd($seedRunId, $quotesTable, (string)$id);
+            return $id;
+        };
+
+        // ──────────────────────────────────────────────────────────────────────
+        // BQ1: RPM Digital Transformation — service + project blocks
+        // ──────────────────────────────────────────────────────────────────────
+        $bq1 = $ensureQuote($rpmId, 'BQ1 RPM Digital Transformation', 'Block-based: professional services and project delivery');
+        if ($bq1 !== null) {
+            $s1 = $insertSection($bq1, 'Professional Services', 0, true, true);
+            $insertBlock($bq1, $s1, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Architecture Review & Roadmap',
+                'quantity' => 4, 'sellValue' => 200.0, 'totalValue' => 800.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-001'),
+            ]);
+            $insertBlock($bq1, $s1, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'API Integration Development',
+                'quantity' => 8, 'sellValue' => 180.0, 'totalValue' => 1440.0,
+                'roleId' => $rDeveloper, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-001'),
+            ]);
+            $insertBlock($bq1, $s1, 'OnceOffSimpleServiceBlock', 2, [
+                'description' => 'Technical Support Setup',
+                'quantity' => 6, 'sellValue' => 150.0, 'totalValue' => 900.0,
+                'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eLiam, 'owner' => $nLiam,
+                'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => $catId('SERV-002'),
+            ]);
+
+            $s2 = $insertSection($bq1, 'Project Delivery', 1, true, false, true);
+            $insertBlock($bq1, $s2, 'OnceOffProjectBlock', 0, [
+                'description' => 'Website Rebuild Project',
+                'totalValue' => 5200.0,
+                'phases' => [
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Discovery & Planning', 'order' => 0,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Stakeholder Workshops', 'quantity' => 3, 'unitPrice' => 200.0, 'totalValue' => 600.0, 'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Requirements Analysis', 'quantity' => 5, 'unitPrice' => 180.0, 'totalValue' => 900.0, 'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-006')],
+                        ]
+                    ],
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Build & Test', 'order' => 1,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Frontend Development', 'quantity' => 10, 'unitPrice' => 170.0, 'totalValue' => 1700.0, 'roleId' => $rDeveloper, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Backend API Build', 'quantity' => 8, 'unitPrice' => 170.0, 'totalValue' => 1360.0, 'roleId' => $rDeveloper, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'QA & Acceptance Testing', 'quantity' => 4, 'unitPrice' => 160.0, 'totalValue' => 640.0, 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eNoah, 'owner' => $nNoah, 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => null],
+                        ]
+                    ],
+                ],
+            ]);
+            $created++;
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // BQ2: Acme Infrastructure Overhaul — heavy service blocks
+        // ──────────────────────────────────────────────────────────────────────
+        $bq2 = $ensureQuote($acmeId, 'BQ2 Acme Infrastructure Overhaul', 'Block-based: assessment and implementation services');
+        if ($bq2 !== null) {
+            $s1 = $insertSection($bq2, 'Assessment', 0, true, true);
+            $insertBlock($bq2, $s1, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Security Vulnerability Assessment',
+                'quantity' => 2, 'sellValue' => 2500.0, 'totalValue' => 5000.0,
+                'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-008'),
+            ]);
+            $insertBlock($bq2, $s1, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Network Architecture Review',
+                'quantity' => 3, 'sellValue' => 195.0, 'totalValue' => 585.0,
+                'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-005'),
+            ]);
+
+            $s2 = $insertSection($bq2, 'Implementation', 1, true, true, true);
+            $insertBlock($bq2, $s2, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Firewall & WAF Configuration',
+                'quantity' => 5, 'sellValue' => 195.0, 'totalValue' => 975.0,
+                'roleId' => $rDevOps, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-005'),
+            ]);
+            $insertBlock($bq2, $s2, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Server Hardening & Patching',
+                'quantity' => 8, 'sellValue' => 170.0, 'totalValue' => 1360.0,
+                'roleId' => $rDeveloper, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null,
+            ]);
+            $insertBlock($bq2, $s2, 'OnceOffSimpleServiceBlock', 2, [
+                'description' => 'Monitoring & Alerting Setup',
+                'quantity' => 4, 'sellValue' => 180.0, 'totalValue' => 720.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-001'),
+            ]);
+
+            $s3 = $insertSection($bq2, 'Project Work', 2, true, false, true);
+            $insertBlock($bq2, $s3, 'OnceOffProjectBlock', 0, [
+                'description' => 'Infrastructure Migration Project',
+                'totalValue' => 7680.0,
+                'phases' => [
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Assessment & Planning', 'order' => 0,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Current State Audit', 'quantity' => 4, 'unitPrice' => 200.0, 'totalValue' => 800.0, 'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Migration Playbook', 'quantity' => 3, 'unitPrice' => 180.0, 'totalValue' => 540.0, 'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Execution', 'order' => 1,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'VM Provisioning', 'quantity' => 6, 'unitPrice' => 195.0, 'totalValue' => 1170.0, 'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Data Migration', 'quantity' => 8, 'unitPrice' => 195.0, 'totalValue' => 1560.0, 'roleId' => $rDevOps, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Application Cutover', 'quantity' => 6, 'unitPrice' => 170.0, 'totalValue' => 1020.0, 'roleId' => $rDeveloper, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Validation', 'order' => 2,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Smoke Testing', 'quantity' => 3, 'unitPrice' => 160.0, 'totalValue' => 480.0, 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eNoah, 'owner' => $nNoah, 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Security Verification', 'quantity' => 2, 'unitPrice' => 250.0, 'totalValue' => 500.0, 'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Handover Documentation', 'quantity' => 4, 'unitPrice' => 150.0, 'totalValue' => 600.0, 'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                ],
+            ]);
+            $created++;
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // BQ3: Nexus Cloud-Native Platform Build — project-heavy
+        // ──────────────────────────────────────────────────────────────────────
+        $bq3 = $ensureQuote($nexusId, 'BQ3 Nexus Cloud-Native Platform', 'Block-based: multi-project cloud-native delivery');
+        if ($bq3 !== null) {
+            $s1 = $insertSection($bq3, 'Delivery', 0, true, false, true);
+            $insertBlock($bq3, $s1, 'OnceOffProjectBlock', 0, [
+                'description' => 'API Platform Build',
+                'totalValue' => 5240.0,
+                'phases' => [
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Design', 'order' => 0,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'API Architecture Design', 'quantity' => 6, 'unitPrice' => 200.0, 'totalValue' => 1200.0, 'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Data Model Definition', 'quantity' => 4, 'unitPrice' => 170.0, 'totalValue' => 680.0, 'roleId' => $rDeveloper, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Implementation', 'order' => 1,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'REST API Development', 'quantity' => 12, 'unitPrice' => 170.0, 'totalValue' => 2040.0, 'roleId' => $rDeveloper, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Auth & Gateway Setup', 'quantity' => 4, 'unitPrice' => 195.0, 'totalValue' => 780.0, 'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Integration Testing', 'quantity' => 3, 'unitPrice' => 180.0, 'totalValue' => 540.0, 'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                ],
+            ]);
+            $insertBlock($bq3, $s1, 'OnceOffProjectBlock', 1, [
+                'description' => 'Cloud Infrastructure Setup',
+                'totalValue' => 4700.0,
+                'phases' => [
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Provisioning', 'order' => 0,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Kubernetes Cluster Setup', 'quantity' => 6, 'unitPrice' => 195.0, 'totalValue' => 1170.0, 'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-005')],
+                            ['id' => 'un-' . $uid++, 'description' => 'CI/CD Pipeline Configuration', 'quantity' => 4, 'unitPrice' => 195.0, 'totalValue' => 780.0, 'roleId' => $rDevOps, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Secrets Management', 'quantity' => 2, 'unitPrice' => 250.0, 'totalValue' => 500.0, 'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Hardening & Monitoring', 'order' => 1,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Network Policies & RBAC', 'quantity' => 4, 'unitPrice' => 195.0, 'totalValue' => 780.0, 'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Observability Stack Deploy', 'quantity' => 3, 'unitPrice' => 195.0, 'totalValue' => 585.0, 'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Runbook Documentation', 'quantity' => 3, 'unitPrice' => 160.0, 'totalValue' => 480.0, 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eLiam, 'owner' => $nLiam, 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'DR Failover Testing', 'quantity' => 2, 'unitPrice' => 200.0, 'totalValue' => 400.0, 'roleId' => $rDevOps, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                ],
+            ]);
+
+            $s2 = $insertSection($bq3, 'Advisory', 1, true, true);
+            $insertBlock($bq3, $s2, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Cloud Strategy Consulting',
+                'quantity' => 6, 'sellValue' => 220.0, 'totalValue' => 1320.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eSteve, 'owner' => $nSteve,
+                'teamId' => $tExecutive, 'team' => 'Executive', 'catalogItemId' => $catId('ADVIS-001'),
+            ]);
+            $insertBlock($bq3, $s2, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Cost Optimisation Review',
+                'quantity' => 3, 'sellValue' => 200.0, 'totalValue' => 600.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-002'),
+            ]);
+            $created++;
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // BQ4: Government Security Programme — all service blocks, varied roles
+        // ──────────────────────────────────────────────────────────────────────
+        $bq4 = $ensureQuote($govCustId, 'BQ4 Government Security Programme', 'Block-based: comprehensive security service catalogue');
+        if ($bq4 !== null) {
+            $s1 = $insertSection($bq4, 'Security Services', 0, true, true);
+            $insertBlock($bq4, $s1, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Penetration Testing',
+                'quantity' => 4, 'sellValue' => 2500.0, 'totalValue' => 10000.0,
+                'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-008'),
+            ]);
+            $insertBlock($bq4, $s1, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Compliance Gap Analysis',
+                'quantity' => 6, 'sellValue' => 250.0, 'totalValue' => 1500.0,
+                'roleId' => $rSecurity, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null,
+            ]);
+            $insertBlock($bq4, $s1, 'OnceOffSimpleServiceBlock', 2, [
+                'description' => 'Incident Response Planning',
+                'quantity' => 3, 'sellValue' => 280.0, 'totalValue' => 840.0,
+                'roleId' => $rSecurity, 'ownerType' => 'employee', 'ownerId' => $eIsabella, 'owner' => $nIsabella,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-007'),
+            ]);
+            $insertBlock($bq4, $s1, 'OnceOffSimpleServiceBlock', 3, [
+                'description' => 'Security Awareness Training',
+                'quantity' => 10, 'sellValue' => 150.0, 'totalValue' => 1500.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-003'),
+            ]);
+
+            $s2 = $insertSection($bq4, 'Compliance & Governance', 1, true, true);
+            $insertBlock($bq4, $s2, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Policy Framework Development',
+                'quantity' => 8, 'sellValue' => 200.0, 'totalValue' => 1600.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eSteve, 'owner' => $nSteve,
+                'teamId' => $tExecutive, 'team' => 'Executive', 'catalogItemId' => $catId('ADVIS-001'),
+            ]);
+            $insertBlock($bq4, $s2, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Audit Preparation Support',
+                'quantity' => 5, 'sellValue' => 220.0, 'totalValue' => 1100.0,
+                'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-002'),
+            ]);
+            $insertBlock($bq4, $s2, 'OnceOffSimpleServiceBlock', 2, [
+                'description' => 'Governance Review Sessions',
+                'quantity' => 6, 'sellValue' => 200.0, 'totalValue' => 1200.0,
+                'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-001'),
+            ]);
+            $created++;
+        }
+
+        // ──────────────────────────────────────────────────────────────────────
+        // BQ5: RPM Ongoing Support & Maintenance — support-focused
+        // ──────────────────────────────────────────────────────────────────────
+        $bq5 = $ensureQuote($rpmId, 'BQ5 RPM Support & Maintenance Package', 'Block-based: support services with text description');
+        if ($bq5 !== null) {
+            $s1 = $insertSection($bq5, 'Support Services', 0, true, true);
+            $insertBlock($bq5, $s1, 'TextBlock', 0, [
+                'content' => 'This package covers reactive and proactive support services for RPM\'s IT estate including helpdesk, monitoring, patching and escalation management.',
+            ], false);
+            $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 1, [
+                'description' => 'Helpdesk Support Hours',
+                'quantity' => 20, 'sellValue' => 150.0, 'totalValue' => 3000.0,
+                'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eLiam, 'owner' => $nLiam,
+                'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => $catId('SERV-002'),
+            ]);
+            $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 2, [
+                'description' => 'Proactive Monitoring Setup',
+                'quantity' => 4, 'sellValue' => 195.0, 'totalValue' => 780.0,
+                'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-005'),
+            ]);
+            $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 3, [
+                'description' => 'Monthly Patch Management',
+                'quantity' => 12, 'sellValue' => 120.0, 'totalValue' => 1440.0,
+                'roleId' => $rSupport, 'ownerType' => 'team', 'ownerId' => null, 'owner' => null,
+                'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => $catId('RECUR-001'),
+            ]);
+            $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 4, [
+                'description' => 'Emergency Callout Hours',
+                'quantity' => 8, 'sellValue' => 280.0, 'totalValue' => 2240.0,
+                'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eNoah, 'owner' => $nNoah,
+                'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => $catId('SERV-007'),
+            ]);
+
+            $s2 = $insertSection($bq5, 'Escalation Management', 1, true);
+            $insertBlock($bq5, $s2, 'OnceOffSimpleServiceBlock', 0, [
+                'description' => 'Escalation Process Design',
+                'quantity' => 3, 'sellValue' => 200.0, 'totalValue' => 600.0,
+                'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia,
+                'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null,
+            ]);
+            $insertBlock($bq5, $s2, 'OnceOffProjectBlock', 1, [
+                'description' => 'Runbook & Documentation Project',
+                'totalValue' => 2160.0,
+                'phases' => [
+                    [
+                        'id' => 'ph-' . $uid++, 'name' => 'Documentation', 'order' => 0,
+                        'units' => [
+                            ['id' => 'un-' . $uid++, 'description' => 'Runbook Authoring', 'quantity' => 6, 'unitPrice' => 160.0, 'totalValue' => 960.0, 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eLiam, 'owner' => $nLiam, 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Knowledge Base Setup', 'quantity' => 4, 'unitPrice' => 150.0, 'totalValue' => 600.0, 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eNoah, 'owner' => $nNoah, 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => null],
+                            ['id' => 'un-' . $uid++, 'description' => 'Process Review & Sign-off', 'quantity' => 3, 'unitPrice' => 200.0, 'totalValue' => 600.0, 'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia, 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => null],
+                        ]
+                    ],
+                ],
+            ]);
+            $created++;
+        }
+
+        return ['block_quotes' => $created];
     }
 
     private function seedLeads(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -2726,7 +3465,7 @@ final class DemoSeedService
 
         // Fetch all seeded projects (created from quotes) in order
         $projects = $wpdb->get_results(
-            "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3"
+            "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 5"
         );
         if (empty($projects)) {
             return ['enriched' => 0];
@@ -2757,16 +3496,27 @@ final class DemoSeedService
                 'health' => 'at_risk',
                 'complete_tasks' => ['Training Schedule Setup', 'Onsite Training Day 1', 'Onsite Training Day 2', 'Remote Consulting Session 1', 'Remote Consulting Session 2'],
             ],
-            // Nexus Cloud: active, 1 week in, 8 weeks to go — early stage
+            // Nexus Cloud: active, 5 weeks in, 3 weeks to go — mid-delivery recovery story
             [
                 'state' => 'active',
-                'start_days' => -7,
-                'end_days' => 56,
+                'start_days' => -35,
+                'end_days' => 21,
                 'sold_hours' => 106.0,
-                'hours_used' => 8.0,
+                'hours_used' => 52.0,
                 'pm' => 'Ethan DevOps',
                 'health' => 'on_track',
-                'complete_tasks' => [],
+                'complete_tasks' => ['Cloud Readiness Assessment', 'Architecture Design', 'Migration Runbook'],
+            ],
+            // Quote #10 — Acme Security/Compliance: active, 3 weeks in, 5 weeks to go
+            [
+                'state' => 'active',
+                'start_days' => -21,
+                'end_days' => 35,
+                'sold_hours' => 26.0,
+                'hours_used' => 8.0,
+                'pm' => 'Mia Manager',
+                'health' => 'on_track',
+                'complete_first_n_tasks' => 1,
             ],
         ];
 
@@ -2802,12 +3552,28 @@ final class DemoSeedService
             }
 
             // Complete specified tasks via explicit SQL
-            foreach ($def['complete_tasks'] as $taskName) {
-                $wpdb->query($wpdb->prepare(
-                    "UPDATE $taskTable SET is_completed = 1 WHERE project_id = %d AND name = %s",
+            if (!empty($def['complete_tasks'])) {
+                foreach ($def['complete_tasks'] as $taskName) {
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE $taskTable SET is_completed = 1 WHERE project_id = %d AND name = %s",
+                        $projectId,
+                        $taskName
+                    ));
+                }
+            }
+            // Complete first N tasks by position (for projects with unknown task names)
+            if (!empty($def['complete_first_n_tasks'])) {
+                $taskIds = $wpdb->get_col($wpdb->prepare(
+                    "SELECT id FROM $taskTable WHERE project_id = %d ORDER BY id ASC LIMIT %d",
                     $projectId,
-                    $taskName
+                    (int)$def['complete_first_n_tasks']
                 ));
+                foreach ($taskIds as $tid) {
+                    $wpdb->query($wpdb->prepare(
+                        "UPDATE $taskTable SET is_completed = 1 WHERE id = %d",
+                        (int)$tid
+                    ));
+                }
             }
 
             $enrichedCount++;
@@ -3175,8 +3941,9 @@ final class DemoSeedService
         $closedTickets = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE status IN ('resolved','closed') ORDER BY id ASC LIMIT 3");
         // Active tickets that had SLA issues (for amber history on open items)
         $openTickets = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE status NOT IN ('resolved','closed') ORDER BY id ASC LIMIT 5");
-        // Projects
-        $projIds = $wpdb->get_col("SELECT id FROM $projectsTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3");
+        // Projects — fetch up to 4 with start_date for journey timeline seeding
+        $projRows = $wpdb->get_results("SELECT id, start_date, end_date FROM $projectsTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 4");
+        $projIds = array_map(fn($r) => (string)$r->id, $projRows);
 
         $count = 0;
 
@@ -3262,46 +4029,272 @@ final class DemoSeedService
             $count++;
         }
 
-        // Projects: Acme project was amber (at risk)
-        if (isset($projIds[1])) {
+        // ─── Project Journey Timeline Events (temporally spread) ───
+        // Helper to insert a journey event with seed_key idempotency
+        $insertJourneyEvent = function (string $projId, string $eventType, string $title, string $summary, array $metadata, string $eventDate) use ($wpdb, $feedTable, $seedRunId, &$count) {
+            $seedKey = $metadata['seed_key'] ?? null;
+            if ($seedKey) {
+                $exists = (int)$wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM $feedTable WHERE metadata_json LIKE %s",
+                    '%"seed_key":"' . $seedKey . '"%'
+                ));
+                if ($exists > 0) return; // already seeded
+            }
             $wpdb->insert($feedTable, [
                 'id' => $this->uuid(),
-                'event_type' => 'project.health_amber',
+                'event_type' => $eventType,
                 'source_engine' => 'delivery',
-                'source_entity_id' => (string)$projIds[1],
+                'source_entity_id' => $projId,
                 'classification' => 'critical',
-                'title' => 'Project At Risk',
-                'summary' => 'Acme project flagged as at risk due to burn rate',
-                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
+                'title' => $title,
+                'summary' => $summary,
+                'metadata_json' => json_encode(array_merge($metadata, ['seed' => true]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
                 'audience_scope' => 'global',
                 'audience_reference_id' => null,
                 'pinned_flag' => 0,
                 'expires_at' => null,
-                'created_at' => $seededAt,
+                'created_at' => $eventDate,
             ]);
-            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
+            $this->registryAdd($seedRunId, $feedTable, (string)$wpdb->insert_id);
             $count++;
+        };
 
-            $wpdb->insert($feedTable, [
-                'id' => $this->uuid(),
-                'event_type' => 'project.health_red',
-                'source_engine' => 'delivery',
-                'source_entity_id' => (string)$projIds[1],
-                'classification' => 'critical',
-                'title' => 'Project Critical',
-                'summary' => 'Acme project went over budget',
-                'metadata_json' => json_encode(['seed' => true, 'uhb_history' => true]),
-                'audience_scope' => 'global',
-                'audience_reference_id' => null,
-                'pinned_flag' => 0,
-                'expires_at' => null,
-                'created_at' => $seededAt,
-            ]);
-            $this->registryAdd($seedRunId, $feedTable, (string)$this->wpdb->insert_id);
-            $count++;
+        // Helper to compute a date offset from a project's start_date
+        $dateOffset = function (string $startDate, int $days): string {
+            return (new \DateTimeImmutable($startDate))->modify("+{$days} days")->format('Y-m-d H:i:s');
+        };
+
+        // Scenario A — "Rocky Recovery" (projRows[0]): green→amber→red→green→amber→green
+        if (isset($projRows[0]) && $projRows[0]->start_date) {
+            $pid = (string)$projRows[0]->id;
+            $sd = $projRows[0]->start_date;
+            $insertJourneyEvent($pid, 'project.health_amber', 'Project At Risk',
+                'AT RISK — burn rate 83%, progress only 35%',
+                ['reason_codes' => ['AT_RISK'], 'burn_pct' => 83, 'progress_pct' => 35, 'seed_key' => 'proj0_day18_amber'],
+                $dateOffset($sd, 18));
+            $insertJourneyEvent($pid, 'project.health_red', 'Project Critical',
+                'OVER BUDGET — 210h used / 200h sold',
+                ['reason_codes' => ['OVER_BUDGET'], 'burn_pct' => 105, 'progress_pct' => 45, 'hours_used' => 210, 'sold_hours' => 200, 'seed_key' => 'proj0_day25_red'],
+                $dateOffset($sd, 25));
+            $insertJourneyEvent($pid, 'project.health_green', 'Project Healthy',
+                'Budget extended to 250h, additional resource assigned',
+                ['reason_codes' => [], 'burn_pct' => 68, 'progress_pct' => 50, 'hours_used' => 210, 'sold_hours' => 250, 'seed_key' => 'proj0_day30_green'],
+                $dateOffset($sd, 30));
+            $insertJourneyEvent($pid, 'project.health_amber', 'Project At Risk',
+                'AT RISK — deadline approaching, tasks behind schedule',
+                ['reason_codes' => ['AT_RISK'], 'burn_pct' => 82, 'progress_pct' => 65, 'seed_key' => 'proj0_day45_amber'],
+                $dateOffset($sd, 45));
+            $insertJourneyEvent($pid, 'project.health_green', 'Project Healthy',
+                'Back on track — catch-up sprint completed',
+                ['reason_codes' => [], 'burn_pct' => 88, 'progress_pct' => 85, 'seed_key' => 'proj0_day50_green'],
+                $dateOffset($sd, 50));
+        }
+
+        // Scenario B — "Smooth Delivery" (projRows[1]): no events at all
+        // (implicitly green throughout — nothing to insert)
+
+        // Scenario C — "Full Recovery" (projRows[2]): green→amber→red→green
+        if (isset($projRows[2]) && $projRows[2]->start_date) {
+            $pid = (string)$projRows[2]->id;
+            $sd = $projRows[2]->start_date;
+            $insertJourneyEvent($pid, 'project.health_amber', 'Project At Risk',
+                'AT RISK — burn rate 72%, migration blocked by infra delay',
+                ['reason_codes' => ['AT_RISK'], 'burn_pct' => 72, 'progress_pct' => 15, 'seed_key' => 'proj2_day12_amber'],
+                $dateOffset($sd, 12));
+            $insertJourneyEvent($pid, 'project.health_red', 'Project Critical',
+                'CRITICAL — vendor API outage stalled data migration',
+                ['reason_codes' => ['BLOCKED'], 'burn_pct' => 88, 'progress_pct' => 22, 'seed_key' => 'proj2_day19_red'],
+                $dateOffset($sd, 19));
+            $insertJourneyEvent($pid, 'project.health_green', 'Project Healthy',
+                'Vendor issue resolved, extra resource added, back on track',
+                ['reason_codes' => [], 'burn_pct' => 49, 'progress_pct' => 33, 'seed_key' => 'proj2_day26_green'],
+                $dateOffset($sd, 26));
+        }
+
+        // Scenario D — "Managed Risk" (projRows[3]): green→amber→green (no red)
+        if (isset($projRows[3]) && $projRows[3]->start_date) {
+            $pid = (string)$projRows[3]->id;
+            $sd = $projRows[3]->start_date;
+            $insertJourneyEvent($pid, 'project.health_amber', 'Project At Risk',
+                'AT RISK — burn rate 82%, progress 35%',
+                ['reason_codes' => ['AT_RISK'], 'burn_pct' => 82, 'progress_pct' => 35, 'seed_key' => 'proj3_day15_amber'],
+                $dateOffset($sd, 15));
+            $insertJourneyEvent($pid, 'project.health_green', 'Project Healthy',
+                'Risk mitigated — scope adjusted, back on track',
+                ['reason_codes' => [], 'burn_pct' => 70, 'progress_pct' => 50, 'seed_key' => 'proj3_day22_green'],
+                $dateOffset($sd, 22));
         }
 
         return ['health_events' => $count];
+    }
+
+    private function seedServiceTypes(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $table = $this->wpdb->prefix . 'pet_service_types';
+        $existing = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $table");
+        if ($existing > 0) {
+            return ['service_types' => $existing, 'skipped' => true];
+        }
+
+        $types = [
+            ['Managed Support', 'Ongoing managed support operations and incident handling'],
+            ['Project Delivery', 'Project-based delivery work — scoped implementations'],
+            ['Consulting & Advisory', 'Strategic consulting, governance reviews, and advisory sessions'],
+            ['DevOps Engineering', 'CI/CD pipelines, infrastructure automation, and deployment'],
+            ['Training & Knowledge Transfer', 'On-site and remote training, workshops, documentation'],
+            ['Security Services', 'Security audits, penetration testing, compliance assessments'],
+            ['Cloud Infrastructure', 'Cloud architecture, migration, and infrastructure management'],
+            ['Emergency Response', 'After-hours critical incident response and recovery'],
+        ];
+        foreach ($types as [$name, $desc]) {
+            $this->wpdb->insert($table, [
+                'name' => $name,
+                'description' => $desc,
+                'status' => 'active',
+                'created_at' => $seededAt,
+                'updated_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $table, (string)$this->wpdb->insert_id);
+        }
+        return ['service_types' => count($types)];
+    }
+
+    private function seedRateCards(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $table = $this->wpdb->prefix . 'pet_rate_cards';
+        $existing = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $table");
+        if ($existing > 0) {
+            return ['rate_cards' => $existing, 'skipped' => true];
+        }
+
+        $rolesTable = $this->wpdb->prefix . 'pet_roles';
+        $stTable = $this->wpdb->prefix . 'pet_service_types';
+        $roleId = function (string $name): int {
+            return (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM {$this->wpdb->prefix}pet_roles WHERE name=%s LIMIT 1", $name
+            ));
+        };
+        $stId = function (string $name): int {
+            return (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM {$this->wpdb->prefix}pet_service_types WHERE name=%s LIMIT 1", $name
+            ));
+        };
+
+        // Global rate cards: [role, serviceType, sellRate]
+        $globals = [
+            ['Consultant', 'Consulting & Advisory', 200.0],
+            ['Consultant', 'Project Delivery', 180.0],
+            ['Consultant', 'Security Services', 210.0],
+            ['Consultant', 'Training & Knowledge Transfer', 190.0],
+            ['Support Technician', 'Managed Support', 150.0],
+            ['Support Technician', 'Emergency Response', 280.0],
+            ['Support Technician', 'Security Services', 160.0],
+            ['Project Manager', 'Project Delivery', 175.0],
+            ['Project Manager', 'Training & Knowledge Transfer', 170.0],
+            ['Project Manager', 'Cloud Infrastructure', 185.0],
+            ['Developer', 'Project Delivery', 170.0],
+            ['Developer', 'DevOps Engineering', 185.0],
+            ['Developer', 'Cloud Infrastructure', 180.0],
+            ['Developer', 'Security Services', 175.0],
+            ['DevOps Engineer', 'DevOps Engineering', 195.0],
+            ['DevOps Engineer', 'Cloud Infrastructure', 200.0],
+            ['DevOps Engineer', 'Managed Support', 160.0],
+            ['Security Analyst', 'Security Services', 220.0],
+            ['Security Analyst', 'Cloud Infrastructure', 190.0],
+            ['Security Analyst', 'Consulting & Advisory', 205.0],
+        ];
+        $count = 0;
+        foreach ($globals as [$roleName, $stName, $rate]) {
+            $rid = $roleId($roleName);
+            $sid = $stId($stName);
+            if ($rid > 0 && $sid > 0) {
+                $this->wpdb->insert($table, [
+                    'role_id' => $rid,
+                    'service_type_id' => $sid,
+                    'sell_rate' => $rate,
+                    'contract_id' => null,
+                    'valid_from' => null,
+                    'valid_to' => null,
+                    'status' => 'active',
+                    'created_at' => $seededAt,
+                    'updated_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $table, (string)$this->wpdb->insert_id);
+                $count++;
+            }
+        }
+
+        // Contract-specific rate cards (discounted) for Q1 and Q5 contracts
+        $contractsTable = $this->wpdb->prefix . 'pet_contracts';
+        $quotesTable = $this->wpdb->prefix . 'pet_quotes';
+        $q1Id = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title=%s ORDER BY id DESC LIMIT 1", 'Q1 Website Implementation & Advisory'));
+        $q5Id = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title=%s ORDER BY id DESC LIMIT 1", 'Q5 Cloud Migration & Managed Services'));
+        $q1Contract = $q1Id > 0 ? (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $contractsTable WHERE quote_id=%d ORDER BY id DESC LIMIT 1", $q1Id)) : 0;
+        $q5Contract = $q5Id > 0 ? (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $contractsTable WHERE quote_id=%d ORDER BY id DESC LIMIT 1", $q5Id)) : 0;
+
+        $contractCards = [];
+        if ($q1Contract > 0) {
+            $contractCards[] = [$roleId('Consultant'), $stId('Consulting & Advisory'), 185.0, $q1Contract];
+        }
+        if ($q5Contract > 0) {
+            $contractCards[] = [$roleId('DevOps Engineer'), $stId('Cloud Infrastructure'), 180.0, $q5Contract];
+        }
+        foreach ($contractCards as [$rid, $sid, $rate, $cid]) {
+            if ($rid > 0 && $sid > 0) {
+                $this->wpdb->insert($table, [
+                    'role_id' => $rid,
+                    'service_type_id' => $sid,
+                    'sell_rate' => $rate,
+                    'contract_id' => $cid,
+                    'valid_from' => null,
+                    'valid_to' => null,
+                    'status' => 'active',
+                    'created_at' => $seededAt,
+                    'updated_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $table, (string)$this->wpdb->insert_id);
+                $count++;
+            }
+        }
+
+        return ['rate_cards' => $count];
+    }
+
+    private function seedCatalogProducts(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $table = $this->wpdb->prefix . 'pet_catalog_products';
+        $existing = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $table");
+        if ($existing > 0) {
+            return ['catalog_products' => $existing, 'skipped' => true];
+        }
+
+        $products = [
+            ['HW-LAPTOP-001', 'Laptop Workstation', 15000.0, 10000.0, 'Business-grade laptop workstation', 'Hardware'],
+            ['HW-MON-001', 'External Monitor 27"', 5500.0, 3500.0, '27-inch 4K external display', 'Hardware'],
+            ['SW-O365-001', 'Office 365 License', 250.0, 180.0, 'Annual Office 365 Business license', 'Software'],
+            ['SW-SEC-001', 'Security Suite License', 450.0, 200.0, 'Enterprise endpoint security suite', 'Software'],
+            ['HW-DOCK-001', 'Docking Station', 3200.0, 2100.0, 'USB-C thunderbolt docking station', 'Hardware'],
+            ['HW-BACKUP-001', 'Cloud Backup Appliance', 8500.0, 5500.0, 'On-premises backup appliance with cloud sync', 'Hardware'],
+            ['SW-PM-001', 'Project Management SaaS', 150.0, 100.0, 'Annual project management tool license', 'Software'],
+            ['INFRA-SW-001', 'Network Switch', 4200.0, 2800.0, '48-port managed network switch', 'Infrastructure'],
+            ['INFRA-FW-001', 'Firewall Appliance', 12000.0, 7500.0, 'Enterprise next-gen firewall', 'Infrastructure'],
+            ['INFRA-UPS-001', 'UPS System', 6500.0, 4200.0, 'Rack-mounted UPS for server room', 'Infrastructure'],
+        ];
+        foreach ($products as [$sku, $name, $price, $cost, $desc, $cat]) {
+            $this->wpdb->insert($table, [
+                'sku' => $sku,
+                'name' => $name,
+                'unit_price' => $price,
+                'unit_cost' => $cost,
+                'description' => $desc,
+                'category' => $cat,
+                'status' => 'active',
+                'created_at' => $seededAt,
+                'updated_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $table, (string)$this->wpdb->insert_id);
+        }
+        return ['catalog_products' => count($products)];
     }
 
     private function uuid(): string

@@ -8,12 +8,17 @@ This specifies how quote “cards” become tickets and then projects, with immu
 
 ## Entities (conceptual)
 
-- **CatalogItem** (GOODS or LABOUR)
+- **CatalogProduct** (products only — hardware, licenses, subscriptions)
+- **Role** (competency + `base_internal_rate` for internal cost)
+- **ServiceType** (classification of labour — Consulting, Support, Training, etc.)
+- **RateCard** (sell pricing per role + service type + optional contract)
 - **Quote** (versioned, accepted immutable)
-- **QuoteLine / QuoteTask** (snapshot of catalog-derived terms)
+- **QuoteLine / QuoteTask** (snapshot of product catalog or role + rate card economics)
 - **Ticket** (draft quote ticket, baseline ticket, execution ticket)
 - **Project** (container for execution tickets)
 - **Phase** (grouping / payment schedule anchor)
+
+> See `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md` for authoritative entity definitions.
 
 ## Draft quote building
 
@@ -21,8 +26,8 @@ This specifies how quote “cards” become tickets and then projects, with immu
 
 When user adds labour to a quote:
 
-1. Select from Services/Labour catalog (or “no template” → manual).
-2. Create a **draft QuoteTask** record (existing table acceptable).
+1. Select a **Role** and **ServiceType**. System resolves the applicable **RateCard** to determine sell rate. `base_internal_rate` is sourced from the Role.
+2. Create a **draft QuoteTask** record with snapshotted `base_internal_rate`, `sell_rate`, `service_type_id`, and `rate_card_id`.
 3. Create a **draft Ticket** in `wp_pet_tickets` with:
    - `quote_id` = current quote
    - `primary_container` = 'project' OR 'support'?? (normative: 'project' for delivery work)
@@ -94,8 +99,11 @@ No schedule item may reference mutable execution-only artifacts without a baseli
 
 ```mermaid
 flowchart LR
-  C[Catalog (GOODS/LABOUR)] --> Q[Quote Draft]
-  Q -->|Add labour| QT[QuoteTask snapshot]
+  CP[CatalogProduct] --> Q[Quote Draft]
+  R[Role + ServiceType] --> RC[RateCard Resolution]
+  RC --> QT[QuoteTask snapshot]
+  Q -->|Add product| QPL[QuoteProductLine]
+  Q -->|Add labour| QT
   QT --> DT[Draft Ticket (quote_id)]
   Q -->|Accept| QA[Quote Accepted (immutable)]
   QA --> BT[Baseline Tickets (locked)]

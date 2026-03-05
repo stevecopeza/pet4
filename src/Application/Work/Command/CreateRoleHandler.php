@@ -34,7 +34,10 @@ class CreateRoleHandler
             null, // id
             1,    // version
             'draft',
-            $command->requiredSkills()
+            $command->requiredSkills(),
+            null, // createdAt
+            null, // publishedAt
+            $command->baseInternalRate()
         );
 
         $this->roleRepository->save($role);

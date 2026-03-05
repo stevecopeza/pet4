@@ -21,6 +21,9 @@ composer.phar
 # Environment
 .env
 
+# Test cache
+.phpunit.result.cache
+
 # Playwright
 .auth/
 playwright-report/

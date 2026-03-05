@@ -1,8 +1,11 @@
-STATUS: AUTHORITATIVE — IMPLEMENTATION REQUIRED
+STATUS: SUPERSEDED
 SCOPE: Ticket Backbone Correction
 VERSION: v1
+SUPERSEDED BY: 07_Products_Roles_ServiceTypes_and_RateCards_v2.md
 
 # Catalog, Roles, Rates, and Snapshots (v1)
+
+> **⚠️ SUPERSEDED** — This document has been replaced by [Products, Roles, Service Types, and Rate Cards (v2)](07_Products_Roles_ServiceTypes_and_RateCards_v2.md). The single-catalog GOODS/LABOUR model described here is no longer the target architecture. Products are now in a dedicated `CatalogProduct` entity; labour economics are modelled via Role (internal cost), ServiceType (classification), and RateCard (sell pricing). See v2 for the authoritative specification.
 
 ## Typed catalog requirement
 

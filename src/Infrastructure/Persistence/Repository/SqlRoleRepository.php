@@ -29,11 +29,12 @@ class SqlRoleRepository implements RoleRepository
             'level' => $role->level(),
             'description' => $role->description(),
             'success_criteria' => $role->successCriteria(),
+            'base_internal_rate' => $role->baseInternalRate(),
             'created_at' => $role->createdAt()->format('Y-m-d H:i:s'),
             'published_at' => $role->publishedAt() ? $role->publishedAt()->format('Y-m-d H:i:s') : null,
         ];
 
-        $format = ['%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s'];
+        $format = ['%s', '%d', '%s', '%s', '%s', '%s', '%f', '%s', '%s'];
 
         if ($role->id()) {
             $this->wpdb->update(
@@ -133,7 +134,8 @@ class SqlRoleRepository implements RoleRepository
             $row->status,
             $requiredSkills,
             new \DateTimeImmutable($row->created_at),
-            $row->published_at ? new \DateTimeImmutable($row->published_at) : null
+            $row->published_at ? new \DateTimeImmutable($row->published_at) : null,
+            isset($row->base_internal_rate) && $row->base_internal_rate !== null ? (float) $row->base_internal_rate : null
         );
     }
 

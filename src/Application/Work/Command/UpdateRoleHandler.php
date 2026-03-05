@@ -37,7 +37,8 @@ class UpdateRoleHandler
             $command->level(),
             $command->description(),
             $command->successCriteria(),
-            $command->requiredSkills()
+            $command->requiredSkills(),
+            $command->baseInternalRate()
         );
 
         $this->roleRepository->save($role);

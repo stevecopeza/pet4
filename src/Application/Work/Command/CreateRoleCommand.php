@@ -11,19 +11,22 @@ class CreateRoleCommand
     private string $description;
     private string $successCriteria;
     private array $requiredSkills;
+    private ?float $baseInternalRate;
 
     public function __construct(
         string $name,
         string $level,
         string $description,
         string $successCriteria,
-        array $requiredSkills = []
+        array $requiredSkills = [],
+        ?float $baseInternalRate = null
     ) {
         $this->name = $name;
         $this->level = $level;
         $this->description = $description;
         $this->successCriteria = $successCriteria;
         $this->requiredSkills = $requiredSkills;
+        $this->baseInternalRate = $baseInternalRate;
     }
 
     public function name(): string
@@ -49,5 +52,10 @@ class CreateRoleCommand
     public function requiredSkills(): array
     {
         return $this->requiredSkills;
+    }
+
+    public function baseInternalRate(): ?float
+    {
+        return $this->baseInternalRate;
     }
 }

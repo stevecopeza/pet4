@@ -41,6 +41,19 @@ class CatalogItemController implements RestController
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)', [
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => [$this, 'updateItem'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => [$this, 'deleteItem'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
     }
 
     public function getItems(WP_REST_Request $request): WP_REST_Response
@@ -68,12 +81,24 @@ class CatalogItemController implements RestController
     {
         $params = $request->get_json_params();
 
+        // Duplicate SKU check
+        $sku = $params['sku'] ?? null;
+        if ($sku !== null && $sku !== '') {
+            $existing = $this->repository->findBySku($sku);
+            if ($existing !== null) {
+                return new WP_REST_Response(
+                    ['error' => "A catalog item with SKU \"$sku\" already exists."],
+                    409
+                );
+            }
+        }
+
         try {
             $command = new CreateCatalogItemCommand(
                 $params['name'],
                 (float) $params['unit_price'],
                 (float) ($params['unit_cost'] ?? 0.0),
-                $params['sku'] ?? null,
+                $sku,
                 $params['description'] ?? null,
                 $params['category'] ?? null,
                 $params['type'] ?? 'product',
@@ -83,6 +108,78 @@ class CatalogItemController implements RestController
             $this->createHandler->handle($command);
 
             return new WP_REST_Response(['status' => 'created'], 201);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function updateItem(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+        $params = $request->get_json_params();
+
+        try {
+            $existing = $this->repository->findById($id);
+            if (!$existing) {
+                return new WP_REST_Response(['error' => 'Catalog item not found.'], 404);
+            }
+
+            // Duplicate SKU check (exclude self)
+            $sku = $params['sku'] ?? $existing->sku();
+            if ($sku !== null && $sku !== '') {
+                $skuMatch = $this->repository->findBySku($sku);
+                if ($skuMatch !== null && $skuMatch->id() !== $id) {
+                    return new WP_REST_Response(
+                        ['error' => "A catalog item with SKU \"$sku\" already exists."],
+                        409
+                    );
+                }
+            }
+
+            $item = new \Pet\Domain\Commercial\Entity\CatalogItem(
+                $params['name'] ?? $existing->name(),
+                (float) ($params['unit_price'] ?? $existing->unitPrice()),
+                (float) ($params['unit_cost'] ?? $existing->unitCost()),
+                $params['type'] ?? $existing->type(),
+                $sku,
+                array_key_exists('description', $params) ? $params['description'] : $existing->description(),
+                array_key_exists('category', $params) ? $params['category'] : $existing->category(),
+                $params['wbs_template'] ?? $existing->wbsTemplate(),
+                $id,
+                $existing->createdAt()
+            );
+
+            $this->repository->save($item);
+
+            return new WP_REST_Response([
+                'id' => $item->id(),
+                'sku' => $item->sku(),
+                'name' => $item->name(),
+                'type' => $item->type(),
+                'description' => $item->description(),
+                'category' => $item->category(),
+                'wbs_template' => $item->wbsTemplate(),
+                'unit_price' => $item->unitPrice(),
+                'unit_cost' => $item->unitCost(),
+            ], 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    public function deleteItem(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+
+        try {
+            $existing = $this->repository->findById($id);
+            if (!$existing) {
+                return new WP_REST_Response(['error' => 'Catalog item not found.'], 404);
+            }
+
+            $this->repository->delete($id);
+
+            return new WP_REST_Response(['status' => 'deleted'], 200);
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }

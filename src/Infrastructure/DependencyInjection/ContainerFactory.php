@@ -193,6 +193,35 @@ class ContainerFactory
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlQuoteSectionRepository($wpdb);
             },
+            \Pet\Domain\Commercial\Repository\ServiceTypeRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlServiceTypeRepository($wpdb);
+            },
+            \Pet\Infrastructure\Persistence\Repository\SqlServiceTypeRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlServiceTypeRepository($wpdb);
+            },
+            \Pet\Domain\Commercial\Repository\RateCardRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlRateCardRepository($wpdb);
+            },
+            \Pet\Infrastructure\Persistence\Repository\SqlRateCardRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlRateCardRepository($wpdb);
+            },
+            \Pet\Domain\Commercial\Repository\CatalogProductRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlCatalogProductRepository($wpdb);
+            },
+            \Pet\Infrastructure\Persistence\Repository\SqlCatalogProductRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlCatalogProductRepository($wpdb);
+            },
+            \Pet\Application\Commercial\Service\RateCardResolver::class => function (\Psr\Container\ContainerInterface $c) {
+                return new \Pet\Application\Commercial\Service\RateCardResolver(
+                    $c->get(\Pet\Domain\Commercial\Repository\RateCardRepository::class)
+                );
+            },
             
             \Pet\Domain\Time\Repository\TimeEntryRepository::class => function () {
                 global $wpdb;
@@ -374,6 +403,9 @@ class ContainerFactory
                 return new \Pet\Infrastructure\Persistence\Repository\SqlQuoteBlockRepository($wpdb);
             },
 
+            // Application Services
+            \Pet\Application\Delivery\Service\ProjectHealthTransitionEmitter::class => \DI\autowire(\Pet\Application\Delivery\Service\ProjectHealthTransitionEmitter::class),
+
             // Application Handlers
             \Pet\Application\Delivery\Command\CreateProjectHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\CreateProjectHandler::class),
             \Pet\Application\Delivery\Command\AddTaskHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\AddTaskHandler::class),
@@ -417,6 +449,20 @@ class ContainerFactory
             \Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class),
             \Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class),
             \Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class),
+            \Pet\Application\Commercial\Command\CreateServiceTypeHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateServiceTypeHandler::class),
+            \Pet\Application\Commercial\Command\UpdateServiceTypeHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateServiceTypeHandler::class),
+            \Pet\Application\Commercial\Command\ArchiveServiceTypeHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ArchiveServiceTypeHandler::class),
+            \Pet\Application\Commercial\Command\CreateRateCardHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateRateCardHandler::class),
+            \Pet\Application\Commercial\Command\ArchiveRateCardHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ArchiveRateCardHandler::class),
+            \Pet\Application\Commercial\Command\ResolveRateCardHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ResolveRateCardHandler::class),
+            \Pet\Application\Commercial\Command\CreateCatalogProductHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateCatalogProductHandler::class),
+            \Pet\Application\Commercial\Command\UpdateCatalogProductHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateCatalogProductHandler::class),
+            \Pet\Application\Commercial\Command\ArchiveCatalogProductHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ArchiveCatalogProductHandler::class),
+
+            \Pet\Domain\Work\Repository\RoleTeamRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlRoleTeamRepository($wpdb);
+            },
 
             \Pet\Application\Team\Command\CreateTeamHandler::class => \DI\autowire(\Pet\Application\Team\Command\CreateTeamHandler::class),
             \Pet\Application\Team\Command\UpdateTeamHandler::class => \DI\autowire(\Pet\Application\Team\Command\UpdateTeamHandler::class),
@@ -533,6 +579,9 @@ class ContainerFactory
             \Pet\Application\Integration\Pulseway\Service\PulsewayTicketCreationService::class => \DI\autowire(\Pet\Application\Integration\Pulseway\Service\PulsewayTicketCreationService::class),
             \Pet\UI\Rest\Controller\PulsewayController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\HealthHistoryController::class => \DI\create(\Pet\UI\Rest\Controller\HealthHistoryController::class),
+            \Pet\UI\Rest\Controller\ServiceTypeController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\RateCardController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\CatalogProductController::class => \DI\autowire(),
         ];
     }
 }

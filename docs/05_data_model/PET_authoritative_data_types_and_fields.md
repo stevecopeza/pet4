@@ -34,9 +34,12 @@ Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commer
 | ``quote_number`` | (varchar 50, unique) |
 | `title` | varchar 255, required |
 | `description` | text, required |
+| `contract_id` | BIGINT, FK → contracts, nullable (NEW — rate card resolution context) |
 | `updated_at` | datetime |
 
-Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_quote_schema.md`
+Quote `contract_id` is set at quote creation. If non-null, rate card resolution tries contract-specific cards first, then global fallback. If null, only global rate cards are considered.
+
+Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_quote_schema.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `quote_components`
 
@@ -87,22 +90,24 @@ Sources: `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`
 
 | Field | Type / Notes |
 |---|---|
-| `internal_cost_snapshot` | decimal 14,2 |
 | `id` | UUID, PK |
-| `title` | varchar 255 |
-| `Internal` | cost ceiling derived at sale. |
-| `duration_hours` | decimal 8,2 |
-| `description` | text |
-| `role_catalog_item_id` | UUID, FK |
-| `base_rate_snapshot` | decimal 12,2 |
-| `sell_value_snapshot` | decimal 14,2 |
-| `sequence` | int |
-| `All` | rate values snapshotted. |
-| `sell_rate_snapshot` | decimal 12,2 |
 | `milestone_id` | UUID, FK |
-| ``department_snapshot`` | (varchar 255) |
+| `title` | varchar 255 |
+| `description` | text |
+| `duration_hours` | decimal 8,2 |
+| `role_id` | BIGINT, FK → pet_roles |
+| `service_type_id` | BIGINT, FK → pet_service_types (NEW) |
+| `rate_card_id` | BIGINT, FK → pet_rate_cards, nullable (NEW — provenance) |
+| `base_internal_rate` | decimal 12,2 (snapshot from Role) |
+| `sell_rate` | decimal 12,2 (snapshot from RateCard) |
+| `internal_cost_snapshot` | decimal 14,2 (derived: duration_hours × base_internal_rate) |
+| `sell_value_snapshot` | decimal 14,2 (derived: duration_hours × sell_rate) |
+| `sequence` | int |
+| `department_snapshot` | varchar 255 |
 
-Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`
+All rate values snapshotted at line creation. Internal cost ceiling derived at sale. `role_catalog_item_id` renamed to `role_id`; now references `pet_roles` directly. `service_type_id` and `rate_card_id` are new fields for the refactored model.
+
+Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `quote_recurring_services`
 
@@ -222,19 +227,64 @@ Sources: `05_data_model/docs_05_data_model_payment_plan_schema.md`
 
 ### `service_catalog_items`
 
+> **⚠️ SUPERSEDED** — This entity has been removed. Service economics are now modelled via `pet_roles` (internal cost), `pet_service_types` (classification), and `pet_rate_cards` (sell pricing). See `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`.
+
+_Table retained for legacy read access only. No new rows should be created._
+
+Sources: `05_data_model/docs_05_data_model_service_catalog_schema.md` (historical)
+
+### `pet_catalog_products` (NEW)
+
 | Field | Type / Notes |
 |---|---|
-| `id` | UUID, PK |
-| `name` | varchar 255, required |
-| `department_id` | UUID, FK, required |
-| `base_internal_rate` | decimal 12,2, required |
-| `recommended_sell_rate` | decimal 12,2, required |
-| `skill_level_id` | UUID, FK, optional |
-| `status` | enum: active, archived |
-| `created_at` | datetime |
-| `updated_at` | datetime |
+| `id` | BIGINT, PK, auto-increment |
+| `sku` | VARCHAR(50), nullable, unique when non-null |
+| `name` | VARCHAR(255), required |
+| `description` | TEXT, nullable |
+| `category` | VARCHAR(100), nullable |
+| `unit_price` | DECIMAL(14,2), required |
+| `unit_cost` | DECIMAL(14,2), required |
+| `status` | ENUM('active', 'archived'), default 'active' |
+| `created_at` | DATETIME, immutable |
+| `updated_at` | DATETIME |
 
-Sources: `05_data_model/docs_05_data_model_service_catalog_schema.md`
+Products only — no labour/service items. Replaces product-type rows from `pet_catalog_items`.
+
+Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+
+### `pet_service_types` (NEW)
+
+| Field | Type / Notes |
+|---|---|
+| `id` | BIGINT, PK, auto-increment |
+| `name` | VARCHAR(255), required, unique |
+| `description` | TEXT, nullable |
+| `status` | ENUM('active', 'archived'), default 'active' |
+| `created_at` | DATETIME, immutable |
+| `updated_at` | DATETIME |
+
+Classification of labour categories (Consulting, Support, Training, etc.).
+
+Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+
+### `pet_rate_cards` (NEW)
+
+| Field | Type / Notes |
+|---|---|
+| `id` | BIGINT, PK, auto-increment |
+| `role_id` | BIGINT, FK → pet_roles, required |
+| `service_type_id` | BIGINT, FK → pet_service_types, required |
+| `sell_rate` | DECIMAL(12,2), required |
+| `contract_id` | BIGINT, FK → contracts, nullable (null = global rate) |
+| `valid_from` | DATE, nullable (null = open start) |
+| `valid_to` | DATE, nullable (null = open end / no expiry) |
+| `status` | ENUM('active', 'archived'), default 'active' |
+| `created_at` | DATETIME, immutable |
+| `updated_at` | DATETIME |
+
+Composite index on `(role_id, service_type_id, contract_id, valid_from)`. No overlapping date ranges per tuple.
+
+Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 
 ---
@@ -290,10 +340,13 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `level` | VARCHAR |
 | `description` | TEXT |
 | `success_criteria` | TEXT |
+| `base_internal_rate` | DECIMAL(12,2), NULL (required for published roles) |
 | `created_at` | DATETIME |
 | `published_at` | DATETIME, NULL |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+`base_internal_rate` represents the hourly internal cost of a person in this role. Must be > 0 for published roles. Roles do NOT carry sell rates.
+
+Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `pet_role_skills`
 

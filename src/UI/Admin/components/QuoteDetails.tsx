@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Quote, QuoteBlock, QuoteSection, Employee, Team, Customer } from '../types';
+import { computeQuoteTotals, isQuoteLevelAdjustmentSection, sortSections, generateLocalId, getBaseBlockValue } from '../utils/quoteTotals';
+import MarkdownTextarea from './MarkdownTextarea';
+import BlockRow, { BlockRowCallbacks } from './BlockRow';
+import ServiceBlockEditor from './ServiceBlockEditor';
+import ProjectBlockEditor, { computeProjectSummary } from './ProjectBlockEditor';
 
 const flattenTeams = (nodes: Team[]): Team[] => {
   let flat: Team[] = [];
@@ -17,321 +22,39 @@ import ConversationPanel from './ConversationPanel';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import { computeQuoteHealth } from '../healthCompute';
 
-interface MarkdownTextareaProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-const MarkdownTextarea: React.FC<MarkdownTextareaProps> = ({ value, onChange }) => {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const applyWrap = (marker: string, placeholder: string) => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const selected = value.slice(start, end) || placeholder;
-    const wrapped = `${marker}${selected}${marker}`;
-    const next =
-      value.slice(0, start) + wrapped + value.slice(end);
-    onChange(next);
-    const selectionStart = start + marker.length;
-    const selectionEnd = selectionStart + selected.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  };
-
-  const applyList = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const before = value.slice(0, start);
-    const selected = value.slice(start, end);
-    const after = value.slice(end);
-    const text = selected || 'List item';
-    const lines = text.split('\n').map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return '- ';
-      if (trimmed.startsWith('- ')) return trimmed;
-      return `- ${trimmed}`;
-    });
-    const block = lines.join('\n');
-    const next = before + block + after;
-    onChange(next);
-    const selectionStart = before.length;
-    const selectionEnd = selectionStart + block.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  };
-
-  const applyHeading = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const before = value.slice(0, start);
-    const selected = value.slice(start, end) || 'Heading';
-    const after = value.slice(end);
-    const prefix = '# ';
-    const block = `${prefix}${selected}`;
-    const next = before + block + after;
-    onChange(next);
-    const selectionStart = before.length + prefix.length;
-    const selectionEnd = selectionStart + selected.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  };
-
-  const applyQuote = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const before = value.slice(0, start);
-    const selected = value.slice(start, end) || 'Quoted text';
-    const after = value.slice(end);
-    const lines = selected.split('\n').map((line) => `> ${line || ''}`);
-    const block = lines.join('\n');
-    const next = before + block + after;
-    onChange(next);
-    const selectionStart = before.length + 2;
-    const selectionEnd = selectionStart + selected.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  };
-
-  const applyLink = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? start;
-    const selected = value.slice(start, end) || 'link text';
-    const block = `[${selected}](https://example.com)`;
-    const next = value.slice(0, start) + block + value.slice(end);
-    onChange(next);
-    const selectionStart = start + 1;
-    const selectionEnd = selectionStart + selected.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(selectionStart, selectionEnd);
-    });
-  };
-
-  return (
-    <div>
-      <div
-        style={{
-          marginBottom: '6px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '4px',
-          alignItems: 'center',
-        }}
-      >
-        <button
-          type="button"
-          className="button button-small"
-          title="Bold"
-          aria-label="Bold"
-          onClick={() => applyWrap('**', 'bold text')}
-        >
-          B
-        </button>
-        <button
-          type="button"
-          className="button button-small"
-          title="Italic"
-          aria-label="Italic"
-          onClick={() => applyWrap('_', 'italic text')}
-        >
-          I
-        </button>
-        <button
-          type="button"
-          className="button button-small"
-          title="Heading"
-          aria-label="Heading"
-          onClick={applyHeading}
-        >
-          H
-        </button>
-        <button
-          type="button"
-          className="button button-small"
-          title="Bulleted list"
-          aria-label="Bulleted list"
-          onClick={applyList}
-        >
-          • List
-        </button>
-        <button
-          type="button"
-          className="button button-small"
-          title="Quote"
-          aria-label="Quote"
-          onClick={applyQuote}
-        >
-          “”
-        </button>
-        <button
-          type="button"
-          className="button button-small"
-          title="Link"
-          aria-label="Link"
-          onClick={applyLink}
-        >
-          Link
-        </button>
-        <span
-          style={{
-            fontSize: '11px',
-            color: '#666',
-            marginLeft: '6px',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Formatting: Markdown
-        </span>
-      </div>
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={6}
-        style={{ width: '100%' }}
-      />
-    </div>
-  );
-};
-
-const generateLocalId = () =>
-  `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-
-export const computeQuoteTotals = (
-  quote: Quote
-): { quoteTotal: number; sectionTotals: Record<number, number> } => {
-  const sections = (quote.sections || []).slice();
-  const blocks = (quote.blocks || []).slice();
-
-  const sectionTotals: Record<number, number> = {};
-  let rootPricedTotal = 0;
-  let quoteScopedAdjustmentsTotal = 0;
-
-  const getBaseBlockValue = (block: QuoteBlock): number => {
-    if (!block.priced) {
-      return 0;
+/** Returns true if a project block's draft differs from its server payload. */
+const isProjectBlockDirty = (draft: any, payload: any): boolean => {
+  if (!draft) return false;
+  const p = payload || {};
+  if ((draft.description ?? '') !== (p.description ?? '')) return true;
+  const dPhases = Array.isArray(draft.phases) ? draft.phases : [];
+  const pPhases = Array.isArray(p.phases) ? p.phases : [];
+  if (dPhases.length !== pPhases.length) return true;
+  for (let i = 0; i < dPhases.length; i++) {
+    const dp = dPhases[i];
+    const pp = pPhases[i];
+    if ((dp.name ?? '') !== (pp.name ?? '')) return true;
+    const dUnits = Array.isArray(dp.units) ? dp.units : [];
+    const pUnits = Array.isArray(pp.units) ? pp.units : [];
+    if (dUnits.length !== pUnits.length) return true;
+    for (let j = 0; j < dUnits.length; j++) {
+      const du = dUnits[j];
+      const pu = pUnits[j];
+      if ((du.description ?? '') !== (pu.description ?? '')) return true;
+      if (Number(du.quantity ?? 0) !== Number(pu.quantity ?? 0)) return true;
+      if ((du.unit ?? 'hours') !== (pu.unit ?? 'hours')) return true;
+      if (Number(du.unitPrice ?? 0) !== Number(pu.unitPrice ?? 0)) return true;
+      if ((du.roleId ?? null) !== (pu.roleId ?? null)) return true;
+      if ((du.ownerType ?? '') !== (pu.ownerType ?? '')) return true;
+      if ((du.ownerId ?? null) !== (pu.ownerId ?? null)) return true;
+      if ((du.teamId ?? null) !== (pu.teamId ?? null)) return true;
+      if ((du.catalogItemId ?? null) !== (pu.catalogItemId ?? null)) return true;
+      if (Boolean(du.price_override) !== Boolean(pu.price_override)) return true;
     }
-
-    const payload = block.payload || {};
-    const value =
-      typeof payload.totalValue === 'number'
-        ? payload.totalValue
-        : typeof payload.sellValue === 'number'
-        ? payload.sellValue
-        : 0;
-
-    return value;
-  };
-
-  sections.forEach((section) => {
-    const blocksInSection = blocks.filter(
-      (block) => block.sectionId === section.id
-    );
-
-    const nonAdjustmentBlocks = blocksInSection.filter(
-      (block) => block.type !== 'PriceAdjustmentBlock'
-    );
-
-    const hasNonAdjustmentBlocks = nonAdjustmentBlocks.some(
-      (block) => block.priced
-    );
-
-    const baseTotal = nonAdjustmentBlocks.reduce(
-      (sum, block) => sum + getBaseBlockValue(block),
-      0
-    );
-
-    let sectionAdjustmentTotal = 0;
-
-    blocksInSection.forEach((block) => {
-      if (block.type === 'PriceAdjustmentBlock') {
-        const payload = block.payload || {};
-        const rawAmount =
-          typeof payload.amount === 'number'
-            ? payload.amount
-            : typeof payload.amount === 'string'
-            ? parseFloat(payload.amount)
-            : 0;
-
-        const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
-
-        if (hasNonAdjustmentBlocks) {
-          sectionAdjustmentTotal += amount;
-        } else {
-          quoteScopedAdjustmentsTotal += amount;
-        }
-      }
-    });
-
-    sectionTotals[section.id] = baseTotal + sectionAdjustmentTotal;
-  });
-
-  const rootBlocks = blocks.filter((block) => block.sectionId === null);
-
-  rootBlocks.forEach((block) => {
-    if (block.type === 'PriceAdjustmentBlock') {
-      const payload = block.payload || {};
-      const rawAmount =
-        typeof payload.amount === 'number'
-          ? payload.amount
-          : typeof payload.amount === 'string'
-          ? parseFloat(payload.amount)
-          : 0;
-
-      const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
-
-      quoteScopedAdjustmentsTotal += amount;
-    } else {
-      rootPricedTotal += getBaseBlockValue(block);
-    }
-  });
-
-  const sectionsTotal = sections.reduce(
-    (sum, section) => sum + (sectionTotals[section.id] ?? 0),
-    0
-  );
-
-  const quoteTotal =
-    sectionsTotal + rootPricedTotal + quoteScopedAdjustmentsTotal;
-
-  return { quoteTotal, sectionTotals };
-};
-
-const isQuoteLevelAdjustmentSection = (
-  section: QuoteSection,
-  blocks: QuoteBlock[]
-): boolean => {
-  const blocksInSection = blocks.filter(
-    (block) => block.sectionId === section.id
-  );
-
-  if (blocksInSection.length === 0) {
-    return false;
   }
-
-  return blocksInSection.every(
-    (block) => block.type === 'PriceAdjustmentBlock'
-  );
+  return false;
 };
+
 
 interface QuoteDetailsProps {
   quoteId: number;
@@ -347,6 +70,14 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [roles, setRoles] = useState<{ id: number; name: string }[]>([]);
+  const [rateCards, setRateCards] = useState<{ id: number; role_id: number; service_type_id: number; sell_rate: number; status: string }[]>([]);
+  const [ownerOptionsCache, setOwnerOptionsCache] = useState<Record<number, {
+    recommended_teams: { id: number; name: string; is_primary?: boolean }[];
+    recommended_employees: { id: number; name: string }[];
+    other_teams: { id: number; name: string }[];
+    other_employees: { id: number; name: string }[];
+  }>>({});
   
   const [showTypeSelection, setShowTypeSelection] = useState(false);
   const [blockSectionIdForCreate, setBlockSectionIdForCreate] = useState<number | null>(null);
@@ -355,6 +86,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [expandedBlockId, setExpandedBlockId] = useState<number | null>(null);
   const [blockDrafts, setBlockDrafts] = useState<Record<number, any>>({});
   const [savingBlockId, setSavingBlockId] = useState<number | null>(null);
+  const [serverErrors, setServerErrors] = useState<Record<number, string>>({});
+  const [blockSnapshots, setBlockSnapshots] = useState<Record<number, Record<string, any>>>({});
   const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
   const [sectionDraftNames, setSectionDraftNames] = useState<Record<number, string>>({});
   const [activeSubjectKeys, setActiveSubjectKeys] = useState<Set<string>>(new Set());
@@ -370,24 +103,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [headerDraftDescription, setHeaderDraftDescription] = useState('');
 
   const blocksForRendering: QuoteBlock[] = (quote?.blocks || []).slice().sort((a, b) => a.orderIndex - b.orderIndex);
-  const sectionsForRendering: QuoteSection[] = (quote?.sections || [])
-    .slice()
-    .sort((a, b) => {
-      const aIsAdjustment = isQuoteLevelAdjustmentSection(
-        a,
-        blocksForRendering
-      );
-      const bIsAdjustment = isQuoteLevelAdjustmentSection(
-        b,
-        blocksForRendering
-      );
-
-      if (aIsAdjustment !== bIsAdjustment) {
-        return aIsAdjustment ? 1 : -1;
-      }
-
-      return a.orderIndex - b.orderIndex;
-    });
+  const sectionsForRendering: QuoteSection[] = sortSections(quote?.sections || [], blocksForRendering);
 
   const fetchSchema = async () => {
     try {
@@ -589,6 +305,61 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     }
   };
 
+  const fetchRoles = async () => {
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(`${apiUrl}/roles?status=published`, {
+        headers: { 'X-WP-Nonce': nonce },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(Array.isArray(data) ? data.map((r: any) => ({ id: r.id, name: r.name })) : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch roles', err);
+    }
+  };
+
+  const fetchRateCards = async () => {
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(`${apiUrl}/rate-cards`, {
+        headers: { 'X-WP-Nonce': nonce },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRateCards(Array.isArray(data) ? data.filter((rc: any) => rc.status === 'active') : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch rate cards', err);
+    }
+  };
+
+  const fetchOwnerOptions = async (roleId: number) => {
+    if (ownerOptionsCache[roleId]) return;
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(`${apiUrl}/roles/${roleId}/owner-options`, {
+        headers: { 'X-WP-Nonce': nonce },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOwnerOptionsCache(prev => ({ ...prev, [roleId]: data }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch owner options', err);
+    }
+  };
+
   const fetchActiveSubjects = async () => {
     try {
       // @ts-ignore
@@ -615,8 +386,38 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     fetchEmployees();
     fetchTeams();
     fetchCustomers();
+    fetchRoles();
+    fetchRateCards();
     fetchActiveSubjects();
   }, [quoteId]);
+
+  // Auto-initialize drafts for project blocks (always expanded)
+  useEffect(() => {
+    if (!quote?.blocks) return;
+    setBlockDrafts((prev) => {
+      let next = prev;
+      for (const block of (quote.blocks || [])) {
+        if (block.type !== 'OnceOffProjectBlock') continue;
+        if (next[block.id]) continue;
+        const p = block.payload || {};
+        if (next === prev) next = { ...prev };
+        next[block.id] = {
+          description: p.description ?? '',
+          quantity: p.quantity ?? 1,
+          sellValue: p.sellValue ?? p.totalValue ?? 0,
+          owner: p.owner ?? '',
+          team: p.team ?? '',
+          ownerType: p.ownerType ?? '',
+          ownerId: p.ownerId ?? null,
+          teamId: p.teamId ?? null,
+          totalValue: p.totalValue ?? p.sellValue ?? 0,
+          type: block.type,
+          phases: Array.isArray(p.phases) ? p.phases : [],
+        };
+      }
+      return next;
+    });
+  }, [quote?.blocks]);
 
   const handleAddPaymentSchedule = async () => {
     if (!quote) {
@@ -1211,8 +1012,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           payload.unit_price ??
           payload.sellValue ??
           0;
-      } else if (block.type === 'OnceOffSimpleServiceBlock') {
+    } else if (block.type === 'OnceOffSimpleServiceBlock') {
         draft.catalogItemId = payload.catalogItemId ?? null;
+        draft.roleId = payload.roleId ?? null;
+        draft.unit = payload.unit ?? 'hours';
+        draft.price_override = payload.price_override ?? false;
       } else if (block.type === 'OnceOffProjectBlock') {
         draft.phases = Array.isArray(payload.phases) ? payload.phases : [];
       }
@@ -1268,6 +1072,10 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         team: draft.team ?? '',
         catalogItemId:
           draft.catalogItemId !== undefined ? draft.catalogItemId : null,
+        roleId:
+          typeof draft.roleId === 'number' && Number.isFinite(draft.roleId)
+            ? draft.roleId
+            : null,
       };
     } else if (block.type === 'OnceOffProjectBlock') {
       const rawPhases = Array.isArray(draft.phases) ? draft.phases : [];
@@ -1315,6 +1123,10 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                 : null,
             owner: unit.owner ?? '',
             team: unit.team ?? '',
+            roleId:
+              typeof unit.roleId === 'number' && Number.isFinite(unit.roleId)
+                ? unit.roleId
+                : null,
           };
         });
 
@@ -1391,12 +1203,32 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error(message);
       }
 
+      // Store snapshot of previous payload before updating quote
+      setBlockSnapshots((prev) => ({
+        ...prev,
+        [block.id]: { ...(block.payload || {}) },
+      }));
+      setServerErrors((prev) => {
+        const next = { ...prev };
+        delete next[block.id];
+        return next;
+      });
       setExpandedBlockId(null);
       setSavingBlockId(null);
+      // For always-expanded project blocks, clear draft so useEffect re-inits from updated payload
+      if (block.type === 'OnceOffProjectBlock') {
+        setBlockDrafts((prev) => {
+          const next = { ...prev };
+          delete next[block.id];
+          return next;
+        });
+      }
       if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error updating block');
+      const message = err instanceof Error ? err.message : 'Error updating block';
+      setServerErrors((prev) => ({ ...prev, [block.id]: message }));
       setSavingBlockId(null);
+      // Keep row in edit mode — do NOT close expandedBlockId
     }
   };
 
@@ -1407,6 +1239,123 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       delete next[blockId];
       return next;
     });
+    setServerErrors((prev) => {
+      const next = { ...prev };
+      delete next[blockId];
+      return next;
+    });
+  };
+
+  const handleMoveSection = async (sectionId: number, adjacentSectionId: number) => {
+    const sections = quote?.sections || [];
+    const sectionA = sections.find((s) => s.id === sectionId);
+    const sectionB = sections.find((s) => s.id === adjacentSectionId);
+    if (!sectionA || !sectionB) return;
+
+    const changes = [
+      { id: sectionA.id, orderIndex: sectionB.orderIndex },
+      { id: sectionB.id, orderIndex: sectionA.orderIndex },
+    ];
+
+    // Optimistic update
+    setQuote((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sections: (prev.sections || []).map((s) => {
+          if (s.id === sectionA.id) return { ...s, orderIndex: sectionB.orderIndex };
+          if (s.id === sectionB.id) return { ...s, orderIndex: sectionA.orderIndex };
+          return s;
+        }),
+      };
+    });
+
+    try {
+      const response = await fetch(
+        `${window.petSettings.apiUrl}/quotes/${quoteId}/sections/reorder`,
+        {
+          method: 'POST',
+          headers: {
+            'X-WP-Nonce': window.petSettings.nonce,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ changes }),
+        }
+      );
+      if (!response.ok) {
+        await fetchQuote();
+      }
+    } catch (err) {
+      console.error('Failed to reorder sections', err);
+      await fetchQuote();
+    }
+  };
+
+  const handleMoveBlock = async (blockId: number, adjacentBlockId: number) => {
+    const blocks = quote?.blocks || [];
+    const blockA = blocks.find((b) => b.id === blockId);
+    const blockB = blocks.find((b) => b.id === adjacentBlockId);
+    if (!blockA || !blockB) return;
+
+    const changes = [
+      { id: blockA.id, orderIndex: blockB.orderIndex, sectionId: blockA.sectionId },
+      { id: blockB.id, orderIndex: blockA.orderIndex, sectionId: blockB.sectionId },
+    ];
+
+    // Optimistic update
+    setQuote((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        blocks: (prev.blocks || []).map((b) => {
+          if (b.id === blockA.id) return { ...b, orderIndex: blockB.orderIndex };
+          if (b.id === blockB.id) return { ...b, orderIndex: blockA.orderIndex };
+          return b;
+        }),
+      };
+    });
+
+    try {
+      const response = await fetch(
+        `${window.petSettings.apiUrl}/quotes/${quoteId}/blocks/reorder`,
+        {
+          method: 'POST',
+          headers: {
+            'X-WP-Nonce': window.petSettings.nonce,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ changes }),
+        }
+      );
+      if (!response.ok) {
+        await fetchQuote();
+      }
+    } catch (err) {
+      console.error('Failed to reorder blocks', err);
+      await fetchQuote();
+    }
+  };
+
+  const revertBlock = (blockId: number) => {
+    const snapshot = blockSnapshots[blockId];
+    if (!snapshot) return;
+    // Restore the snapshot into the block's payload locally
+    setQuote((prev) => {
+      if (!prev || !prev.blocks) return prev;
+      return {
+        ...prev,
+        blocks: prev.blocks.map((b) =>
+          b.id === blockId ? { ...b, payload: { ...snapshot } } : b
+        ),
+      };
+    });
+    // Clear the snapshot (one level only)
+    setBlockSnapshots((prev) => {
+      const next = { ...prev };
+      delete next[blockId];
+      return next;
+    });
+    cancelBlockEdit(blockId);
   };
 
   const updateProjectDraft = (
@@ -1847,7 +1796,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       </div>
 
       {/* KPI cards */}
-      <div className="pet-kpi-grid">
+      <div className="pet-kpi-grid" style={{ position: 'sticky', top: 0, zIndex: 5, background: '#f0f0f1', paddingTop: '8px', paddingBottom: '8px', marginLeft: '-12px', marginRight: '-12px', paddingLeft: '12px', paddingRight: '12px' }}>
         <div className="pet-kpi-card">
           <div className="pet-kpi-value">${quoteTotal.toFixed(2)}</div>
           <div className="pet-kpi-label">Total Value</div>
@@ -1925,7 +1874,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       <h3>Quote Sections</h3>
       {sectionsForRendering.length > 0 && (
         <div>
-          {sectionsForRendering.map((section) => {
+          {sectionsForRendering.map((section, sectionIndex) => {
             const blocksInSection = blocksForRendering.filter(
               (block) => block.sectionId === section.id
             );
@@ -1946,6 +1895,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
+                    position: 'sticky',
+                    top: '80px',
+                    zIndex: 3,
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1989,6 +1941,13 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                         { type: 'action', label: 'Clone section', onClick: () => handleCloneSection(section.id) },
                         { type: 'action', label: 'Discuss', onClick: () => setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Section: ${section.name || 'Untitled'}`, subjectKey: `quote_section:${section.id}` }), hasNotification: activeSubjectKeys.has(`quote_section:${section.id}`) },
                         { type: 'divider' },
+                        ...(sectionIndex > 0
+                          ? [{ type: 'action' as const, label: 'Move Up', onClick: () => handleMoveSection(section.id, sectionsForRendering[sectionIndex - 1].id) }]
+                          : []),
+                        ...(sectionIndex < sectionsForRendering.length - 1
+                          ? [{ type: 'action' as const, label: 'Move Down', onClick: () => handleMoveSection(section.id, sectionsForRendering[sectionIndex + 1].id) }]
+                          : []),
+                        { type: 'divider' },
                         { type: 'toggle', label: 'Show total value', checked: section.showTotalValue, onChange: () => handleSectionToggle(section.id, 'showTotalValue') },
                         { type: 'toggle', label: 'Show item count', checked: section.showItemCount, onChange: () => handleSectionToggle(section.id, 'showItemCount') },
                         { type: 'toggle', label: 'Show total hours', checked: section.showTotalHours, onChange: () => handleSectionToggle(section.id, 'showTotalHours') },
@@ -1997,11 +1956,24 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                       ]}
                     />
                   </div>
-                  {section.showTotalValue && (
-                    <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                      Section Total: ${sectionTotal.toFixed(2)}
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', opacity: 0.8 }}>
+                    {section.showItemCount && blocksInSection.length > 0 && (
+                      <span>{blocksInSection.length} item{blocksInSection.length !== 1 ? 's' : ''}</span>
+                    )}
+                    {section.showTotalValue && (
+                      <span>${sectionTotal.toFixed(2)}</span>
+                    )}
+                    {quoteTotal > 0 && sectionTotal > 0 && (
+                      <span>{((sectionTotal / quoteTotal) * 100).toFixed(1)}% of quote</span>
+                    )}
+                    {sectionTotal > 0 && adjustedCost > 0 && (() => {
+                      const sectionCostRatio = sectionTotal / quoteTotal;
+                      const sectionCost = adjustedCost * sectionCostRatio;
+                      const sectionMargin = sectionTotal - sectionCost;
+                      const marginPct = (sectionMargin / sectionTotal) * 100;
+                      return <span style={{ color: marginPct >= 0 ? '#a0e6a0' : '#ffaaaa' }}>{marginPct.toFixed(0)}% margin</span>;
+                    })()}
+                  </div>
                 </div>
                 {blocksInSection.length > 0 ? (
                   isTextSection ? (
@@ -2101,1513 +2073,244 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                   >
                     <thead>
                       <tr>
-                        <th style={{ textAlign: 'left', padding: '10px', width: '15%' }}>Type</th>
-                        <th style={{ textAlign: 'left', padding: '10px', width: '45%' }}>Details</th>
-                        <th style={{ textAlign: 'right', padding: '10px', width: '8%' }}>Qty</th>
-                        <th style={{ textAlign: 'right', padding: '10px', width: '15%' }}>Value</th>
-                        <th style={{ textAlign: 'right', padding: '10px', width: '17%' }}>Actions</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '25%' }}>Description</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '10%' }}>Role</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '12%' }}>Owner/Team</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '6%' }}>Qty</th>
+                        <th style={{ textAlign: 'center', padding: '10px', width: '7%' }}>Unit</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '10%' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '12%' }}>Total</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '8%' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {blocksInSection.map((block) => {
-                        const payload = block.payload || {};
-
-                        let description = '';
-                        let qty: number | null = null;
-                        if (block.type === 'TextBlock') {
-                          const text =
-                            typeof payload.text === 'string' ? payload.text : '';
-                          description =
-                            text.length > 80 ? `${text.slice(0, 80)}…` : text;
-                        } else if (block.type === 'HardwareBlock') {
-                          description =
-                            typeof payload.description === 'string'
-                              ? payload.description
-                              : '';
-                          qty =
-                            typeof payload.quantity === 'number'
-                              ? payload.quantity
-                              : 1;
-                        } else if (payload && typeof payload.description === 'string') {
-                          description = payload.description;
-                          if (typeof payload.quantity === 'number') {
-                            qty = payload.quantity;
-                          }
-                        }
-
-                        let value: number | null = null;
-                        if (block.type === 'PriceAdjustmentBlock') {
-                          const rawAmount =
-                            typeof payload.amount === 'number'
-                              ? payload.amount
-                              : typeof payload.amount === 'string'
-                              ? parseFloat(payload.amount)
-                              : 0;
-                          value = Number.isFinite(rawAmount) ? rawAmount : 0;
-                        } else if (block.type !== 'TextBlock') {
-                          if (typeof payload.totalValue === 'number') {
-                            value = payload.totalValue;
-                          } else if (typeof payload.sellValue === 'number') {
-                            value = payload.sellValue;
-                          } else {
-                            value = null;
-                          }
-                        }
-
+                      {blocksInSection.map((block, blockIndex) => {
                         const isExpanded = expandedBlockId === block.id;
                         const draft = blockDrafts[block.id] || {};
+                        const isFirst = blockIndex === 0;
+                        const isLast = blockIndex === blocksInSection.length - 1;
+                        const blockCallbacks: BlockRowCallbacks = {
+                          onEdit: (b) => isExpanded ? cancelBlockEdit(b.id) : openBlockEditor(b),
+                          onDelete: (id) => handleDeleteBlock(id),
+                          onDiscuss: (b) => {
+                            const desc = (b.payload && typeof b.payload.description === 'string') ? b.payload.description : b.type;
+                            setConversationContext({
+                              type: 'quote',
+                              id: quote.id.toString(),
+                              version: quote.version.toString(),
+                              subject: `Block: ${desc}`,
+                              subjectKey: `quote_line:${b.id}`,
+                            });
+                          },
+                          ...(blockSnapshots[block.id] ? { onRevert: (id: number) => revertBlock(id) } : {}),
+                          ...(!isFirst ? { onMoveUp: () => handleMoveBlock(block.id, blocksInSection[blockIndex - 1].id) } : {}),
+                          ...(!isLast ? { onMoveDown: () => handleMoveBlock(block.id, blocksInSection[blockIndex + 1].id) } : {}),
+                        };
 
+                        // Service block: inline editor replaces the row
+                        if (block.type === 'OnceOffSimpleServiceBlock' && isExpanded) {
+                          return (
+                            <ServiceBlockEditor
+                              key={block.id}
+                              draft={{
+                                description: draft.description ?? '',
+                                catalogItemId: draft.catalogItemId ?? null,
+                                roleId: draft.roleId ?? null,
+                                ownerType: draft.ownerType ?? '',
+                                ownerId: draft.ownerId ?? null,
+                                teamId: draft.teamId ?? null,
+                                owner: draft.owner ?? '',
+                                team: draft.team ?? '',
+                                quantity: draft.quantity ?? 1,
+                                unit: draft.unit ?? 'hours',
+                                sellValue: draft.sellValue ?? 0,
+                                price_override: draft.price_override ?? false,
+                              }}
+                              onDraftChange={(field, value) => updateBlockDraft(block.id, field, value)}
+                              onSave={() => saveBlock(block)}
+                              onCancel={() => cancelBlockEdit(block.id)}
+                              saving={savingBlockId === block.id}
+                              serverError={serverErrors[block.id] ?? null}
+                              catalogItems={catalogItems}
+                              roles={roles}
+                              employees={employees}
+                              teams={teams}
+                              ownerOptions={draft.roleId ? ownerOptionsCache[draft.roleId] ?? null : null}
+                              onRoleChange={(roleId) => {
+                                if (roleId) fetchOwnerOptions(roleId);
+                                // Prepopulate price from rate card
+                                if (roleId && !draft.price_override) {
+                                  const rc = rateCards.find((r) => r.role_id === roleId);
+                                  if (rc) {
+                                    updateBlockDraft(block.id, 'sellValue', rc.sell_rate);
+                                    updateBlockDraft(block.id, 'price_override', false);
+                                  }
+                                }
+                              }}
+                            />
+                          );
+                        }
+
+                        // Project block: always expanded (no collapse)
+                        if (block.type === 'OnceOffProjectBlock') {
+                          const payload = block.payload || {};
+                          // Draft is auto-initialized by useEffect; fallback to payload
+                          const projectDraft = blockDrafts[block.id] || {
+                            description: payload.description ?? '',
+                            phases: Array.isArray(payload.phases) ? payload.phases : [],
+                          };
+                          const projectDirty = isProjectBlockDirty(blockDrafts[block.id], payload);
+                          return (
+                            <React.Fragment key={block.id}>
+                              <BlockRow
+                                block={block}
+                                roles={roles}
+                                callbacks={blockCallbacks}
+                                hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
+                                isEditing={projectDirty}
+                                projectSummary={computeProjectSummary(payload)}
+                                editableDescription={{
+                                  value: projectDraft.description ?? '',
+                                  onChange: (val: string) => updateBlockDraft(block.id, 'description', val),
+                                }}
+                              />
+                              <tr>
+                                <td colSpan={8} style={{ padding: 0, background: '#f8f9fa', borderLeft: projectDirty ? '3px solid #46b450' : '3px solid transparent' }}>
+                                      <ProjectBlockEditor
+                                        draft={{
+                                          description: projectDraft.description ?? '',
+                                          phases: (Array.isArray(projectDraft.phases) ? projectDraft.phases : []).map((phase: any) => ({
+                                            id: phase.id ?? null,
+                                            name: phase.name ?? '',
+                                            units: (Array.isArray(phase.units) ? phase.units : []).map((unit: any) => ({
+                                              id: unit.id ?? null,
+                                              title: unit.description ?? '',
+                                              description: unit.description ?? '',
+                                              catalogItemId: unit.catalogItemId ?? null,
+                                              roleId: unit.roleId ?? null,
+                                              ownerType: unit.ownerType ?? '',
+                                              ownerId: unit.ownerId ?? null,
+                                              teamId: unit.teamId ?? null,
+                                              owner: unit.owner ?? '',
+                                              team: unit.team ?? '',
+                                              quantity: unit.quantity ?? 1,
+                                              unit: unit.unit ?? 'hours',
+                                              unitPrice: unit.unitPrice ?? 0,
+                                              totalValue: unit.totalValue ?? 0,
+                                              price_override: unit.price_override ?? false,
+                                            })),
+                                          })),
+                                        }}
+                                        onDraftChange={(newDraft) => {
+                                          setBlockDrafts((prev) => ({
+                                            ...prev,
+                                            [block.id]: {
+                                              ...(prev[block.id] || {}),
+                                              description: newDraft.description,
+                                              phases: newDraft.phases.map((phase) => ({
+                                                ...phase,
+                                                units: phase.units.map((u) => ({
+                                                  ...u,
+                                                  unitPrice: u.unitPrice,
+                                                })),
+                                                phaseTotalValue: phase.units.reduce(
+                                                  (sum, u) => sum + (Number(u.totalValue) || 0),
+                                                  0
+                                                ),
+                                              })),
+                                            },
+                                          }));
+                                        }}
+                                        roles={roles}
+                                        employees={employees}
+                                        teams={teams}
+                                        catalogItems={catalogItems}
+                                        ownerOptionsCache={ownerOptionsCache}
+                                        rateCards={rateCards}
+                                        onRoleChange={(roleId) => { if (roleId) fetchOwnerOptions(roleId); }}
+                                        onDiscussPhase={(phaseName, phaseId) => {
+                                          setConversationContext({
+                                            type: 'quote',
+                                            id: quote.id.toString(),
+                                            version: quote.version.toString(),
+                                            subject: `Phase: ${phaseName}`,
+                                            subjectKey: `quote_phase:${block.id}:${phaseId ?? 'new'}`,
+                                          });
+                                        }}
+                                        onDiscussUnit={(unitDesc, unitId) => {
+                                          setConversationContext({
+                                            type: 'quote',
+                                            id: quote.id.toString(),
+                                            version: quote.version.toString(),
+                                            subject: `Unit: ${unitDesc}`,
+                                            subjectKey: `quote_unit:${block.id}:${unitId ?? 'new'}`,
+                                          });
+                                        }}
+                                      />
+                                    </td>
+                                  </tr>
+                                  {projectDirty && (
+                                  <tr>
+                                    <td colSpan={8} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450', textAlign: 'right' }}>
+                                      <button
+                                        className="button button-primary"
+                                        onClick={() => saveBlock(block)}
+                                        disabled={savingBlockId === block.id}
+                                      >
+                                        {savingBlockId === block.id ? 'Saving...' : 'Save'}
+                                      </button>
+                                      <button
+                                        className="button"
+                                        style={{ marginLeft: '8px' }}
+                                        onClick={() => {
+                                          // Reset draft from current server payload
+                                          const p = block.payload || {};
+                                          setBlockDrafts((prev) => ({
+                                            ...prev,
+                                            [block.id]: {
+                                              description: p.description ?? '',
+                                              quantity: p.quantity ?? 1,
+                                              sellValue: p.sellValue ?? p.totalValue ?? 0,
+                                              owner: p.owner ?? '',
+                                              team: p.team ?? '',
+                                              ownerType: p.ownerType ?? '',
+                                              ownerId: p.ownerId ?? null,
+                                              teamId: p.teamId ?? null,
+                                              totalValue: p.totalValue ?? p.sellValue ?? 0,
+                                              type: block.type,
+                                              phases: Array.isArray(p.phases) ? p.phases : [],
+                                            },
+                                          }));
+                                          setServerErrors((prev) => {
+                                            const next = { ...prev };
+                                            delete next[block.id];
+                                            return next;
+                                          });
+                                        }}
+                                        disabled={savingBlockId === block.id}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  )}
+                            </React.Fragment>
+                          );
+                        }
+
+                        // All other block types: BlockRow + old-style editor when expanded
                         return (
                           <React.Fragment key={block.id}>
-                            <tr
-                              style={{ cursor: isExpanded ? 'default' : 'pointer', background: isExpanded ? '#f0faf0' : undefined }}
-                              onClick={() => { if (!isExpanded) openBlockEditor(block); }}
-                            >
-                              <td style={{ padding: '10px' }}>{block.type}</td>
-                              <td style={{ padding: '10px' }}>
-                                {block.type === 'OnceOffProjectBlock' ? (
-                                  (() => {
-                                    const phases = Array.isArray(payload.phases)
-                                      ? payload.phases
-                                      : [];
-                                    const baseDescription =
-                                      typeof payload.description === 'string'
-                                        ? payload.description
-                                        : '';
-
-                                    return (
-                                      <div>
-                                        {baseDescription && (
-                                          <div style={{ fontWeight: 600 }}>
-                                            {baseDescription}
-                                          </div>
-                                        )}
-                                        {phases.map(
-                                          (phase: any, phaseIndex: number) => {
-                                            const phaseName =
-                                              phase.name && phase.name.length > 0
-                                                ? phase.name
-                                                : `Phase ${phaseIndex + 1}`;
-                                            const units = Array.isArray(
-                                              phase.units
-                                            )
-                                              ? phase.units
-                                              : [];
-
-                                            return (
-                                              <div
-                                                key={phase.id || phaseIndex}
-                                                style={{ marginTop: '8px' }}
-                                              >
-                                                <div
-                                                  style={{
-                                                    fontWeight: 600,
-                                                    background: '#000',
-                                                    color: '#fff',
-                                                    padding: '4px 8px',
-                                                  }}
-                                                >
-                                                  {phaseName}
-                                                </div>
-                                                {units.length > 0 && (
-                                                  <table
-                                                    style={{
-                                                      width: '100%',
-                                                      borderCollapse: 'collapse',
-                                                      marginTop: '4px',
-                                                    }}
-                                                  >
-                                                    <thead>
-                                                      <tr>
-                                                        <th
-                                                          style={{
-                                                            textAlign: 'left',
-                                                            padding: '4px 8px',
-                                                          }}
-                                                        >
-                                                          Item
-                                                        </th>
-                                                        <th
-                                                          style={{
-                                                            textAlign: 'right',
-                                                            padding: '4px 8px',
-                                                            width: '70px',
-                                                          }}
-                                                        >
-                                                          Qty
-                                                        </th>
-                                                        <th
-                                                          style={{
-                                                            textAlign: 'right',
-                                                            padding: '4px 8px',
-                                                            width: '100px',
-                                                          }}
-                                                        >
-                                                          Unit
-                                                        </th>
-                                                        <th
-                                                          style={{
-                                                            textAlign: 'right',
-                                                            padding: '4px 8px',
-                                                            width: '100px',
-                                                          }}
-                                                        >
-                                                          Value
-                                                        </th>
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {units.map(
-                                                        (
-                                                          unit: any,
-                                                          unitIndex: number
-                                                        ) => {
-                                                          const quantity =
-                                                            Number.isFinite(
-                                                              Number(
-                                                                unit.quantity
-                                                              )
-                                                            )
-                                                              ? Number(
-                                                                  unit.quantity
-                                                                )
-                                                              : 0;
-                                                          const unitPrice =
-                                                            Number.isFinite(
-                                                              Number(
-                                                                unit.unitPrice
-                                                              )
-                                                            )
-                                                              ? Number(
-                                                                  unit
-                                                                    .unitPrice
-                                                                )
-                                                              : 0;
-                                                          const totalValue =
-                                                            Number.isFinite(
-                                                              Number(
-                                                                unit.totalValue
-                                                              )
-                                                            )
-                                                              ? Number(
-                                                                  unit
-                                                                    .totalValue
-                                                                )
-                                                              : quantity *
-                                                                unitPrice;
-                                                          const label =
-                                                            unit.description &&
-                                                            unit.description
-                                                              .length > 0
-                                                              ? unit.description
-                                                              : `Unit ${
-                                                                  unitIndex + 1
-                                                                }`;
-                                                          const isEvenRow =
-                                                            unitIndex % 2 === 0;
-
-                                                          return (
-                                                            <tr
-                                                              key={
-                                                                unit.id ||
-                                                                unitIndex
-                                                              }
-                                                              style={{
-                                                                backgroundColor:
-                                                                  isEvenRow
-                                                                    ? '#f9f9f9'
-                                                                    : '#ffffff',
-                                                              }}
-                                                            >
-                                                              <td
-                                                                style={{
-                                                                  padding:
-                                                                    '4px 8px',
-                                                                }}
-                                                              >
-                                                                {label}
-                                                              </td>
-                                                              <td
-                                                                style={{
-                                                                  padding:
-                                                                    '4px 8px',
-                                                                  textAlign:
-                                                                    'right',
-                                                                }}
-                                                              >
-                                                                {quantity}
-                                                              </td>
-                                                              <td
-                                                                style={{
-                                                                  padding:
-                                                                    '4px 8px',
-                                                                  textAlign:
-                                                                    'right',
-                                                                  whiteSpace:
-                                                                    'nowrap',
-                                                                }}
-                                                              >
-                                                                $
-                                                                {unitPrice.toFixed(
-                                                                  2
-                                                                )}
-                                                              </td>
-                                                              <td
-                                                                style={{
-                                                                  padding:
-                                                                    '4px 8px',
-                                                                  textAlign:
-                                                                    'right',
-                                                                  whiteSpace:
-                                                                    'nowrap',
-                                                                }}
-                                                              >
-                                                                $
-                                                                {totalValue.toFixed(
-                                                                  2
-                                                                )}
-                                                              </td>
-                                                            </tr>
-                                                          );
-                                                        }
-                                                      )}
-                                                    </tbody>
-                                                  </table>
-                                                )}
-                                              </div>
-                                            );
-                                          }
-                                        )}
-                                      </div>
-                                    );
-                                  })()
-                                ) : (
-                                  description || 'Block placeholder'
-                                )}
-                              </td>
-                              <td style={{ padding: '10px', textAlign: 'right' }}>
-                                {qty !== null ? qty : '-'}
-                              </td>
-                              <td style={{ padding: '10px', textAlign: 'right' }}>
-                                {value !== null ? `$${value.toFixed(2)}` : '-'}
-                              </td>
-                              <td style={{ padding: '10px', textAlign: 'right' }}>
-                                <KebabMenu
-                                  hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
-                                  items={[
-                                    { type: 'action', label: isExpanded ? 'Close' : 'Edit', onClick: () => isExpanded ? cancelBlockEdit(block.id) : openBlockEditor(block) },
-                                    { type: 'action', label: 'Discuss', onClick: () => { const desc = (block.payload && typeof block.payload.description === 'string') ? block.payload.description : block.type; setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Block: ${desc}`, subjectKey: `quote_line:${block.id}` }); }, hasNotification: activeSubjectKeys.has(`quote_line:${block.id}`) },
-                                    { type: 'divider' },
-                                    { type: 'action', label: 'Delete', onClick: () => handleDeleteBlock(block.id), danger: true, disabled: isExpanded, disabledReason: 'Cannot delete while editing' },
-                                  ]}
-                                />
-                              </td>
-                            </tr>
+                            <BlockRow
+                              block={block}
+                              roles={roles}
+                              callbacks={blockCallbacks}
+                              hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
+                              isEditing={isExpanded}
+                            />
                             {isExpanded && (
                               <tr>
-                                <td colSpan={5} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450' }}>
-                                  {block.type === 'OnceOffSimpleServiceBlock' && (
-                                    <div style={{ marginBottom: '10px' }}>
-                                      <div style={{ marginBottom: '10px' }}>
-                                        <div>Catalog Service</div>
-                                        <select
-                                          value={draft.catalogItemId ?? ''}
-                                          onChange={(e) => {
-                                            const value = e.target.value;
-                                            const id = value ? Number(value) : null;
-                                            updateBlockDraft(
-                                              block.id,
-                                              'catalogItemId',
-                                              id
-                                            );
-                                            if (id !== null) {
-                                              const item = catalogItems.find(
-                                                (c) =>
-                                                  c.id === id &&
-                                                  c.type === 'service'
-                                              );
-                                              if (item) {
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'description',
-                                                  item.name
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'sellValue',
-                                                  item.unit_price
-                                                );
-                                              }
-                                            }
-                                          }}
-                                          style={{ width: '100%' }}
-                                        >
-                                          <option value="">
-                                            Select from services catalog
-                                          </option>
-                                          {catalogItems
-                                            .filter(
-                                              (item) => item.type === 'service'
-                                            )
-                                            .map((item) => (
-                                              <option
-                                                key={item.id}
-                                                value={item.id}
-                                              >
-                                                {item.name}
-                                              </option>
-                                            ))}
-                                        </select>
-                                      </div>
-                                      <div
-                                        style={{
-                                          display: 'grid',
-                                          gridTemplateColumns:
-                                            '2fr 1fr 1fr 1fr',
-                                          gap: '10px',
-                                        }}
-                                      >
-                                        <div>
-                                          <div>Description</div>
-                                          <input
-                                            type="text"
-                                            value={draft.description || ''}
-                                            onChange={(e) =>
-                                              updateBlockDraft(
-                                                block.id,
-                                                'description',
-                                                e.target.value
-                                              )
-                                            }
-                                            style={{ width: '100%' }}
-                                          />
-                                        </div>
-                                        <div>
-                                          <div>Quantity</div>
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={draft.quantity ?? 1}
-                                            onChange={(e) =>
-                                              updateBlockDraft(
-                                                block.id,
-                                                'quantity',
-                                                e.target.value
-                                              )
-                                            }
-                                            style={{ width: '100%' }}
-                                          />
-                                        </div>
-                                        <div>
-                                          <div>Sell Value</div>
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            value={draft.sellValue ?? 0}
-                                            onChange={(e) =>
-                                              updateBlockDraft(
-                                                block.id,
-                                                'sellValue',
-                                                e.target.value
-                                              )
-                                            }
-                                            style={{ width: '100%' }}
-                                          />
-                                        </div>
-                                        <div>
-                                          <div>Owner/Team</div>
-                                          <select
-                                            value={
-                                              draft.ownerType === 'employee' &&
-                                              typeof draft.ownerId === 'number'
-                                                ? `employee:${draft.ownerId}`
-                                                : draft.ownerType === 'team' &&
-                                                  typeof draft.teamId ===
-                                                    'number'
-                                                ? `team:${draft.teamId}`
-                                                : ''
-                                            }
-                                            onChange={(e) => {
-                                              const value = e.target.value;
-                                              if (!value) {
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerType',
-                                                  ''
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerId',
-                                                  null
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'teamId',
-                                                  null
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'owner',
-                                                  ''
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'team',
-                                                  ''
-                                                );
-                                                return;
-                                              }
-                                              const [kind, idStr] =
-                                                value.split(':');
-                                              const id = Number(idStr);
-                                              if (kind === 'employee') {
-                                                const employee =
-                                                  employees.find(
-                                                    (emp) =>
-                                                      emp.id === id
-                                                  );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerType',
-                                                  'employee'
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerId',
-                                                  id
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'teamId',
-                                                  null
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'team',
-                                                  ''
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'owner',
-                                                  employee
-                                                    ? `${employee.firstName} ${employee.lastName}`
-                                                    : ''
-                                                );
-                                              } else if (kind === 'team') {
-                                                const team = teams.find(
-                                                  (t) => t.id === id
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerType',
-                                                  'team'
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'teamId',
-                                                  id
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'ownerId',
-                                                  null
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'owner',
-                                                  ''
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'team',
-                                                  team ? team.name : ''
-                                                );
-                                              }
-                                            }}
-                                            style={{ width: '100%' }}
-                                          >
-                                            <option value="">
-                                              Select owner or team
-                                            </option>
-                                            {teams
-                                              .filter(
-                                                (t) => t.status === 'active'
-                                              )
-                                              .slice()
-                                              .sort((a, b) =>
-                                                a.name.localeCompare(b.name)
-                                              )
-                                              .map((t) => (
-                                                <option
-                                                  key={`team-${t.id}`}
-                                                  value={`team:${t.id}`}
-                                                >
-                                                  {t.name}
-                                                </option>
-                                              ))}
-                                            <option value="" disabled>
-                                              ────────────────
-                                            </option>
-                                            {employees
-                                              .filter(
-                                                (e) =>
-                                                  e.status !== 'archived'
-                                              )
-                                              .slice()
-                                              .sort((a, b) => {
-                                                const aName = `${a.firstName} ${a.lastName}`.toLowerCase();
-                                                const bName = `${b.firstName} ${b.lastName}`.toLowerCase();
-                                                return aName.localeCompare(
-                                                  bName
-                                                );
-                                              })
-                                              .map((e) => (
-                                                <option
-                                                  key={`employee-${e.id}`}
-                                                  value={`employee:${e.id}`}
-                                                >
-                                                  {e.firstName} {e.lastName}
-                                                </option>
-                                              ))}
-                                          </select>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {block.type === 'OnceOffProjectBlock' && (
-                                    <div style={{ marginBottom: '10px' }}>
-                                      <div style={{ marginBottom: '10px' }}>
-                                        <div>Project Description</div>
-                                        <input
-                                          type="text"
-                                          value={draft.description || ''}
-                                          onChange={(e) =>
-                                            updateBlockDraft(
-                                              block.id,
-                                              'description',
-                                              e.target.value
-                                            )
-                                          }
-                                          style={{ width: '100%' }}
-                                        />
-                                      </div>
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          justifyContent: 'space-between',
-                                          alignItems: 'center',
-                                          marginBottom: '6px',
-                                        }}
-                                      >
-                                        <strong>Phases</strong>
-                                        <button
-                                          type="button"
-                                          className="button button-secondary"
-                                          onClick={() => addProjectPhase(block.id)}
-                                        >
-                                          Add Phase
-                                        </button>
-                                      </div>
-                                      <div>
-                                        {(draft.phases || []).map(
-                                          (phase: any, phaseIndex: number) => {
-                                            const units = Array.isArray(
-                                              phase.units
-                                            )
-                                              ? phase.units
-                                              : [];
-                                            const phaseTotal = units.reduce(
-                                              (sum: number, u: any) =>
-                                                sum +
-                                                (Number.isFinite(
-                                                  Number(u.totalValue)
-                                                )
-                                                  ? Number(u.totalValue)
-                                                  : 0),
-                                              0
-                                            );
-
-                                            return (
-                                              <div
-                                                key={phase.id || phaseIndex}
-                                                data-test="project-phase-panel"
-                                                style={{
-                                                  border:
-                                                    '1px solid #ccd0d4',
-                                                  padding: '10px',
-                                                  marginBottom: '8px',
-                                                  background: '#fff',
-                                                }}
-                                              >
-                                                <div
-                                                  style={{
-                                                    display: 'flex',
-                                                    justifyContent:
-                                                      'space-between',
-                                                    alignItems: 'center',
-                                                    marginBottom: '6px',
-                                                  }}
-                                                >
-                                                  <input
-                                                    type="text"
-                                                    value={
-                                                      phase.name || ''
-                                                    }
-                                                    onChange={(e) =>
-                                                      updateProjectDraft(
-                                                        block.id,
-                                                        (d) => {
-                                                          const phases =
-                                                            Array.isArray(
-                                                              d.phases
-                                                            )
-                                                              ? [
-                                                                  ...d.phases,
-                                                                ]
-                                                              : [];
-                                                          if (
-                                                            phaseIndex >=
-                                                            0 &&
-                                                            phaseIndex <
-                                                              phases.length
-                                                          ) {
-                                                            phases[
-                                                              phaseIndex
-                                                            ] = {
-                                                              ...(phases[
-                                                                phaseIndex
-                                                              ] || {}),
-                                                              name:
-                                                                e.target
-                                                                  .value,
-                                                            };
-                                                          }
-                                                          d.phases =
-                                                            phases;
-                                                          return d;
-                                                        }
-                                                      )
-                                                    }
-                                                    placeholder="Phase name"
-                                                    style={{
-                                                      flex: 1,
-                                                      marginRight: '8px',
-                                                    }}
-                                                  />
-                                                  <div>
-                                                    <button
-                                                      type="button"
-                                                      className="button button-small"
-                                                      onClick={() =>
-                                                        moveProjectPhase(
-                                                          block.id,
-                                                          phaseIndex,
-                                                          -1
-                                                        )
-                                                      }
-                                                    >
-                                                      ↑
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      className="button button-small"
-                                                      style={{
-                                                        marginLeft: '4px',
-                                                      }}
-                                                      onClick={() =>
-                                                        moveProjectPhase(
-                                                          block.id,
-                                                          phaseIndex,
-                                                          1
-                                                        )
-                                                      }
-                                                    >
-                                                      ↓
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      className="button button-small"
-                                                      style={{
-                                                        marginLeft: '4px',
-                                                      }}
-                                                      onClick={() =>
-                                                        removeProjectPhase(
-                                                          block.id,
-                                                          phaseIndex
-                                                        )
-                                                      }
-                                                    >
-                                                      Delete
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                                <table
-                                                  className="widefat fixed striped"
-                                                  data-test="project-phase-units"
-                                                  style={{
-                                                    marginTop: '4px',
-                                                  }}
-                                                >
-                                                  <thead>
-                                                    <tr>
-                                                      <th>Description</th>
-                                                      <th
-                                                        style={{
-                                                          textAlign:
-                                                            'right',
-                                                        }}
-                                                      >
-                                                        Qty
-                                                      </th>
-                                                      <th
-                                                        style={{
-                                                          textAlign:
-                                                            'right',
-                                                        }}
-                                                      >
-                                                        Unit Price
-                                                      </th>
-                                                      <th
-                                                        style={{
-                                                          textAlign:
-                                                            'right',
-                                                        }}
-                                                      >
-                                                        Total
-                                                      </th>
-                                                      <th
-                                                        style={{
-                                                          textAlign:
-                                                            'right',
-                                                        }}
-                                                      >
-                                                        Actions
-                                                      </th>
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody>
-                                                    {units.map(
-                                                      (
-                                                        unit: any,
-                                                        unitIndex: number
-                                                      ) => (
-                                                        <tr
-                                                          key={
-                                                            unit.id ||
-                                                            unitIndex
-                                                          }
-                                                        >
-                                                          <td>
-                                                            <div
-                                                              style={{
-                                                                border:
-                                                                  '1px solid #ccd0d4',
-                                                                background:
-                                                                  '#fdfdfd',
-                                                                padding: '6px',
-                                                                borderRadius:
-                                                                  '2px',
-                                                                display:
-                                                                  'flex',
-                                                                flexDirection:
-                                                                  'column',
-                                                                gap: '6px',
-                                                              }}
-                                                            >
-                                                              <div
-                                                                style={{
-                                                                  display:
-                                                                    'grid',
-                                                                  gridTemplateColumns:
-                                                                    '1fr 1fr',
-                                                                  gap: '4px',
-                                                                }}
-                                                              >
-                                                              <div>
-                                                                <div
-                                                                  style={{
-                                                                    fontSize:
-                                                                      '11px',
-                                                                    color:
-                                                                      '#555',
-                                                                  }}
-                                                                >
-                                                                  Catalog
-                                                                  Service
-                                                                </div>
-                                                                <select
-                                                                  value={
-                                                                    unit.catalogItemId ??
-                                                                    ''
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) => {
-                                                                    const value =
-                                                                      e.target
-                                                                        .value;
-                                                                    const id =
-                                                                      value
-                                                                        ? Number(
-                                                                            value
-                                                                          )
-                                                                        : null;
-                                                                    updateProjectDraft(
-                                                                      block.id,
-                                                                      (
-                                                                        draft
-                                                                      ) => {
-                                                                        const phases =
-                                                                          Array.isArray(
-                                                                            draft.phases
-                                                                          )
-                                                                            ? [
-                                                                                ...draft.phases,
-                                                                              ]
-                                                                            : [];
-                                                                        if (
-                                                                          phaseIndex <
-                                                                            0 ||
-                                                                          phaseIndex >=
-                                                                            phases.length
-                                                                        ) {
-                                                                          return draft;
-                                                                        }
-                                                                        const phase =
-                                                                          {
-                                                                            ...phases[
-                                                                              phaseIndex
-                                                                            ],
-                                                                          };
-                                                                        const unitsInner =
-                                                                          Array.isArray(
-                                                                            phase.units
-                                                                          )
-                                                                            ? [
-                                                                                ...phase.units,
-                                                                              ]
-                                                                            : [];
-                                                                        if (
-                                                                          unitIndex <
-                                                                            0 ||
-                                                                          unitIndex >=
-                                                                            unitsInner.length
-                                                                        ) {
-                                                                          return draft;
-                                                                        }
-                                                                        const unitInner =
-                                                                          {
-                                                                            ...unitsInner[
-                                                                              unitIndex
-                                                                            ],
-                                                                          };
-                                                                        unitInner.catalogItemId =
-                                                                          id;
-                                                                        if (
-                                                                          id !==
-                                                                          null
-                                                                        ) {
-                                                                          const item =
-                                                                            catalogItems.find(
-                                                                              (
-                                                                                c
-                                                                              ) =>
-                                                                                c.id ===
-                                                                                  id &&
-                                                                                c.type ===
-                                                                                  'service'
-                                                                            );
-                                                                          if (
-                                                                            item
-                                                                          ) {
-                                                                            unitInner.description =
-                                                                              item.name;
-                                                                            unitInner.unitPrice =
-                                                                              item.unit_price;
-                                                                            const quantityInner =
-                                                                              Number.isFinite(
-                                                                                Number(
-                                                                                  unitInner.quantity
-                                                                                )
-                                                                              )
-                                                                                ? Number(
-                                                                                    unitInner.quantity
-                                                                                  )
-                                                                                : 0;
-                                                                            unitInner.totalValue =
-                                                                              quantityInner *
-                                                                              item.unit_price;
-                                                                          }
-                                                                        }
-                                                                        unitsInner[
-                                                                          unitIndex
-                                                                        ] =
-                                                                          unitInner;
-                                                                        phase.units =
-                                                                          unitsInner;
-                                                                        phase.phaseTotalValue =
-                                                                          unitsInner.reduce(
-                                                                            (
-                                                                              sum: number,
-                                                                              u: any
-                                                                            ) =>
-                                                                              sum +
-                                                                              (u.totalValue ||
-                                                                                0),
-                                                                            0
-                                                                          );
-                                                                        phases[
-                                                                          phaseIndex
-                                                                        ] =
-                                                                          phase;
-                                                                        draft.phases =
-                                                                          phases;
-                                                                        return draft;
-                                                                      }
-                                                                    );
-                                                                  }}
-                                                                  style={{
-                                                                    width:
-                                                                      '100%',
-                                                                  }}
-                                                                >
-                                                                  <option value="">
-                                                                    Select
-                                                                    service
-                                                                  </option>
-                                                                  {catalogItems
-                                                                    .filter(
-                                                                      (
-                                                                        item
-                                                                      ) =>
-                                                                        item.type ===
-                                                                        'service'
-                                                                    )
-                                                                    .map(
-                                                                      (
-                                                                        item
-                                                                      ) => (
-                                                                        <option
-                                                                          key={
-                                                                            item.id
-                                                                          }
-                                                                          value={
-                                                                            item.id
-                                                                          }
-                                                                        >
-                                                                          {
-                                                                            item.name
-                                                                          }
-                                                                        </option>
-                                                                      )
-                                                                    )}
-                                                                </select>
-                                                              </div>
-                                                            </div>
-                                                            <div>
-                                                                <div
-                                                                  style={{
-                                                                    fontSize:
-                                                                      '11px',
-                                                                    color:
-                                                                      '#555',
-                                                                  }}
-                                                                >
-                                                                  Owner/Team
-                                                                </div>
-                                                                <select
-                                                                  value={
-                                                                    unit.ownerType ===
-                                                                      'employee' &&
-                                                                    typeof unit.ownerId ===
-                                                                      'number'
-                                                                      ? `employee:${unit.ownerId}`
-                                                                      : unit.ownerType ===
-                                                                          'team' &&
-                                                                        typeof unit.teamId ===
-                                                                          'number'
-                                                                      ? `team:${unit.teamId}`
-                                                                      : ''
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) => {
-                                                                    const value =
-                                                                      e.target
-                                                                        .value;
-                                                                    updateProjectDraft(
-                                                                      block.id,
-                                                                      (
-                                                                        draft
-                                                                      ) => {
-                                                                        const phases =
-                                                                          Array.isArray(
-                                                                            draft.phases
-                                                                          )
-                                                                            ? [
-                                                                                ...draft.phases,
-                                                                              ]
-                                                                            : [];
-                                                                        if (
-                                                                          phaseIndex <
-                                                                            0 ||
-                                                                          phaseIndex >=
-                                                                            phases.length
-                                                                        ) {
-                                                                          return draft;
-                                                                        }
-                                                                        const phase =
-                                                                          {
-                                                                            ...phases[
-                                                                              phaseIndex
-                                                                            ],
-                                                                          };
-                                                                        const unitsInner =
-                                                                          Array.isArray(
-                                                                            phase.units
-                                                                          )
-                                                                            ? [
-                                                                                ...phase.units,
-                                                                              ]
-                                                                            : [];
-                                                                        if (
-                                                                          unitIndex <
-                                                                            0 ||
-                                                                          unitIndex >=
-                                                                            unitsInner.length
-                                                                        ) {
-                                                                          return draft;
-                                                                        }
-                                                                        const unitInner =
-                                                                          {
-                                                                            ...unitsInner[
-                                                                              unitIndex
-                                                                            ],
-                                                                          };
-
-                                                                        if (
-                                                                          !value
-                                                                        ) {
-                                                                          unitInner.ownerType =
-                                                                            '';
-                                                                          unitInner.ownerId =
-                                                                            null;
-                                                                          unitInner.teamId =
-                                                                            null;
-                                                                          unitInner.owner =
-                                                                            '';
-                                                                          unitInner.team =
-                                                                            '';
-                                                                        } else {
-                                                                          const [
-                                                                            kind,
-                                                                            idStr,
-                                                                          ] =
-                                                                            value.split(
-                                                                              ':'
-                                                                            );
-                                                                          const id =
-                                                                            Number(
-                                                                              idStr
-                                                                            );
-                                                                          if (
-                                                                            kind ===
-                                                                            'employee'
-                                                                          ) {
-                                                                            const employee =
-                                                                              employees.find(
-                                                                                (
-                                                                                  emp
-                                                                                ) =>
-                                                                                  emp.id ===
-                                                                                  id
-                                                                              );
-                                                                            unitInner.ownerType =
-                                                                              'employee';
-                                                                            unitInner.ownerId =
-                                                                              id;
-                                                                            unitInner.teamId =
-                                                                              null;
-                                                                            unitInner.team =
-                                                                              '';
-                                                                            unitInner.owner =
-                                                                              employee
-                                                                                ? `${employee.firstName} ${employee.lastName}`
-                                                                                : '';
-                                                                          } else if (
-                                                                            kind ===
-                                                                            'team'
-                                                                          ) {
-                                                                            const team =
-                                                                              teams.find(
-                                                                                (
-                                                                                  t
-                                                                                ) =>
-                                                                                  t.id ===
-                                                                                  id
-                                                                              );
-                                                                            unitInner.ownerType =
-                                                                              'team';
-                                                                            unitInner.teamId =
-                                                                              id;
-                                                                            unitInner.ownerId =
-                                                                              null;
-                                                                            unitInner.owner =
-                                                                              '';
-                                                                            unitInner.team =
-                                                                              team
-                                                                                ? team.name
-                                                                                : '';
-                                                                          }
-                                                                        }
-
-                                                                        unitsInner[
-                                                                          unitIndex
-                                                                        ] =
-                                                                          unitInner;
-                                                                        phase.units =
-                                                                          unitsInner;
-                                                                        phase.phaseTotalValue =
-                                                                          unitsInner.reduce(
-                                                                            (
-                                                                              sum: number,
-                                                                              u: any
-                                                                            ) =>
-                                                                              sum +
-                                                                              (u.totalValue ||
-                                                                                0),
-                                                                            0
-                                                                          );
-                                                                        phases[
-                                                                          phaseIndex
-                                                                        ] =
-                                                                          phase;
-                                                                        draft.phases =
-                                                                          phases;
-                                                                        return draft;
-                                                                      }
-                                                                    );
-                                                                  }}
-                                                                  style={{
-                                                                    width:
-                                                                      '100%',
-                                                                  }}
-                                                                >
-                                                                  <option value="">
-                                                                    Select
-                                                                    owner or
-                                                                    team
-                                                                  </option>
-                                                                  {teams
-                                                                    .filter(
-                                                                      (t) =>
-                                                                        t.status ===
-                                                                        'active'
-                                                                    )
-                                                                    .slice()
-                                                                    .sort(
-                                                                      (
-                                                                        a,
-                                                                        b
-                                                                      ) =>
-                                                                        a.name.localeCompare(
-                                                                          b.name
-                                                                        )
-                                                                    )
-                                                                    .map(
-                                                                      (t) => (
-                                                                        <option
-                                                                          key={`team-${t.id}`}
-                                                                          value={`team:${t.id}`}
-                                                                        >
-                                                                          {t.name}
-                                                                        </option>
-                                                                      )
-                                                                    )}
-                                                                  <option
-                                                                    value=""
-                                                                    disabled
-                                                                  >
-                                                                    ────────────────
-                                                                  </option>
-                                                                  {employees
-                                                                    .filter(
-                                                                      (e) =>
-                                                                        e.status !==
-                                                                        'archived'
-                                                                    )
-                                                                    .slice()
-                                                                    .sort(
-                                                                      (
-                                                                        a,
-                                                                        b
-                                                                      ) => {
-                                                                        const aName = `${a.firstName} ${a.lastName}`.toLowerCase();
-                                                                        const bName = `${b.firstName} ${b.lastName}`.toLowerCase();
-                                                                        return aName.localeCompare(
-                                                                          bName
-                                                                        );
-                                                                      }
-                                                                    )
-                                                                    .map(
-                                                                      (e) => (
-                                                                        <option
-                                                                          key={`employee-${e.id}`}
-                                                                          value={`employee:${e.id}`}
-                                                                        >
-                                                                          {
-                                                                            e.firstName
-                                                                          }{' '}
-                                                                          {
-                                                                            e.lastName
-                                                                          }
-                                                                        </option>
-                                                                      )
-                                                                    )}
-                                                                </select>
-                                                              </div>
-                                                              <div>
-                                                                <div
-                                                                  style={{
-                                                                    fontSize:
-                                                                      '11px',
-                                                                    color:
-                                                                      '#555',
-                                                                    marginBottom:
-                                                                      '2px',
-                                                                  }}
-                                                                >
-                                                                  Description
-                                                                </div>
-                                                                <input
-                                                                  type="text"
-                                                                  value={
-                                                                    unit.description ||
-                                                                    ''
-                                                                  }
-                                                                  onChange={(
-                                                                    e
-                                                                  ) =>
-                                                                    updateProjectUnitField(
-                                                                      block.id,
-                                                                      phaseIndex,
-                                                                      unitIndex,
-                                                                      'description'
-                                                                    )(
-                                                                      e.target
-                                                                        .value
-                                                                    )
-                                                                  }
-                                                                  style={{
-                                                                    width:
-                                                                      '100%',
-                                                                  }}
-                                                                />
-                                                              </div>
-                                                            </div>
-                                                          </td>
-                                                          <td
-                                                            style={{
-                                                              textAlign:
-                                                                'right',
-                                                            }}
-                                                          >
-                                                            <input
-                                                              type="number"
-                                                              min={0}
-                                                              value={
-                                                                unit.quantity ??
-                                                                0
-                                                              }
-                                                              onChange={(
-                                                                e
-                                                              ) =>
-                                                                updateProjectUnitField(
-                                                                  block.id,
-                                                                  phaseIndex,
-                                                                  unitIndex,
-                                                                  'quantity'
-                                                                )(
-                                                                  e
-                                                                    .target
-                                                                    .value
-                                                                )
-                                                              }
-                                                              style={{
-                                                                width:
-                                                                  '80px',
-                                                              }}
-                                                            />
-                                                          </td>
-                                                          <td
-                                                            style={{
-                                                              textAlign:
-                                                                'right',
-                                                            }}
-                                                          >
-                                                            <input
-                                                              type="number"
-                                                              min={0}
-                                                              value={
-                                                                unit.unitPrice ??
-                                                                0
-                                                              }
-                                                              onChange={(
-                                                                e
-                                                              ) =>
-                                                                updateProjectUnitField(
-                                                                  block.id,
-                                                                  phaseIndex,
-                                                                  unitIndex,
-                                                                  'unitPrice'
-                                                                )(
-                                                                  e
-                                                                    .target
-                                                                    .value
-                                                                )
-                                                              }
-                                                              style={{
-                                                                width:
-                                                                  '100px',
-                                                              }}
-                                                            />
-                                                          </td>
-                                                          <td
-                                                            style={{
-                                                              textAlign:
-                                                                'right',
-                                                            }}
-                                                          >
-                                                            $
-                                                            {(
-                                                              unit.totalValue ??
-                                                              0
-                                                            ).toFixed(2)}
-                                                          </td>
-                                                          <td
-                                                            style={{
-                                                              textAlign:
-                                                                'right',
-                                                            }}
-                                                          >
-                                                            <button
-                                                              type="button"
-                                                              className="button button-small"
-                                                              onClick={() =>
-                                                                moveProjectUnit(
-                                                                  block.id,
-                                                                  phaseIndex,
-                                                                  unitIndex,
-                                                                  -1
-                                                                )
-                                                              }
-                                                            >
-                                                              ↑
-                                                            </button>
-                                                            <button
-                                                              type="button"
-                                                              className="button button-small"
-                                                              style={{
-                                                                marginLeft:
-                                                                  '4px',
-                                                              }}
-                                                              onClick={() =>
-                                                                moveProjectUnit(
-                                                                  block.id,
-                                                                  phaseIndex,
-                                                                  unitIndex,
-                                                                  1
-                                                                )
-                                                              }
-                                                            >
-                                                              ↓
-                                                            </button>
-                                                            <button
-                                                              type="button"
-                                                              className="button button-small"
-                                                              style={{
-                                                                marginLeft:
-                                                                  '4px',
-                                                              }}
-                                                              onClick={() =>
-                                                                removeProjectUnit(
-                                                                  block.id,
-                                                                  phaseIndex,
-                                                                  unitIndex
-                                                                )
-                                                              }
-                                                            >
-                                                              Delete
-                                                            </button>
-                                                          </td>
-                                                        </tr>
-                                                      )
-                                                    )}
-                                                    {units.length ===
-                                                      0 && (
-                                                      <tr>
-                                                        <td
-                                                          colSpan={5}
-                                                          style={{
-                                                            fontStyle:
-                                                              'italic',
-                                                          }}
-                                                        >
-                                                          No units yet.
-                                                        </td>
-                                                      </tr>
-                                                    )}
-                                                  </tbody>
-                                                </table>
-                                                <div
-                                                  style={{
-                                                    marginTop: '6px',
-                                                    display: 'flex',
-                                                    justifyContent:
-                                                      'space-between',
-                                                    alignItems: 'center',
-                                                  }}
-                                                >
-                                                  <button
-                                                    type="button"
-                                                    className="button button-secondary"
-                                                    onClick={() =>
-                                                      addProjectUnit(
-                                                        block.id,
-                                                        phaseIndex
-                                                      )
-                                                    }
-                                                  >
-                                                    Add Unit
-                                                  </button>
-                                                  <span>
-                                                    Phase Total:{' '}
-                                                    $
-                                                    {phaseTotal.toFixed(
-                                                      2
-                                                    )}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            );
-                                          }
-                                        )}
-                                        {(draft.phases || []).length ===
-                                          0 && (
-                                          <p
-                                            style={{
-                                              fontStyle: 'italic',
-                                              color: '#666',
-                                            }}
-                                          >
-                                            No phases defined yet.
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-
+                                <td colSpan={8} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450' }}>
                                   {block.type === 'HardwareBlock' && (
                                     <div
                                       style={{
@@ -3620,61 +2323,32 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                       <div>
                                         <div>Catalog Product</div>
                                         <select
-                                          value={
-                                            draft.catalogItemId ?? ''
-                                          }
+                                          value={draft.catalogItemId ?? ''}
                                           onChange={(e) => {
                                             const value = e.target.value;
                                             const id = value ? Number(value) : null;
-                                            updateBlockDraft(
-                                              block.id,
-                                              'catalogItemId',
-                                              id
-                                            );
+                                            updateBlockDraft(block.id, 'catalogItemId', id);
                                             if (id !== null) {
                                               const item = catalogItems.find(
-                                                (c) =>
-                                                  c.id === id &&
-                                                  c.type === 'product'
+                                                (c) => c.id === id && c.type === 'product'
                                               );
                                               if (item) {
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'description',
-                                                  item.name
-                                                );
-                                                updateBlockDraft(
-                                                  block.id,
-                                                  'unitPrice',
-                                                  item.unit_price
-                                                );
-                                                const qty = Number(
-                                                  draft.quantity ?? 1
-                                                );
+                                                updateBlockDraft(block.id, 'description', item.name);
+                                                updateBlockDraft(block.id, 'unitPrice', item.unit_price);
+                                                const qty = Number(draft.quantity ?? 1);
                                                 if (Number.isFinite(qty)) {
-                                                  updateBlockDraft(
-                                                    block.id,
-                                                    'totalValue',
-                                                    qty * item.unit_price
-                                                  );
+                                                  updateBlockDraft(block.id, 'totalValue', qty * item.unit_price);
                                                 }
                                               }
                                             }
                                           }}
                                           style={{ width: '100%' }}
                                         >
-                                          <option value="">
-                                            Select from product catalog
-                                          </option>
+                                          <option value="">Select from product catalog</option>
                                           {catalogItems
-                                            .filter(
-                                              (item) => item.type === 'product'
-                                            )
+                                            .filter((item) => item.type === 'product')
                                             .map((item) => (
-                                              <option
-                                                key={item.id}
-                                                value={item.id}
-                                              >
+                                              <option key={item.id} value={item.id}>
                                                 {item.name}
                                               </option>
                                             ))}
@@ -3688,24 +2362,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                           value={draft.quantity ?? 1}
                                           onChange={(e) => {
                                             const value = e.target.value;
-                                            updateBlockDraft(
-                                              block.id,
-                                              'quantity',
-                                              value
-                                            );
+                                            updateBlockDraft(block.id, 'quantity', value);
                                             const qty = Number(value);
-                                            const price = Number(
-                                              draft.unitPrice ?? 0
-                                            );
-                                            if (
-                                              Number.isFinite(qty) &&
-                                              Number.isFinite(price)
-                                            ) {
-                                              updateBlockDraft(
-                                                block.id,
-                                                'totalValue',
-                                                qty * price
-                                              );
+                                            const price = Number(draft.unitPrice ?? 0);
+                                            if (Number.isFinite(qty) && Number.isFinite(price)) {
+                                              updateBlockDraft(block.id, 'totalValue', qty * price);
                                             }
                                           }}
                                           style={{ width: '100%' }}
@@ -3719,24 +2380,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                           value={draft.unitPrice ?? 0}
                                           onChange={(e) => {
                                             const value = e.target.value;
-                                            updateBlockDraft(
-                                              block.id,
-                                              'unitPrice',
-                                              value
-                                            );
+                                            updateBlockDraft(block.id, 'unitPrice', value);
                                             const price = Number(value);
-                                            const qty = Number(
-                                              draft.quantity ?? 1
-                                            );
-                                            if (
-                                              Number.isFinite(qty) &&
-                                              Number.isFinite(price)
-                                            ) {
-                                              updateBlockDraft(
-                                                block.id,
-                                                'totalValue',
-                                                qty * price
-                                              );
+                                            const qty = Number(draft.quantity ?? 1);
+                                            if (Number.isFinite(qty) && Number.isFinite(price)) {
+                                              updateBlockDraft(block.id, 'totalValue', qty * price);
                                             }
                                           }}
                                           style={{ width: '100%' }}
@@ -3753,11 +2401,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                           type="text"
                                           value={draft.description || ''}
                                           onChange={(e) =>
-                                            updateBlockDraft(
-                                              block.id,
-                                              'description',
-                                              e.target.value
-                                            )
+                                            updateBlockDraft(block.id, 'description', e.target.value)
                                           }
                                           style={{ width: '100%' }}
                                         />
@@ -3768,11 +2412,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                           type="number"
                                           value={draft.amount ?? 0}
                                           onChange={(e) =>
-                                            updateBlockDraft(
-                                              block.id,
-                                              'amount',
-                                              e.target.value
-                                            )
+                                            updateBlockDraft(block.id, 'amount', e.target.value)
                                           }
                                           style={{ width: '100%' }}
                                         />
@@ -3786,11 +2426,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                       <MarkdownTextarea
                                         value={draft.text || ''}
                                         onChange={(val) =>
-                                          updateBlockDraft(
-                                            block.id,
-                                            'text',
-                                            val
-                                          )
+                                          updateBlockDraft(block.id, 'text', val)
                                         }
                                       />
                                     </div>
@@ -3799,89 +2435,25 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                   <div
                                     style={{
                                       marginTop: '10px',
-                                      padding: '10px',
-                                      background: '#fff',
-                                      border: '1px solid #ccd0d4',
                                       display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center',
+                                      justifyContent: 'flex-end',
+                                      gap: '8px',
                                     }}
                                   >
-                                    <div>
-                                      <strong>Commercial Summary:</strong>{' '}
-                                      {block.type === 'OnceOffSimpleServiceBlock' &&
-                                        (() => {
-                                          const qty = Number.isFinite(
-                                            Number(draft.quantity)
-                                          )
-                                            ? Number(draft.quantity)
-                                            : 1;
-                                          const sell = Number.isFinite(
-                                            Number(draft.sellValue)
-                                          )
-                                            ? Number(draft.sellValue)
-                                            : 0;
-                                          return `Qty ${qty} @ $${sell.toFixed(
-                                            2
-                                          )}`;
-                                        })()}
-                                      {block.type === 'OnceOffProjectBlock' && (() => {
-                                        const phases = Array.isArray(draft.phases)
-                                          ? draft.phases
-                                          : [];
-                                        const unitsCount = phases.reduce(
-                                          (sum: number, phase: any) =>
-                                            sum +
-                                            (Array.isArray(phase.units)
-                                              ? phase.units.length
-                                              : 0),
-                                          0
-                                        );
-                                        const totalValue = phases.reduce(
-                                          (sum: number, phase: any) =>
-                                            sum +
-                                            (Number.isFinite(
-                                              Number(phase.phaseTotalValue)
-                                            )
-                                              ? Number(phase.phaseTotalValue)
-                                              : 0),
-                                          0
-                                        );
-                                        return `Total Value $${totalValue.toFixed(
-                                          2
-                                        )} (${phases.length} phases / ${unitsCount} units)`;
-                                      })()}
-                                      {block.type === 'PriceAdjustmentBlock' &&
-                                        (() => {
-                                          const amount = Number.isFinite(
-                                            Number(draft.amount)
-                                          )
-                                            ? Number(draft.amount)
-                                            : 0;
-                                          return `Adjustment $${amount.toFixed(
-                                            2
-                                          )}`;
-                                        })()}
-                                      {block.type === 'TextBlock' &&
-                                        (draft.text || '')}
-                                    </div>
-                                    <div>
-                                      <button
-                                        className="button button-primary"
-                                        onClick={() => saveBlock(block)}
-                                        disabled={savingBlockId === block.id}
-                                      >
-                                        {savingBlockId === block.id ? 'Saving...' : 'Save'}
-                                      </button>
-                                      <button
-                                        className="button"
-                                        style={{ marginLeft: '8px' }}
-                                        onClick={() => cancelBlockEdit(block.id)}
-                                        disabled={savingBlockId === block.id}
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
+                                    <button
+                                      className="button button-primary"
+                                      onClick={() => saveBlock(block)}
+                                      disabled={savingBlockId === block.id}
+                                    >
+                                      {savingBlockId === block.id ? 'Saving...' : 'Save'}
+                                    </button>
+                                    <button
+                                      className="button"
+                                      onClick={() => cancelBlockEdit(block.id)}
+                                      disabled={savingBlockId === block.id}
+                                    >
+                                      Cancel
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
@@ -4278,89 +2850,25 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                             <div
                               style={{
                                 marginTop: '10px',
-                                padding: '10px',
-                                background: '#fff',
-                                border: '1px solid #ccd0d4',
                                 display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: '8px',
                               }}
                             >
-                              <div>
-                                <strong>Commercial Summary:</strong>{' '}
-                                {block.type === 'OnceOffSimpleServiceBlock' &&
-                                  (() => {
-                                    const qty = Number.isFinite(
-                                      Number(draft.quantity)
-                                    )
-                                      ? Number(draft.quantity)
-                                      : 1;
-                                    const sell = Number.isFinite(
-                                      Number(draft.sellValue)
-                                    )
-                                      ? Number(draft.sellValue)
-                                      : 0;
-                                    return `Qty ${qty} @ $${sell.toFixed(2)}`;
-                                  })()}
-                                {block.type === 'OnceOffProjectBlock' &&
-                                  (() => {
-                                    const total = Number.isFinite(
-                                      Number(draft.totalValue)
-                                    )
-                                      ? Number(draft.totalValue)
-                                      : 0;
-                                    return `Total Value $${total.toFixed(2)}`;
-                                  })()}
-                                {block.type === 'HardwareBlock' &&
-                                  (() => {
-                                    const qty = Number.isFinite(
-                                      Number(draft.quantity)
-                                    )
-                                      ? Number(draft.quantity)
-                                      : 1;
-                                    const unit = Number.isFinite(
-                                      Number(draft.unitPrice)
-                                    )
-                                      ? Number(draft.unitPrice)
-                                      : 0;
-                                    const total = Number.isFinite(
-                                      Number(draft.totalValue)
-                                    )
-                                      ? Number(draft.totalValue)
-                                      : 0;
-                                    return `Qty ${qty} @ $${unit.toFixed(
-                                      2
-                                    )} = $${total.toFixed(2)}`;
-                                  })()}
-                                {block.type === 'PriceAdjustmentBlock' &&
-                                  (() => {
-                                    const amount = Number.isFinite(
-                                      Number(draft.amount)
-                                    )
-                                      ? Number(draft.amount)
-                                      : 0;
-                                    return `Adjustment $${amount.toFixed(2)}`;
-                                  })()}
-                                {block.type === 'TextBlock' &&
-                                  (draft.text || '').slice(0, 40)}
-                              </div>
-                              <div>
-                                <button
-                                  className="button button-primary"
-                                  onClick={() => saveBlock(block)}
-                                  disabled={savingBlockId === block.id}
-                                >
-                                  {savingBlockId === block.id ? 'Saving...' : 'Save'}
-                                </button>
-                                <button
-                                  className="button"
-                                  style={{ marginLeft: '8px' }}
-                                  onClick={() => cancelBlockEdit(block.id)}
-                                  disabled={savingBlockId === block.id}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
+                              <button
+                                className="button button-primary"
+                                onClick={() => saveBlock(block)}
+                                disabled={savingBlockId === block.id}
+                              >
+                                {savingBlockId === block.id ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                className="button"
+                                onClick={() => cancelBlockEdit(block.id)}
+                                disabled={savingBlockId === block.id}
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </td>
                         </tr>

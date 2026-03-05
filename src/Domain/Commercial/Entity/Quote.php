@@ -15,6 +15,7 @@ class Quote
     private ?int $id;
     private int $customerId;
     private ?int $leadId;
+    private ?int $contractId;
     private string $title;
     private ?string $description;
     private QuoteState $state;
@@ -62,11 +63,13 @@ class Quote
         array $malleableData = [],
         array $costAdjustments = [],
         array $paymentSchedule = [],
-        ?int $leadId = null
+        ?int $leadId = null,
+        ?int $contractId = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
         $this->leadId = $leadId;
+        $this->contractId = $contractId;
         $this->title = $title;
         $this->description = $description;
         $this->state = $state;
@@ -127,6 +130,11 @@ class Quote
     public function leadId(): ?int
     {
         return $this->leadId;
+    }
+
+    public function contractId(): ?int
+    {
+        return $this->contractId;
     }
 
     public function customerId(): int
