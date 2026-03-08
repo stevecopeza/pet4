@@ -10,8 +10,11 @@
 
 ## 2) Anchoring
 Conversation has exactly one anchor:
-- `context_type`: `quote | quote_line_item | project | ticket | ...`
-- `context_id`: UUID
+- `context_type`: `quote | ticket | project | knowledge_article | lead | sla | ...`
+- `context_id`: entity primary key
+- `subject_key`: thread discriminator within the context (e.g. `quote:42`, `quote_line:15`, `quote_section:7`)
+
+**Important:** Quote line items do NOT use a separate `context_type`. They share `context_type = 'quote'` and `context_id = quote_id`, distinguished only by `subject_key`. Header conversations use `subject_key = 'quote:{quote_id}'`; line-item conversations use `subject_key = 'quote_line:{line_item_id}'` or `quote_section:{section_id}`.
 
 Other contexts may reference via link/notification/activity, but do not multi-anchor.
 
@@ -61,8 +64,14 @@ Application-layer check for protected actions (minimum: Quote “Send to custome
 
 Indexing requirements:
 - context lookup (`context_type`,`context_id`)
+- context + subject_key lookup (`context_type`,`context_id`,`context_version`,`subject_key`)
+- subject_key index (for child aggregate queries)
 - paging (`conversation_id`, occurred_at or sequential id)
 - decision state lookup (`context_type`,`context_id`,`decision_type`,`state`)
+
+### Key read methods
+- `findByContext(contextType, contextId, contextVersion?, subjectKey?, strict?)` — returns a single conversation. When `strict = true`, disables the backward-compatibility fallback that ignores `subject_key`. Used by `CreateConversationHandler` to prevent false duplicate detection.
+- `getSummaryForContexts(contextType, contextIds[], userId)` — batched summary returning header status + child discussion aggregate per context_id. Two queries: header-only + child aggregate (see Conversation Standardisation spec §1.5.2).
 
 ## 8) Concurrency
 - Decision responses: transaction + row lock (`SELECT ... FOR UPDATE`)

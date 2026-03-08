@@ -157,11 +157,11 @@ Key documents:
 
 - Principles and invariants: `00_foundations/01_Ticket_Backbone_Principles_and_Invariants_v1.md`
 - Data model and migrations: `05_data_model/02_Ticket_Data_Model_and_Migrations_v1.md`
-- Quote → Ticket → Project flow: `03_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md`
-- Time entry enforcement: `04_time/05_Time_Entry_Ticket_Enforcement_v1.md`
-- Roadmap: `08_implementation_blueprint/PET_Ticket_Backbone_Implementation_Roadmap_v1.md`
-- Stress tests: `08_implementation_blueprint/10_Stress_Test_Scenarios_Ticket_Backbone_v1.md`
-- TRAE implementation prompt (NOT TO BE USED YET): `08_implementation_blueprint/11_TRAE_Prompt_Ticket_Backbone_Implementation_ADD_ONLY_v1.md`
+- Quote → Ticket → Project flow: `07_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md`
+- Time entry enforcement: `09_time/05_Time_Entry_Ticket_Enforcement_v1.md`
+- Roadmap: `15_implementation_blueprint/PET_Ticket_Backbone_Implementation_Roadmap_v1.md`
+- Stress tests: `15_implementation_blueprint/10_Stress_Test_Scenarios_Ticket_Backbone_v1.md`
+- TRAE implementation prompt (NOT TO BE USED YET): `15_implementation_blueprint/11_TRAE_Prompt_Ticket_Backbone_Implementation_ADD_ONLY_v1.md`
 
 These documents are authoritative for the Ticket Backbone; implementation work must follow them without redesign.
 
@@ -169,7 +169,7 @@ These documents are authoritative for the Ticket Backbone; implementation work m
 
 ## Contributing
 
-Before contributing, **read the Developer Onboarding Guide** in `/docs/12_developer_onboarding/`.
+Before contributing, **read the Developer Onboarding Guide** in `/docs/20_developer_onboarding/`.
 
 Key rules:
 - Do not bypass domain rules
