@@ -76,16 +76,22 @@ Rules:
 
 ---
 
-### Tasks
+### Tickets (Delivery Work Items)
 
-Tasks:
+> **Ticket Backbone**: Per `00_foundations/02_Ticket_Architecture_Decisions_v1.md`, the Ticket entity is the universal work unit for both support and delivery. On quote acceptance, one Ticket is created per sold labour item with immutable `sold_minutes` and `is_baseline_locked = 1`. See `07_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md` (v2) for the full flow.
+
+Tickets:
 - Are the unit of execution
 - Are assigned to roles or individuals
-- Anchor all time entries
+- Anchor all time entries (leaf tickets only; rollup tickets reject time)
+- Carry immutable sold baselines from the accepted quote
 
 Rules:
-- Tasks may be added, removed, or re‑sequenced
-- Aggregate hours must respect milestone limits
+- Tickets may be split into child tickets (WBS) but sold totals are immutable
+- `estimated_minutes` may be adjusted during planning
+- Aggregate estimated hours must respect sold hour limits
+
+> **Implementation gap**: `CreateProjectFromQuoteListener` still creates legacy `Task` entities alongside the new Ticket creation in `AcceptQuoteHandler`. The old Task path is redundant and should be removed.
 
 ---
 
@@ -201,8 +207,11 @@ The following actions are blocked:
 
 - **API**: `/pet/v1/projects` (GET, POST)
 - **API**: `/pet/v1/projects/{id}` (PUT, DELETE/Archive)
+- **API**: `/pet/v1/tickets?lifecycle_owner=project&project_id={id}` (project tickets)
 - **Frontend**: `Projects.tsx`, `ProjectForm.tsx` (Unified Add/Edit component).
 - **Malleable Fields**: Supported (Schema: `project`).
+- **Ticket creation**: Via `CreateProjectTicketHandler` during quote acceptance (not REST API).
+- **Domain**: `Domain\Support\Entity\Ticket` with `lifecycleOwner='project'`, `primaryContainer='project'`.
 
 ---
 

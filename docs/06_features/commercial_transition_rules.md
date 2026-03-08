@@ -19,7 +19,9 @@ On `ConvertLeadToQuote`:
 Quotes may be created directly for a Customer without a Lead.
 `lead_id` remains NULL.
 
-Both paths converge at the Quote lifecycle: draft → sent → accepted.
+Both paths converge at the Quote lifecycle: `draft → sent → accepted/rejected/archived`.
+
+Additional transitions in code: `sent → draft` (revert to draft for revision). Terminal states: `accepted`, `rejected`, `archived`.
 
 ------------------------------------------------------------------------
 
@@ -41,11 +43,14 @@ All steps atomic within transaction boundary.
 
 ## 2. WBS Mapping Rules
 
--   1 Quote Task → 1 Project Task (baseline version).
--   Milestone hierarchy preserved.
--   Duration copied exactly.
--   Internal cost ceiling calculated from all task
-    internal_cost_snapshot values.
+-   1 Quote Task → 1 Ticket (`lifecycle_owner = 'project'`, `is_baseline_locked = 1`).
+-   `sold_minutes` snapshotted from quote task duration (immutable).
+-   `sold_value_cents` snapshotted from quote task sell value (immutable).
+-   `estimated_minutes` initially = `sold_minutes` (mutable during planning).
+-   Internal cost ceiling derived from all task `internal_cost_snapshot` values.
+-   See `07_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md` (v2) for full specification.
+
+> **Note**: `CreateProjectFromQuoteListener` still also creates legacy `Task` entities on the `Project` aggregate. This is redundant with the ticket creation and should be removed.
 
 ------------------------------------------------------------------------
 

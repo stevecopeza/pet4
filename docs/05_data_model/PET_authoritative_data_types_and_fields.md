@@ -22,7 +22,7 @@ Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 | `id` | UUID, PK |
 | `supersedes_quote_id` | UUID, FK, nullable |
 | `total_sell_value` | decimal 14,2 |
-| `status` | (enum: draft, pending_approval, approved, sent, accepted, |
+| `status` | enum: draft, sent, accepted, rejected, archived |
 | `currency` | char 3 |
 | `total_margin` | decimal 14,2 |
 | `version_number` | int |
@@ -30,7 +30,7 @@ Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 | `created_at` | datetime |
 | `quote_number` | varchar 50, unique |
 | `valid_until` | date |
-| `opportunity_id` | UUID, FK, required |
+| `opportunity_id` | UUID, FK, nullable (Opportunity entity not yet implemented) |
 | ``quote_number`` | (varchar 50, unique) |
 | `title` | varchar 255, required |
 | `description` | text, required |

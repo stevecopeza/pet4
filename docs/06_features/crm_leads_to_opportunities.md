@@ -2,7 +2,9 @@
 
 ## Implementation Status
 
-> **Current implementation** covers Lead capture, qualification states (`new` → `qualified` → `converted` / `disqualified`), and direct Lead → Quote conversion via `ConvertLeadToQuoteCommand`. The Opportunity entity, Gold/Silver/Bronze classification, and structured Qualification record described below are **future roadmap** — not yet implemented. See `04_features/PET_Sales_Dashboard_v1.md` for the implemented Lead → Quote conversion mechanics.
+> **Current implementation** covers Lead capture, qualification states (`new` → `qualified` → `converted` / `disqualified`), and direct Lead → Quote conversion via `ConvertLeadToQuoteCommand`. The Opportunity entity, Gold/Silver/Bronze classification, and structured Qualification record described below are **future roadmap** — not yet implemented. See `06_features/PET_Sales_Dashboard_v1.md` for the implemented Lead → Quote conversion mechanics.
+>
+> **Known code/doc gap**: The `Lead` entity constructor currently requires `customerId` (non-nullable `int`). This contradicts the design principle below that Leads should not require a Customer. The code must be updated to make `customerId` nullable before Leads can be created without an existing Customer record.
 
 ## Purpose of this Document
 This document defines the **CRM feature domain** in PET, covering:
