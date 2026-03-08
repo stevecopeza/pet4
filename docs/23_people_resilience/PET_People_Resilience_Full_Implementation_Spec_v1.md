@@ -1,7 +1,6 @@
 # PET People Resilience --- Full Implementation Spec v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/ Related existing docs:
-docs/16 People Resilience/\*
+Date: 2026-02-26
 
 ## Goal
 

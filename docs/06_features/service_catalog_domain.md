@@ -10,7 +10,7 @@ The previous single-entity approach to service pricing has been decomposed into:
 
 ## Authoritative Specification
 
-See: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+See: `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 That document contains the full structural specification, lifecycle contract, prohibited behaviours, and stress-test scenarios for the replacement entities.
 

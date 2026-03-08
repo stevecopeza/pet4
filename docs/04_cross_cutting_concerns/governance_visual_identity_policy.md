@@ -7,8 +7,12 @@ model for PET entities.
 
 ## Scope
 
-Applies to: - Teams - People - Companies - Sites - SLAs - Any future
-visual-capable entity
+Applies to: - Teams (implemented) - People, Companies, Sites, SLAs (planned)
+- Any future visual-capable entity
+
+> **Implementation status:** Visual identity fields (`visual_type`, `visual_ref`,
+> `visual_version`, `visual_updated_at`) are currently implemented only on the
+> `pet_teams` table. Extension to other entities is planned but not yet migrated.
 
 ## Design Principles
 

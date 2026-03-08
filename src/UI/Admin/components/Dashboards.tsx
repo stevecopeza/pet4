@@ -34,6 +34,11 @@ interface TicketItem {
   category?: string;
   subcategory?: string;
   ticketMode?: string;
+  lifecycleOwner?: string;
+  soldMinutes?: number | null;
+  estimatedMinutes?: number | null;
+  isBaselineLocked?: boolean;
+  isRollup?: boolean;
   siteId?: number;
   slaId?: number;
   contactId?: number | null;
@@ -43,7 +48,6 @@ interface TicketItem {
   intake_source?: string | null;
   queueId?: string | null;
   ownerUserId?: string | null;
-  lifecycleOwner?: string;
   isBillableDefault?: boolean;
   billingContextType?: string;
   slaSnapshotId?: number | null;
@@ -882,6 +886,7 @@ const PMView: React.FC<{
   customers: Map<number, string>;
 }> = ({ projects, workItems, activity, customers }) => {
   const now = new Date();
+  const intakeProjects = projects.filter(p => p.state === 'intake');
   const activeProjects = projects.filter(p => p.state === 'active' || p.state === 'planned');
 
   // Fetch journey data for all active projects
@@ -942,6 +947,9 @@ const PMView: React.FC<{
   return (
     <>
       <div className="pd-kpi-strip">
+        {intakeProjects.length > 0 && (
+          <KpiCard value={intakeProjects.length} label="Intake" color="purple" />
+        )}
         <KpiCard value={activeProjects.length} label="Active Projects" color="blue" />
         <KpiCard value={`${totalSold}h`} label="Total Sold Hours" color="teal" />
         <KpiCard value={`${totalHoursUsed}h`} label="Hours Used" color="purple" />
@@ -1010,15 +1018,19 @@ const PMView: React.FC<{
             return (
               <div key={p.id} className={`pd-project-card ${projHealth.className}`}>
                 <div className="pd-project-card-header">
-                  <div className="pd-project-card-title">
-                    {p.name}
-                    {projHealth.reasons.length > 0 && projHealth.reasons.map((r, ri) => (
-                      <span key={ri} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
-                    ))}
-                  </div>
+                  <div className="pd-project-card-title">{p.name}</div>
                   <span className={`pd-project-state-badge state-${p.state}`}>{p.state.replace('_', ' ')}</span>
                 </div>
                 <div className="pd-project-customer">{custName}</div>
+                {projHealth.reasons.length > 0 && (
+                  <div className="pd-project-risk-row">
+                    {projHealth.reasons.map((r, ri) => (
+                      <span key={ri} className={`pd-risk-badge pd-risk-${r.color}`}>
+                        {r.color === 'red' ? '⚠' : '△'} {r.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 {/* Journey Timeline Bar + Trajectory */}
                 <JourneyBar
@@ -1060,6 +1072,14 @@ const PMView: React.FC<{
                     <div className="pd-project-meta-item">
                       <span className="pd-project-meta-label">Last</span>
                       <span className={`pd-project-meta-value ${lastActivityDays !== null && lastActivityDays > 5 ? 'pd-stale-activity' : ''}`}>{lastActivityStr}</span>
+                    </div>
+                  )}
+                  {(journeyMap[p.id]?.escalations ?? 0) > 0 && (
+                    <div className="pd-project-meta-item">
+                      <span className="pd-project-meta-label">Escalations</span>
+                      <span className="pd-project-meta-value pd-escalation-count">
+                        ▴ {journeyMap[p.id].escalations} open
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1658,10 +1678,34 @@ const TicketDetailPanel: React.FC<{
             {/* Ticket Metadata */}
             <div className="pd-ticket-section">
               <h3 className="pd-section-title">Details</h3>
-              {ticket.ticketMode && (
+              {ticket.lifecycleOwner && (
                 <div className="pd-ticket-field">
-                  <span className="pd-ticket-field-label">Mode</span>
-                  <span className="pd-ticket-field-value">{ticket.ticketMode}</span>
+                  <span className="pd-ticket-field-label">Lifecycle</span>
+                  <span className="pd-ticket-field-value">{ticket.lifecycleOwner}</span>
+                </div>
+              )}
+              {ticket.lifecycleOwner === 'project' && ticket.soldMinutes != null && (
+                <div className="pd-ticket-field">
+                  <span className="pd-ticket-field-label">Sold</span>
+                  <span className="pd-ticket-field-value">{(ticket.soldMinutes / 60).toFixed(1)}h</span>
+                </div>
+              )}
+              {ticket.lifecycleOwner === 'project' && ticket.estimatedMinutes != null && (
+                <div className="pd-ticket-field">
+                  <span className="pd-ticket-field-label">Estimated</span>
+                  <span className="pd-ticket-field-value">{(ticket.estimatedMinutes / 60).toFixed(1)}h</span>
+                </div>
+              )}
+              {ticket.isBaselineLocked && (
+                <div className="pd-ticket-field">
+                  <span className="pd-ticket-field-label">Baseline</span>
+                  <span className="pd-ticket-field-value">Locked</span>
+                </div>
+              )}
+              {ticket.isRollup && (
+                <div className="pd-ticket-field">
+                  <span className="pd-ticket-field-label">Rollup</span>
+                  <span className="pd-ticket-field-value">Yes (no direct time)</span>
                 </div>
               )}
               {ticket.intake_source && (
@@ -1705,12 +1749,6 @@ const TicketDetailPanel: React.FC<{
                 <div className="pd-ticket-field">
                   <span className="pd-ticket-field-label">Billable Default</span>
                   <span className="pd-ticket-field-value">{ticket.isBillableDefault ? 'Yes' : 'No'}</span>
-                </div>
-              )}
-              {ticket.lifecycleOwner && ticket.lifecycleOwner !== 'support' && (
-                <div className="pd-ticket-field">
-                  <span className="pd-ticket-field-label">Lifecycle</span>
-                  <span className="pd-ticket-field-value">{ticket.lifecycleOwner}</span>
                 </div>
               )}
               <div className="pd-ticket-field">

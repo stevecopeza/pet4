@@ -36,23 +36,22 @@ A **Time Entry** represents a factual record of work performed.
 Required attributes:
 - Employee
 - Start / end (or duration)
-- Task
+- Ticket
 - Date
 - Classification (billable / non‑billable)
-- Work type (project / support / admin)
 
-Time entries without task context are invalid.
+Time entries without ticket context are invalid.
 
 ---
 
-## Task Anchoring Rule
+## Ticket Anchoring Rule
 
-Every Time Entry must be anchored to a **Task**.
+Every Time Entry must be anchored to a **Ticket**.
 
 Rules:
-- Project tasks are preferred
-- Support tasks must reference a Ticket
-- Administrative tasks exist as explicit operational buckets
+- Project tickets are preferred
+- Support tickets reference the support lifecycle
+- Administrative tickets exist as explicit operational buckets
 
 Free‑floating time is not permitted.
 
@@ -181,7 +180,7 @@ The Ticket Backbone enforcement rules ensure that time entries are anchored to T
 Related documents:
 
 - `00_foundations/01_Ticket_Backbone_Principles_and_Invariants_v1.md`
-- `04_time/05_Time_Entry_Ticket_Enforcement_v1.md`
+- `09_time/05_Time_Entry_Ticket_Enforcement_v1.md`
 - `05_data_model/02_Ticket_Data_Model_and_Migrations_v1.md`
 
 ---

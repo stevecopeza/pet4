@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Project } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import ProjectForm from './ProjectForm';
 import ProjectDetails from './ProjectDetails';
 import { computeProjectHealth } from '../healthCompute';
+import useConversationStatus from '../hooks/useConversationStatus';
+import useConversation from '../hooks/useConversation';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -15,6 +17,10 @@ const Projects = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
+  const { openConversation } = useConversation();
+
+  const projectIds = useMemo(() => projects.map(p => String(p.id)), [projects]);
+  const { statuses: convStatuses } = useConversationStatus('project', projectIds);
 
   const fetchSchema = async () => {
     try {
@@ -132,27 +138,43 @@ const Projects = () => {
     fetchProjects();
   };
 
+  const statusColors: Record<string, string> = { red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' };
+
   const columns: Column<Project>[] = [
     { key: 'id', header: 'ID' },
     { 
       key: 'name', 
       header: 'Project Name', 
-      render: (_, item) => (
-        <a 
-          href="#" 
-          onClick={(e) => { 
-            e.preventDefault(); 
-            setSelectedProjectId(item.id); 
-          }}
-          style={{ fontWeight: 'bold' }}
-        >
-          {item.name}
-        </a>
-      ) 
+      render: (_, item) => {
+        const cs = convStatuses.get(String(item.id));
+        const dot = cs && cs.status !== 'none' ? (
+          <button
+            type="button"
+            title={`Conversation: ${cs.status} — click to open`}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); openConversation({ contextType: 'project', contextId: String(item.id), subject: `Project: ${item.name}`, subjectKey: `project:${item.id}` }); }}
+            style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: statusColors[cs.status] || 'transparent', marginRight: 6, verticalAlign: 'middle', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+          />
+        ) : null;
+        return (
+          <>
+            {dot}
+            <a 
+              href="#" 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                setSelectedProjectId(item.id); 
+              }}
+              style={{ fontWeight: 'bold' }}
+            >
+              {item.name}
+            </a>
+          </>
+        );
+      }
     },
     { key: 'customerId', header: 'Customer ID' },
     { key: 'soldHours', header: 'Sold Hours' },
-    { key: 'state', header: 'Status', render: (val: any) => <span className={`status-badge status-${String(val)}`}>{String(val)}</span> },
+    { key: 'state', header: 'Status', render: (val: any) => <span className={`pet-status-badge status-${String(val)}`}>{String(val)}</span> },
     // Add malleable fields if they exist in schema
     ...(activeSchema?.fields || activeSchema?.schema || []).map((field: any) => ({
       key: field.key as keyof Project,

@@ -219,9 +219,9 @@ Per-employee breakdowns are a future reporting concern, not a Work Log display c
 
 ## Related Documents
 
-- `04_time/05_Time_Entry_Ticket_Enforcement_v1.md` — submission boundary rules
-- `04_time/06_Time_Entry_Work_Log_Display_v1.md` — rendering contract
-- `03_cross_cutting_concerns/04_time_and_resource_accounting.md` — domain principles
-- `04_features/docs_04_features_timesheets_ux.md` — standalone timesheet UX
-- `07_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md` — queue mechanics
+- `09_time/05_Time_Entry_Ticket_Enforcement_v1.md` — submission boundary rules
+- `09_time/06_Time_Entry_Work_Log_Display_v1.md` — rendering contract
+- `04_cross_cutting_concerns/04_time_and_resource_accounting.md` — domain principles
+- `06_features/timesheets_ux.md` — standalone timesheet UX
+- `36_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md` — queue mechanics
 - `00_foundations/01_Ticket_Backbone_Principles_and_Invariants_v1.md` — ticket as universal work unit

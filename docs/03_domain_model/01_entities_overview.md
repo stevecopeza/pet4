@@ -183,11 +183,16 @@ Responsibilities:
 ---
 
 ### Task
-Represents a unit of planned work.
+Represents a unit of planned project work (quote builder artifact).
 
 Responsibilities:
-- Anchor time tracking
-- Enable execution detail
+- Define scope and effort estimates within quote components
+- Carry role-based costing snapshots
+
+Notes:
+- Tasks exist within the quote builder (`wp_pet_quote_tasks`) and project delivery domain
+- At quote acceptance, tasks become **Tickets** which anchor time tracking
+- The Task entity itself does not receive time entries
 
 ---
 

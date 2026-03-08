@@ -8,7 +8,7 @@ Defines the canonical PET data table behaviour.
 - Deterministic sorting
 - Filters persist per user
 - Empty and error states are explicit
-- Support for [List Management & Bulk Actions](docs_22_ui_components_03_list_management_and_bulk_actions.md)
+- Support for [List Management & Bulk Actions](03_list_management_and_bulk_actions.md)
 
 **Authority**: Normative
 

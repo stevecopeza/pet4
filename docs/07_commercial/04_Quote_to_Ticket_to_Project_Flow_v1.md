@@ -9,7 +9,7 @@ DATE: 2026-03-06
 This specifies how accepted quote tasks become tickets and then form the delivery spine of a project.
 
 Governed by `00_foundations/02_Ticket_Architecture_Decisions_v1.md`.
-Structural spec: `03_commercial/05_Sold_Ticket_Structural_Spec_v1.md`.
+Structural spec: `07_commercial/05_Sold_Ticket_Structural_Spec_v1.md`.
 
 ## Entities (conceptual)
 
@@ -23,7 +23,7 @@ Structural spec: `03_commercial/05_Sold_Ticket_Structural_Spec_v1.md`.
 - **Project** (container for tickets as WBS)
 - **Phase** (grouping / payment schedule anchor)
 
-> See `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md` for authoritative entity definitions.
+> See `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md` for authoritative entity definitions.
 
 ## Draft quote building
 

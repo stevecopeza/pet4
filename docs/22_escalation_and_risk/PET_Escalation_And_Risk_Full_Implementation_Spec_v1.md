@@ -1,8 +1,8 @@
 # PET Escalation & Risk --- Full Implementation Spec v1.0
 
-Date: 2026-02-26 Target location: (relocated) Related existing docs:
-docs/15\* (Escalation & Risk), docs/08_implementation_blueprint,
-docs/20_event_registry
+Date: 2026-02-26
+Related existing docs: docs/15_implementation_blueprint,
+docs/27_event_registry
 
 ## Goal
 

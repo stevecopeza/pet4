@@ -7,7 +7,7 @@ Date: 2026-03-02
 
 Defines the layout, data requirements, and rendering contract for the Ticket Detail panel — the drill-down surface accessed by clicking a ticket card in the Support persona view of the admin dashboard SPA.
 
-This is a companion to `docs/24_support_helpdesk/PET_Helpdesk_Overview_UI_Contract_v1_0.md` (which covers the overview shortcode).
+This is a companion to `docs/31_support_helpdesk/PET_Helpdesk_Overview_UI_Contract_v1_0.md` (which covers the overview shortcode).
 
 ---
 
@@ -59,7 +59,7 @@ All calls degrade gracefully — if any fails, the section shows a fallback or e
 **Left column (main content):**
 
 1. **Description** — ticket body text or "No description provided"
-2. **Work Log** — time entries for this ticket (see `docs/04_time/06_Time_Entry_Work_Log_Display_v1.md`)
+2. **Work Log** — time entries for this ticket (see `docs/09_time/06_Time_Entry_Work_Log_Display_v1.md`)
 3. **Discussion** — conversation thread from `MessagePosted` timeline events
 4. **Activity** — filtered feed events for ticket-related event types
 

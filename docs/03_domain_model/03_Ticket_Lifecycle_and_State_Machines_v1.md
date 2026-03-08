@@ -67,15 +67,17 @@ Implementation:
 
 ## Assignment semantics (queue model)
 
-Ticket stores:
-- `owning_team_id` / `department_id`
-- `preferred_assignee_id` (optional)
-- `assigned_to_id` (optional)
-- `assignment_mode` ENUM('PREFERRED_PERSON','TEAM_QUEUE_PULL','MANAGER_ALLOCATED')
+Ticket stores (implemented):
+- `queue_id` (team/department queue identifier, nullable string)
+- `owner_user_id` (individually assigned employee, nullable string)
+- `department_id_ext` (department reference, nullable int)
 
 Rules:
-- owning team/department is always set (or derivable) for support/project/internal tickets.
-- assignment events update WorkItem projection.
+- `assignToTeam(queueId)` sets queue and clears individual owner.
+- `assignToEmployee(userId)` sets individual owner, preserves queue context.
+- `pull(userId)` is a self-assign alias for `assignToEmployee`.
+- Assignment changes emit `TicketAssigned` domain events.
+- Assignment events update WorkItem projection.
 
 ## Domain events (required points)
 

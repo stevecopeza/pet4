@@ -6,17 +6,33 @@ namespace Pet\Domain\Delivery\ValueObject;
 
 class ProjectState
 {
+    public const INTAKE = 'intake';
     public const PLANNED = 'planned';
     public const ACTIVE = 'active';
     public const ON_HOLD = 'on_hold';
     public const COMPLETED = 'completed';
     public const CANCELLED = 'cancelled';
 
+    /** Allowed transitions: source => [targets] */
+    private const TRANSITIONS = [
+        self::INTAKE    => [self::PLANNED, self::CANCELLED],
+        self::PLANNED   => [self::ACTIVE, self::CANCELLED],
+        self::ACTIVE    => [self::ON_HOLD, self::COMPLETED, self::CANCELLED],
+        self::ON_HOLD   => [self::ACTIVE, self::CANCELLED],
+        self::COMPLETED => [],
+        self::CANCELLED => [],
+    ];
+
     private string $value;
 
     private function __construct(string $value)
     {
         $this->value = $value;
+    }
+
+    public static function intake(): self
+    {
+        return new self(self::INTAKE);
     }
 
     public static function planned(): self
@@ -46,7 +62,7 @@ class ProjectState
 
     public static function fromString(string $status): self
     {
-        if (!in_array($status, [self::PLANNED, self::ACTIVE, self::ON_HOLD, self::COMPLETED, self::CANCELLED], true)) {
+        if (!in_array($status, [self::INTAKE, self::PLANNED, self::ACTIVE, self::ON_HOLD, self::COMPLETED, self::CANCELLED], true)) {
             throw new \InvalidArgumentException("Invalid project state: $status");
         }
         return new self($status);
@@ -60,5 +76,14 @@ class ProjectState
     public function isTerminal(): bool
     {
         return in_array($this->value, [self::COMPLETED, self::CANCELLED], true);
+    }
+
+    /**
+     * Check whether transitioning to the given target state is allowed.
+     */
+    public function canTransitionTo(self $target): bool
+    {
+        $allowed = self::TRANSITIONS[$this->value] ?? [];
+        return in_array($target->value, $allowed, true);
     }
 }

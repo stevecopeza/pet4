@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Lead } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import LeadForm from './LeadForm';
+import useConversation from '../hooks/useConversation';
+import useConversationStatus from '../hooks/useConversationStatus';
 import { computeLeadHealth } from '../healthCompute';
 
 interface LeadsProps {
@@ -16,6 +18,10 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
+  const { openConversation } = useConversation();
+
+  const leadIds = useMemo(() => leads.map(l => String(l.id)), [leads]);
+  const { statuses: convStatuses } = useConversationStatus('lead', leadIds);
 
   const fetchLeads = async () => {
     try {
@@ -140,9 +146,24 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
     setSelectedIds([]);
   };
 
+  const statusColors: Record<string, string> = { red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' };
+
   const columns: Column<Lead>[] = [
     { key: 'id', header: 'ID' },
-    { key: 'subject', header: 'Subject' },
+    { key: 'subject', header: 'Subject', render: (val, item) => {
+      const s = convStatuses.get(String(item.id));
+      const dot = s && s.status !== 'none' ? (
+        <button
+          type="button"
+          title={`Conversation: ${s.status} — click to open`}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); openConversation({ contextType: 'lead', contextId: String(item.id), subject: `Lead: ${item.subject}`, subjectKey: `lead:${item.id}` }); }}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: 'transparent', marginRight: 2, marginLeft: -7, verticalAlign: 'middle', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+        >
+          <span style={{ display: 'block', width: 10, height: 10, borderRadius: '50%', background: statusColors[s.status] || 'transparent' }} />
+        </button>
+      ) : null;
+      return <>{dot}{String(val)}</>;
+    }},
     { key: 'customerId', header: 'Customer', render: (val) => val ? val.toString() : '' },
     { key: 'status', header: 'Status', render: (val) => {
       const status = val as string;
@@ -173,6 +194,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
 
       {error && <div className="notice notice-error inline"><p>{error}</p></div>}
 
+
       <DataTable
         data={leads}
         columns={columns}
@@ -182,11 +204,13 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
           onSelectionChange: setSelectedIds
         }}
         rowClassName={(lead) => computeLeadHealth(lead).className}
+        onRowClick={handleEdit}
         actions={(lead) => {
           const items: KebabMenuItem[] = [];
           if (lead.status === 'new' || lead.status === 'qualified') {
             items.push({ type: 'action', label: 'Convert to Quote', onClick: () => handleConvertToQuote(lead) });
           }
+          items.push({ type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'lead', contextId: String(lead.id), subject: `Lead: ${lead.subject}`, subjectKey: `lead:${lead.id}` }) });
           items.push({ type: 'action', label: 'Edit', onClick: () => handleEdit(lead) });
           items.push({ type: 'action', label: 'Delete', onClick: () => handleDelete(lead.id), danger: true });
           return <KebabMenu items={items} />;

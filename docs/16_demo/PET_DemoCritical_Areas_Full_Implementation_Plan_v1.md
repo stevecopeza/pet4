@@ -1,16 +1,16 @@
 # PET Demo-Critical Areas --- Full Implementation Plan v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/
+Date: 2026-02-26
 
 ## Scope
 
 This plan covers full implementation (Domain, Application,
 Infrastructure, Settings/Config, API, UI/Shortcodes/Admin) for:
 
-1.  Escalation & Risk (docs/15)
-2.  Support Helpdesk (docs/24)
-3.  Advisory Layer (docs/18)
-4.  People Resilience (docs/16)
+1.  Escalation & Risk (docs/22_escalation_and_risk)
+2.  Support Helpdesk (docs/31_support_helpdesk)
+3.  Advisory Layer (docs/25_advisory_layer)
+4.  People Resilience (docs/23_people_resilience)
 
 Non-negotiable constraints (PET baseline):
 
@@ -82,7 +82,7 @@ registry updated
 ## Documentation Needed (what must be written before implementation)
 
 Implementation should not start until these docs exist (as ADDITIVE docs
-in docs/ToBeMoved):
+in the appropriate subsystem directory):
 
 1.  **Per-area Implementation Spec** (Domain + Application +
     Infrastructure + UI + Settings)

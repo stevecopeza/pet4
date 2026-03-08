@@ -30,7 +30,7 @@ Instance separation
 
 Defines sellable products and labour economics as separate concerns.
 
-> **Authoritative specification:** `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+> **Authoritative specification:** `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 The previous `ServiceCatalogItem` entity has been replaced by four distinct entities:
 

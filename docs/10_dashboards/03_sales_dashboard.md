@@ -63,5 +63,5 @@ Uses shared `ActivityStream` component with customer badges, actor avatars, and 
 
 **Authority**: Normative
 
-See also: `04_features/PET_Sales_Dashboard_v1.md` for the full feature specification.
+See also: `06_features/PET_Sales_Dashboard_v1.md` for the full feature specification.
 

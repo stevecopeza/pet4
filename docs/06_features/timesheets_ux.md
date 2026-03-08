@@ -36,14 +36,14 @@ Failure here invalidates downstream KPIs, billing, and planning.
 
 ---
 
-### Task‑First Selection
+### Ticket‑First Selection
 
 Flow:
-1. Select Task
+1. Select Ticket
 2. Enter duration
 3. Confirm classification
 
-Task context is mandatory and non‑bypassable.
+Ticket context is mandatory and non‑bypassable.
 
 ---
 
@@ -71,7 +71,7 @@ Visual distinction between Draft and Submitted is mandatory.
 ## Validation Rules
 
 Hard validation at submission:
-- Task required
+- Ticket required
 - Duration > 0
 - Classification selected
 

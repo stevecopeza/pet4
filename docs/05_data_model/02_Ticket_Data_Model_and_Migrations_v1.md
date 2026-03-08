@@ -120,9 +120,9 @@ M3. ✅ Verify `ticket_id` on `wp_pet_time_entries` — already present.
 M4. ✅ Add `ticket_id` to `wp_pet_tasks`. (Migration 008)
 M5. ✅ Backfill: seed creates tickets with full backbone fields; existing tasks bridged.
 M6. Add ticket_id to quote task records (set at acceptance, not during quoting) — future.
-M7. Add `change_order_source_ticket_id` to `wp_pet_tickets` — future.
-M8. Add `is_baseline_locked` to `wp_pet_tickets` — future.
-M9. Drop `ticket_mode` column from `wp_pet_tickets` — future.
+M7. ✅ Add `change_order_source_ticket_id` to `wp_pet_tickets`. (Migration: `AddTicketSoldArchitectureColumns`)
+M8. ✅ Add `is_baseline_locked` to `wp_pet_tickets`. (Migration: `AddTicketSoldArchitectureColumns`)
+M9. Drop `ticket_mode` column from `wp_pet_tickets` — future (column still in use by TicketController).
 
 All backfills must be idempotent and safe to re-run.
 

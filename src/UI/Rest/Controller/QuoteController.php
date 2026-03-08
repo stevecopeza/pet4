@@ -44,8 +44,12 @@ use Pet\Application\Commercial\Command\DeleteQuoteSectionCommand;
 use Pet\Application\Commercial\Command\DeleteQuoteSectionHandler;
 use Pet\Domain\Commercial\Repository\QuoteBlockRepository;
 use Pet\Domain\Commercial\Entity\Component\CatalogComponent;
+use Pet\Domain\Commercial\Entity\Component\ImplementationComponent;
 use Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent;
 use Pet\Domain\Commercial\Entity\Component\Phase;
+use Pet\Domain\Commercial\Entity\Component\QuoteMilestone;
+use Pet\Domain\Commercial\Entity\Component\QuoteTask;
+use Pet\Domain\Commercial\Entity\Component\RecurringServiceComponent;
 use Pet\Domain\Commercial\Entity\Component\SimpleUnit;
 use Pet\Domain\Commercial\Entity\CostAdjustment;
 use Pet\Domain\Commercial\Entity\QuoteSection;
@@ -379,7 +383,29 @@ class QuoteController implements RestController
                     'internalCost' => $component->internalCost(),
                 ];
 
-                if ($component instanceof CatalogComponent) {
+                if ($component instanceof ImplementationComponent) {
+                    $data['milestones'] = array_map(function (QuoteMilestone $milestone) {
+                        return [
+                            'id' => $milestone->id(),
+                            'title' => $milestone->title(),
+                            'description' => $milestone->description(),
+                            'tasks' => array_map(function (QuoteTask $task) {
+                                return [
+                                    'id' => $task->id(),
+                                    'title' => $task->title(),
+                                    'description' => $task->description(),
+                                    'durationHours' => $task->durationHours(),
+                                    'sellRate' => $task->sellRate(),
+                                    'baseInternalRate' => $task->baseInternalRate(),
+                                    'sellValue' => $task->sellValue(),
+                                    'internalCost' => $task->internalCost(),
+                                ];
+                            }, $milestone->tasks()),
+                            'sellValue' => $milestone->sellValue(),
+                            'internalCost' => $milestone->internalCost(),
+                        ];
+                    }, $component->milestones());
+                } elseif ($component instanceof CatalogComponent) {
                     $data['items'] = array_map(function ($item) {
                         return [
                             'description' => $item->description(),
@@ -427,6 +453,13 @@ class QuoteController implements RestController
                             ];
                         }, $component->phases());
                     }
+                } elseif ($component instanceof RecurringServiceComponent) {
+                    $data['serviceName'] = $component->serviceName();
+                    $data['cadence'] = $component->cadence();
+                    $data['termMonths'] = $component->termMonths();
+                    $data['renewalModel'] = $component->renewalModel();
+                    $data['sellPricePerPeriod'] = $component->sellPricePerPeriod();
+                    $data['internalCostPerPeriod'] = $component->internalCostPerPeriod();
                 }
 
                 return $data;

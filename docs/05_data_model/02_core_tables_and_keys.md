@@ -170,7 +170,7 @@ The Ticket Backbone data model extension defines Ticket as the universal work un
 Related documents:
 
 - `05_data_model/02_Ticket_Data_Model_and_Migrations_v1.md`
-- `04_time/05_Time_Entry_Ticket_Enforcement_v1.md`
+- `09_time/05_Time_Entry_Ticket_Enforcement_v1.md`
 
 ---
 

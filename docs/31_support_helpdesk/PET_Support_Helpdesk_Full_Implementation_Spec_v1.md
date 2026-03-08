@@ -1,7 +1,7 @@
 # PET Support Helpdesk --- Full Implementation Spec v1.0
 
-Date: 2026-02-26 Target location: (relocated) Related existing docs:
-docs/24_support_helpdesk/\*, SLA automation docs
+Date: 2026-02-26
+Related existing docs: SLA automation docs
 
 ## Goal
 

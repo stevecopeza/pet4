@@ -69,14 +69,29 @@ see also `docs/09_demo/PET_DemoCritical_Rollout_FeatureFlags_v1.md`.
                                                         indicators + SPOF
   ------------------------------------------------------------------------------
 
+### Integration Flags
+
+  ------------------------------------------------------------------------------
+  Flag Key                               Default        Controls
+  -------------------------------------- -------------- ------------------------
+  pet_pulseway_enabled                   false          Master switch for
+                                                        Pulseway RMM integration
+
+  pet_pulseway_ticket_creation_enabled   false          Auto ticket creation
+                                                        from Pulseway alerts
+  ------------------------------------------------------------------------------
+
 Flags MUST:
 
 -   Default to false on upgrade
 -   Be stored in config table (`wp_pet_settings`, not transient)
 -   Be environment overridable
 
-The demo seed (`DemoSeedService::seedFeatureFlags`) sets all 10 flags
-to enabled on seed execution.
+The demo seed (`DemoSeedService::seedFeatureFlags`) sets 10 core flags
+to enabled on seed execution. The 2 Pulseway integration flags are
+seeded by `CreatePulsewayIntegrationTables` (defaulting to false).
+
+Total flags in system: 12.
 
 ------------------------------------------------------------------------
 

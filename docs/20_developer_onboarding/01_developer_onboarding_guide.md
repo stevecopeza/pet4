@@ -32,12 +32,12 @@ PET is NOT:
 Before touching code, read:
 
 1. `00_foundations/` – philosophy and invariants
-2. `01_architecture/` – boundaries and ownership
-3. `02_domain_model/` – entities and lifecycles
+2. `02_architecture/` – boundaries and ownership
+3. `03_domain_model/` – entities and lifecycles
 4. `05_data_model/` – tables, events, migrations
-5. `07_ui_structure/` – what the UI may and may not do
-6. `09_integrations/` – external system rules
-7. `11_stress_tests/` – what must never break
+5. `13_ui_structure/` – what the UI may and may not do
+6. `17_integrations/` – external system rules
+7. `19_stress_tests/` – what must never break
 
 If something you want to do conflicts with these docs, **your idea is wrong**.
 

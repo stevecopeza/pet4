@@ -1,6 +1,6 @@
 # PET Event Registry Addendum --- Support Helpdesk v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/
+Date: 2026-02-26
 
 ## Events Used (existing)
 

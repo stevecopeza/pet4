@@ -7,9 +7,12 @@ stateDiagram-v2
     New --> Open
     Open --> Pending
     Open --> Resolved
+    Open --> Closed
     Pending --> Open
     Pending --> Resolved
+    Pending --> Closed
     Resolved --> Closed
+    Resolved --> Open
     Closed --> [*]
 ```
 

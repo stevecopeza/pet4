@@ -255,9 +255,12 @@ Allowed transitions:
 - new → open
 - open → pending
 - open → resolved
+- open → closed
 - pending → open
 - pending → resolved
+- pending → closed
 - resolved → closed
+- resolved → open
 
 ### Project (lifecycle_owner='project')
 States: planned, ready, in_progress, blocked, done, closed

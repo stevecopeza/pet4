@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Project, Task } from '../types';
 import { DataTable, Column } from './DataTable';
 import LogTimeModal from './LogTimeModal';
-import ConversationPanel from './ConversationPanel';
+import useConversation from '../hooks/useConversation';
 import { computeProjectHealth } from '../healthCompute';
 
 interface ProjectDetailsProps {
@@ -14,7 +14,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showConversation, setShowConversation] = useState(false);
+  const { openConversation } = useConversation();
   
   // Add Task Form State
   const [name, setName] = useState('');
@@ -111,25 +111,21 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
     <div className={`pet-project-details ${projHealth?.className || ''}`}>
       <div style={{ marginBottom: '20px' }}>
         <button className="button" onClick={onBack}>&larr; Back to Projects</button>
-        <button 
-          className={`button ${showConversation ? 'button-primary' : ''}`} 
-          onClick={() => setShowConversation(!showConversation)} 
-          style={{ marginLeft: '10px' }}
-        >
-          {showConversation ? 'Hide Discussion' : 'Discuss'}
-        </button>
+        {project && (
+          <button 
+            className="button" 
+            onClick={() => openConversation({
+              contextType: 'project',
+              contextId: String(project.id),
+              subject: `Project: ${project.name}`,
+              subjectKey: `project:${project.id}`,
+            })}
+            style={{ marginLeft: '10px' }}
+          >
+            Discuss
+          </button>
+        )}
       </div>
-
-      {showConversation && project && (
-        <div style={{ marginBottom: '20px', border: '1px solid #ccd0d4', background: '#fff', padding: '20px' }}>
-          <ConversationPanel
-            contextType="project"
-            contextId={String(project.id)}
-            defaultSubject={`Project: ${project.name}`}
-            subjectKey={`project:${project.id}`}
-          />
-        </div>
-      )}
 
       <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
         <h2>

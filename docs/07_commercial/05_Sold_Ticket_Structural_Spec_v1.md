@@ -62,7 +62,7 @@ This document defines the complete contract for project tickets created when a q
 
 ## 1.3 State transitions
 
-Project lifecycle (from `02_domain/03_Ticket_Lifecycle_and_State_Machines_v1.md`):
+Project lifecycle (from `03_domain_model/03_Ticket_Lifecycle_and_State_Machines_v1.md`):
 
 ```
 planned → ready → in_progress → blocked → done → closed

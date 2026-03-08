@@ -1,6 +1,6 @@
 # PET UI Contract --- People Resilience v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/
+Date: 2026-02-26
 
 ## Admin Pages
 

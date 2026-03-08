@@ -1,6 +1,6 @@
 # PET Payment Schedule — How To Proceed From Current State (v1.2)
 
-**Repo target path:** `plugins/pet/docs/04_quotes/PET_Payment_Schedule_How_To_Proceed_From_Current_State_v1_2.md`
+**Location:** `docs/08_quotes/PET_Payment_Schedule_How_To_Proceed_From_Current_State_v1_2.md`
 
 ## 1. Current symptom
 - Payment Schedule appears automatically at the top of a new quote.

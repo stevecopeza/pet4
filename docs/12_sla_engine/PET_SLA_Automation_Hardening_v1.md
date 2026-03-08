@@ -10,7 +10,7 @@ rules, and migration safety requirements.
 
 This document is ADDITIVE to:
 
--   docs/08_implementation_blueprint/pre_demo_execution/05_sla_automation_memo.md
+-   docs/15_implementation_blueprint/pre_demo_execution/05_sla_automation_memo.md
 
 ------------------------------------------------------------------------
 

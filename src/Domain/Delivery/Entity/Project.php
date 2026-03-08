@@ -50,7 +50,7 @@ class Project
         $this->sourceQuoteId = $sourceQuoteId;
         $this->name = $name;
         $this->soldHours = $soldHours;
-        $this->state = $state ?? ProjectState::planned();
+        $this->state = $state ?? ProjectState::intake();
         $this->soldValue = $soldValue;
         $this->startDate = $startDate;
         $this->endDate = $endDate;
@@ -162,6 +162,27 @@ class Project
         $this->tasks[] = $task;
     }
 
+    /**
+     * Validate and perform a state transition.
+     *
+     * @throws \DomainException if the transition is not allowed
+     */
+    public function transitionTo(ProjectState $newState): void
+    {
+        if ($this->state->toString() === $newState->toString()) {
+            return; // no-op for same state
+        }
+
+        if (!$this->state->canTransitionTo($newState)) {
+            throw new \DomainException(
+                "Cannot transition project from '{$this->state->toString()}' to '{$newState->toString()}'"
+            );
+        }
+
+        $this->state = $newState;
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
     public function update(
         string $name, 
         string $status, 
@@ -170,13 +191,19 @@ class Project
         array $malleableData
     ): void {
         $this->name = $name;
-        // Note: soldHours and soldValue are immutable as they come from a quote or initial agreement
-        // State transition should ideally be handled via specific methods, but for generic update we allow it if valid
-        $this->state = ProjectState::fromString($status); 
+
+        // Validate state transition
+        $newState = ProjectState::fromString($status);
+        $this->transitionTo($newState);
+
+        // Guard: intake projects must not have start_date
+        if ($this->state->toString() === ProjectState::INTAKE && $startDate !== null) {
+            throw new \DomainException('Cannot set start_date on a project in intake state');
+        }
+
         $this->startDate = $startDate;
         $this->endDate = $endDate;
         $this->malleableData = $malleableData;
-        $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function archive(): void

@@ -10,7 +10,7 @@ instability.
 
 This document is ADDITIVE to:
 
--   docs/07_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md
+-   docs/36_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md
 
 ------------------------------------------------------------------------
 

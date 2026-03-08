@@ -130,4 +130,4 @@ Distribution:
 
 **Authority**: Normative
 
-See also: `04_features/PET_Sales_Dashboard_v1.md` for the equivalent sales dashboard spec.
+See also: `06_features/PET_Sales_Dashboard_v1.md` for the equivalent sales dashboard spec.

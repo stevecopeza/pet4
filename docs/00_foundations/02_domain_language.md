@@ -129,12 +129,13 @@ Properties:
 ---
 
 ### Task
-A **Task** is the smallest unit of planned work.
+A **Task** is a planned unit of project work derived from a quote.
 
 Rules:
-- All time must be logged against a task
-- Tasks belong to a project or operational bucket
-- Tasks may evolve, but original commitments remain visible
+- Tasks exist within the quote builder during draft phase (`wp_pet_quote_tasks`)
+- At quote acceptance, each task becomes a **Ticket** with locked sold baselines
+- Tasks do not receive time entries directly; the corresponding ticket does
+- See the Ticket Backbone for the authoritative model
 
 ---
 
@@ -142,9 +143,9 @@ Rules:
 A **Time Entry** is a factual record of time spent.
 
 Properties:
-- Immutable once submitted
-- Attributed to a person, task, and time window
-- Classified (billable / non‑billable / support / admin)
+- Immutable once submitted (corrections create new linked entries)
+- Attributed to a person, **ticket**, and time window
+- Classified (billable / non‑billable)
 
 Time entries are primary KPI inputs.
 

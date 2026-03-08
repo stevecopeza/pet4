@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Article, SchemaDefinition } from '../types';
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
-import ConversationPanel from './ConversationPanel';
+import useConversation from '../hooks/useConversation';
 
 interface ArticleDetailsProps {
   article: Article;
@@ -11,7 +11,7 @@ interface ArticleDetailsProps {
 
 const ArticleDetails: React.FC<ArticleDetailsProps> = ({ article, schema, onBack }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [showConversation, setShowConversation] = useState(false);
+  const { openConversation } = useConversation();
   const [title, setTitle] = useState(article.title);
   const [content, setContent] = useState(article.content);
   const [category, setCategory] = useState(article.category);
@@ -65,11 +65,16 @@ const ArticleDetails: React.FC<ArticleDetailsProps> = ({ article, schema, onBack
           <>
             <button className="button" onClick={() => setIsEditing(true)} style={{ marginLeft: '10px' }}>Edit</button>
             <button 
-              className={`button ${showConversation ? 'button-primary' : ''}`} 
-              onClick={() => setShowConversation(!showConversation)} 
+              className="button" 
+              onClick={() => openConversation({
+                contextType: 'knowledge_article',
+                contextId: String(article.id),
+                subject: `Article: ${article.title}`,
+                subjectKey: `kb:${article.id}`,
+              })}
               style={{ marginLeft: '10px' }}
             >
-              {showConversation ? 'Hide Discussion' : 'Discuss'}
+              Discuss
             </button>
           </>
         )}
@@ -83,16 +88,6 @@ const ArticleDetails: React.FC<ArticleDetailsProps> = ({ article, schema, onBack
         )}
       </div>
 
-      {showConversation && (
-        <div style={{ marginBottom: '20px', border: '1px solid #ccd0d4', background: '#fff', padding: '20px' }}>
-          <ConversationPanel
-            contextType="knowledge_article"
-            contextId={String(article.id)}
-            defaultSubject={`Article: ${article.title}`}
-            subjectKey={`kb:${article.id}`}
-          />
-        </div>
-      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <div style={{ width: '100%', paddingRight: '20px' }}>

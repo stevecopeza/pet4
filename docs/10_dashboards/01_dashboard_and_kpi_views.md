@@ -70,7 +70,7 @@ Implemented KPIs:
 
 Attention items surface aging quotes, stale leads, and ready-to-send drafts.
 
-See: `06_dashboards/03_sales_dashboard.md` and `04_features/PET_Sales_Dashboard_v1.md`.
+See: `10_dashboards/03_sales_dashboard.md` and `06_features/PET_Sales_Dashboard_v1.md`.
 
 ---
 
@@ -126,7 +126,7 @@ Implemented KPIs:
 - Staff breakdown with status bars (draft/submitted/locked)
 - Staff drill-down with weekly grid and entry list
 
-See: `06_dashboards/04_timesheet_dashboard.md`.
+See: `10_dashboards/04_timesheet_dashboard.md`.
 
 ---
 

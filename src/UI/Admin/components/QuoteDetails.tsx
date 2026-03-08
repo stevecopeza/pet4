@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Quote, QuoteBlock, QuoteSection, Employee, Team, Customer } from '../types';
 import { computeQuoteTotals, isQuoteLevelAdjustmentSection, sortSections, generateLocalId, getBaseBlockValue } from '../utils/quoteTotals';
 import MarkdownTextarea from './MarkdownTextarea';
@@ -18,8 +18,9 @@ const flattenTeams = (nodes: Team[]): Team[] => {
 };
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 import AddCostAdjustmentForm from './AddCostAdjustmentForm';
-import ConversationPanel from './ConversationPanel';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import useConversation from '../hooks/useConversation';
+import useConversationStatus from '../hooks/useConversationStatus';
 import { computeQuoteHealth } from '../healthCompute';
 
 /** Returns true if a project block's draft differs from its server payload. */
@@ -91,13 +92,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [editingSectionId, setEditingSectionId] = useState<number | null>(null);
   const [sectionDraftNames, setSectionDraftNames] = useState<Record<number, string>>({});
   const [activeSubjectKeys, setActiveSubjectKeys] = useState<Set<string>>(new Set());
-  const [conversationContext, setConversationContext] = useState<{
-    type: string;
-    id: string;
-    version: string;
-    subject: string;
-    subjectKey: string;
-  } | null>(null);
+  const { openConversation } = useConversation();
+  const quoteIdArr = useMemo(() => [String(quoteId)], [quoteId]);
+  const { statuses: quoteConvStatuses } = useConversationStatus('quote', quoteIdArr);
   const [editingHeaderField, setEditingHeaderField] = useState<'title' | 'description' | null>(null);
   const [headerDraftTitle, setHeaderDraftTitle] = useState('');
   const [headerDraftDescription, setHeaderDraftDescription] = useState('');
@@ -1771,18 +1768,28 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           {quote.state === 'sent' && (
             <button className="button button-primary" onClick={handleAccept}>Accept Quote</button>
           )}
-          <button
-            className="button"
-            onClick={() => setConversationContext({
-              type: 'quote',
-              id: quote.id.toString(),
-              version: quote.version.toString(),
-              subject: `Quote #${quote.id}: ${quote.title}`,
-              subjectKey: `quote:${quote.id}`
-            })}
-          >
-            Discuss
-          </button>
+          {(() => {
+            const cs = quoteConvStatuses.get(String(quoteId));
+            const dotColor = cs && cs.status !== 'none'
+              ? ({ red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' }[cs.status] || undefined)
+              : undefined;
+            return (
+              <button
+                className="button"
+                onClick={() => openConversation({
+                  contextType: 'quote',
+                  contextId: quote.id.toString(),
+                  contextVersion: quote.version.toString(),
+                  subject: `Quote #${quote.id}: ${quote.title}`,
+                  subjectKey: `quote:${quote.id}`
+                })}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                {dotColor && <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: dotColor }} />}
+                Discuss
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -1871,6 +1878,199 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         />
       )}
 
+      {/* ── Component Summary (read-only fallback when no sections/blocks exist) ── */}
+      {(quote.components || []).length > 0 && sectionsForRendering.length === 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <h3>Quote Components</h3>
+          {(quote.components || []).map((comp, ci) => {
+            const typeLabels: Record<string, string> = {
+              implementation: 'Implementation',
+              catalog: 'Catalog',
+              once_off_service: 'Once-off Service',
+              recurring: 'Recurring Service',
+            };
+            const typeLabel = typeLabels[comp.type] || comp.type;
+
+            return (
+              <div key={comp.id ?? ci} style={{ marginBottom: '16px' }}>
+                {/* Component header bar */}
+                <div
+                  style={{
+                    background: '#1d2327',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontWeight: 600 }}>{comp.section || 'General'}</span>
+                    <span style={{
+                      fontSize: '11px',
+                      background: 'rgba(255,255,255,0.15)',
+                      padding: '2px 8px',
+                      borderRadius: '3px',
+                    }}>
+                      {typeLabel}
+                    </span>
+                    {comp.description && (
+                      <span style={{ fontSize: '12px', opacity: 0.7 }}>{comp.description}</span>
+                    )}
+                  </div>
+                  <span style={{ fontWeight: 600 }}>${comp.sellValue.toFixed(2)}</span>
+                </div>
+
+                {/* ── Implementation: milestones → tasks ── */}
+                {comp.type === 'implementation' && comp.milestones && comp.milestones.map((ms, mi) => (
+                  <div key={ms.id ?? mi} style={{ marginTop: mi === 0 ? 0 : '2px' }}>
+                    <div style={{
+                      background: '#f0f0f1',
+                      padding: '6px 12px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      borderBottom: '1px solid #ccd0d4',
+                    }}>
+                      <span>{ms.title}</span>
+                      <span>${ms.sellValue.toFixed(2)}</span>
+                    </div>
+                    <table className="widefat fixed striped" style={{ border: '1px solid #ccd0d4', borderTop: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '6px 10px' }}>Task</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '80px' }}>Hours</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '90px' }}>Rate</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ms.tasks.map((task, ti) => (
+                          <tr key={task.id ?? ti}>
+                            <td style={{ padding: '6px 10px' }}>{task.title}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>{task.durationHours}h</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>${task.sellRate.toFixed(2)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>${task.sellValue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+
+                {/* ── Catalog: items ── */}
+                {comp.type === 'catalog' && comp.items && (
+                  <table className="widefat fixed striped" style={{ border: '1px solid #ccd0d4', borderTop: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Item</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '60px' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comp.items.map((item, ii) => (
+                        <tr key={ii}>
+                          <td style={{ padding: '6px 10px' }}>{item.description}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>{item.quantity}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>${item.unitSellPrice.toFixed(2)}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>${item.sellValue.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* ── Once-off Service (simple): units ── */}
+                {comp.type === 'once_off_service' && comp.topology === 'simple' && comp.units && (
+                  <table className="widefat fixed striped" style={{ border: '1px solid #ccd0d4', borderTop: 0 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Unit</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '60px' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comp.units.map((unit, ui) => (
+                        <tr key={unit.id ?? ui}>
+                          <td style={{ padding: '6px 10px' }}>{unit.title}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>{unit.quantity}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>${unit.unitSellPrice.toFixed(2)}</td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right' }}>${unit.sellValue.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* ── Once-off Service (complex): phases → units ── */}
+                {comp.type === 'once_off_service' && comp.topology === 'complex' && comp.phases && comp.phases.map((phase, pi) => (
+                  <div key={phase.id ?? pi} style={{ marginTop: pi === 0 ? 0 : '2px' }}>
+                    <div style={{
+                      background: '#f0f0f1',
+                      padding: '6px 12px',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      borderBottom: '1px solid #ccd0d4',
+                    }}>
+                      <span>{phase.name}</span>
+                      <span>${phase.sellValue.toFixed(2)}</span>
+                    </div>
+                    <table className="widefat fixed striped" style={{ border: '1px solid #ccd0d4', borderTop: 0 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '6px 10px' }}>Unit</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '60px' }}>Qty</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Unit Price</th>
+                          <th style={{ textAlign: 'right', padding: '6px 10px', width: '100px' }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {phase.units.map((unit, ui) => (
+                          <tr key={unit.id ?? ui}>
+                            <td style={{ padding: '6px 10px' }}>{unit.title}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>{unit.quantity}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>${unit.unitSellPrice.toFixed(2)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>${unit.sellValue.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+
+                {/* ── Recurring Service: summary card ── */}
+                {comp.type === 'recurring' && (
+                  <div style={{
+                    border: '1px solid #ccd0d4',
+                    borderTop: 0,
+                    padding: '12px',
+                    background: '#fff',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px',
+                    fontSize: '13px',
+                  }}>
+                    <div><strong>Service:</strong> {comp.serviceName}</div>
+                    <div><strong>Cadence:</strong> {comp.cadence}</div>
+                    <div><strong>Term:</strong> {comp.termMonths} months</div>
+                    <div><strong>Renewal:</strong> {comp.renewalModel}</div>
+                    <div><strong>Price/period:</strong> ${comp.sellPricePerPeriod?.toFixed(2)}</div>
+                    <div><strong>Cost/period:</strong> ${comp.internalCostPerPeriod?.toFixed(2)}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <h3>Quote Sections</h3>
       {sectionsForRendering.length > 0 && (
         <div>
@@ -1939,7 +2139,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                       items={[
                         { type: 'action', label: 'Rename', onClick: () => handleSectionNameClick(section.id, section.name) },
                         { type: 'action', label: 'Clone section', onClick: () => handleCloneSection(section.id) },
-                        { type: 'action', label: 'Discuss', onClick: () => setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Section: ${section.name || 'Untitled'}`, subjectKey: `quote_section:${section.id}` }), hasNotification: activeSubjectKeys.has(`quote_section:${section.id}`) },
+                        { type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'quote', contextId: quote.id.toString(), contextVersion: quote.version.toString(), subject: `Section: ${section.name || 'Untitled'}`, subjectKey: `quote_section:${section.id}` }), hasNotification: activeSubjectKeys.has(`quote_section:${section.id}`) },
                         { type: 'divider' },
                         ...(sectionIndex > 0
                           ? [{ type: 'action' as const, label: 'Move Up', onClick: () => handleMoveSection(section.id, sectionsForRendering[sectionIndex - 1].id) }]
@@ -2012,7 +2212,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                 hasNotification={activeSubjectKeys.has(`quote_line:${block.id}`)}
                                 items={[
                                   { type: 'action', label: isExpanded ? 'Close' : 'Edit', onClick: () => isExpanded ? cancelBlockEdit(block.id) : openBlockEditor(block) },
-                                  { type: 'action', label: 'Discuss', onClick: () => setConversationContext({ type: 'quote', id: quote.id.toString(), version: quote.version.toString(), subject: `Text Block`, subjectKey: `quote_line:${block.id}` }), hasNotification: activeSubjectKeys.has(`quote_line:${block.id}`) },
+                                  { type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'quote', contextId: quote.id.toString(), contextVersion: quote.version.toString(), subject: `Text Block`, subjectKey: `quote_line:${block.id}` }), hasNotification: activeSubjectKeys.has(`quote_line:${block.id}`) },
                                   { type: 'divider' },
                                   { type: 'action', label: 'Delete', onClick: () => handleDeleteBlock(block.id), danger: true, disabled: isExpanded, disabledReason: 'Cannot delete while editing' },
                                 ]}
@@ -2094,10 +2294,10 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                           onDelete: (id) => handleDeleteBlock(id),
                           onDiscuss: (b) => {
                             const desc = (b.payload && typeof b.payload.description === 'string') ? b.payload.description : b.type;
-                            setConversationContext({
-                              type: 'quote',
-                              id: quote.id.toString(),
-                              version: quote.version.toString(),
+                            openConversation({
+                              contextType: 'quote',
+                              contextId: quote.id.toString(),
+                              contextVersion: quote.version.toString(),
                               subject: `Block: ${desc}`,
                               subjectKey: `quote_line:${b.id}`,
                             });
@@ -2229,19 +2429,19 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                         rateCards={rateCards}
                                         onRoleChange={(roleId) => { if (roleId) fetchOwnerOptions(roleId); }}
                                         onDiscussPhase={(phaseName, phaseId) => {
-                                          setConversationContext({
-                                            type: 'quote',
-                                            id: quote.id.toString(),
-                                            version: quote.version.toString(),
+                                          openConversation({
+                                            contextType: 'quote',
+                                            contextId: quote.id.toString(),
+                                            contextVersion: quote.version.toString(),
                                             subject: `Phase: ${phaseName}`,
                                             subjectKey: `quote_phase:${block.id}:${phaseId ?? 'new'}`,
                                           });
                                         }}
                                         onDiscussUnit={(unitDesc, unitId) => {
-                                          setConversationContext({
-                                            type: 'quote',
-                                            id: quote.id.toString(),
-                                            version: quote.version.toString(),
+                                          openConversation({
+                                            contextType: 'quote',
+                                            contextId: quote.id.toString(),
+                                            contextVersion: quote.version.toString(),
                                             subject: `Unit: ${unitDesc}`,
                                             subjectKey: `quote_unit:${block.id}:${unitId ?? 'new'}`,
                                           });
@@ -3700,30 +3900,6 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         )}
       </div>
 
-      {conversationContext && (
-        <div className="pet-modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div className="pet-modal-content" style={{
-            background: 'white', padding: '20px', borderRadius: '5px', width: '800px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0 }}>Conversation: {conversationContext.subject}</h3>
-              <button onClick={() => setConversationContext(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2em' }}>&times;</button>
-            </div>
-            <ConversationPanel
-              contextType={conversationContext.type}
-              contextId={conversationContext.id}
-              contextVersion={conversationContext.version}
-              defaultSubject={conversationContext.subject}
-              subjectKey={conversationContext.subjectKey}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

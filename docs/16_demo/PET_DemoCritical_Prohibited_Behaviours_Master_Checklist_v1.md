@@ -1,6 +1,6 @@
 # PET Demo-Critical Areas --- Prohibited Behaviours Master Checklist v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/
+Date: 2026-02-26
 
 ## Purpose
 

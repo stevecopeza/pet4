@@ -1,6 +1,6 @@
 # TRAE Prompt — Fix Payment Schedule Default Render + Add Guardrails (v1.2)
 
-**Repo target path:** `plugins/pet/docs/09_demo/PET_TRAE_Prompt_Fix_Payment_Schedule_Default_Render_And_Add_Guardrails_v1_2.md`
+**Repo target path:** `plugins/pet/docs/16_demo/PET_TRAE_Prompt_Fix_Payment_Schedule_Default_Render_And_Add_Guardrails_v1_2.md`
 
 ```text
 clear
@@ -23,8 +23,8 @@ THIS TASK SCOPE:
 (3) Add guardrail tests to prevent regression.
 
 AUTHORITATIVE CONTRACTS:
-- plugins/pet/docs/04_quotes/PET_Payment_Schedule_Integration_Contract_v1_2.md
-- plugins/pet/docs/04_quotes/PET_Payment_Schedule_Prohibited_Behaviours_v1_2.md
+- plugins/pet/docs/08_quotes/PET_Payment_Schedule_Integration_Contract_v1_2.md
+- plugins/pet/docs/08_quotes/PET_Payment_Schedule_Prohibited_Behaviours_v1_2.md
 - Existing Payment Schedule spec v1.1 remains valid for fields/invariants, but this task is primarily integration guardrails.
 
 WORK ORDER (STRICT):

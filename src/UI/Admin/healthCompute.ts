@@ -93,6 +93,11 @@ export function computeProjectHealth(
     return result('blue');
   }
 
+  // Intake → grey (unscored, not yet in delivery)
+  if (project.state === 'intake') {
+    return result('grey');
+  }
+
   // Planned with no dates/budget → grey
   if (project.state === 'planned' && !project.endDate && !project.soldHours) {
     return result('grey');
@@ -256,6 +261,7 @@ export interface JourneyTotals {
 export interface JourneyData {
   segments: JourneySegment[];
   totals: JourneyTotals;
+  escalations: number;
 }
 
 /* Inline React component for recovery dots (use in .tsx consumers) */

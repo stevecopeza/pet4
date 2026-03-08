@@ -97,9 +97,9 @@ The Ticket Backbone specification unifies support tickets with project and inter
 Related documents:
 
 - `00_foundations/01_Ticket_Backbone_Principles_and_Invariants_v1.md`
-- `02_domain/03_Ticket_Lifecycle_and_State_Machines_v1.md`
-- `06_sla/07_SLA_Agreement_Entitlement_Drawdown_v1.md`
-- `07_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md`
+- `03_domain_model/03_Ticket_Lifecycle_and_State_Machines_v1.md`
+- `12_sla_engine/07_SLA_Agreement_Entitlement_Drawdown_v1.md`
+- `36_work_orchestration/08_Work_Orchestration_Queues_and_Assignment_v1.md`
 
 ---
 

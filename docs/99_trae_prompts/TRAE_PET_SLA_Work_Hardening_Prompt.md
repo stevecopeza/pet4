@@ -17,7 +17,7 @@ DO NOT redesign. IMPLEMENT ONLY per documentation.
 HARDENING ====================================================
 
 Reference:
-docs/08_implementation_blueprint/pre_demo_execution/05_sla_automation_memo.md
+docs/15_implementation_blueprint/pre_demo_execution/05_sla_automation_memo.md
 AND SLA Automation Hardening Addendum v1.0
 
 Tasks:

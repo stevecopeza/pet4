@@ -46,7 +46,8 @@ class CreateConversationHandler
             $command->contextType(), 
             $command->contextId(),
             $contextVersion,
-            $command->subjectKey()
+            $command->subjectKey(),
+            true // strict: do not fallback to a different subject_key
         );
         
         if ($existing) {

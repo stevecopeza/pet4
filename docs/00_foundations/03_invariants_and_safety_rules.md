@@ -80,8 +80,9 @@ These may be archived but never hard‑deleted.
 
 ### I‑06: All Time Must Have Context
 
-- Time entries require task context
-- Non‑project time must still map to an operational bucket
+- Time entries require **ticket** context (`ticket_id` is mandatory)
+- Non‑project time must still be tied to a ticket (internal, admin, or ad‑hoc)
+- See the Ticket Backbone: all person work activity must be tied to a Ticket
 
 **Violation handling:** Block time submission
 
@@ -126,10 +127,11 @@ These may be archived but never hard‑deleted.
 
 ## Support and SLA Invariants
 
-### I‑11: All Support Work Resolves to a Ticket
+### I‑11: All Work Resolves to a Ticket
 
-- Support time must be associated with a ticket
-- SLA applicability must be explicit
+- **All** time entries must be associated with a ticket (support, project, and internal)
+- SLA applicability is explicit (support context only)
+- This is the Ticket Backbone invariant: there is no path to log time without a ticket
 
 **Violation handling:** Block time submission
 

@@ -1,6 +1,6 @@
 # PET Lifecycle Integration Contract --- Advisory Layer v1.0
 
-Date: 2026-02-26 Target location: docs/ToBeMoved/
+Date: 2026-02-26
 
 ## Purpose
 

@@ -44,11 +44,12 @@ Malleable fields may exist on:
 - Knowledge articles
 
 They may **not** exist on:
-- Time entries
 - KPI source events
-- Financial commitments
+- Financial commitments (quotes, contracts, baselines)
 
 These are structurally fixed.
+
+Note: Time entries do carry a `malleable_data` JSON column for operational metadata (e.g. correction type), but this is schema-light and not governed by the full malleable field framework.
 
 ---
 

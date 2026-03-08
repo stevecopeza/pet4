@@ -1024,6 +1024,7 @@ final class DemoSeedService
                 ]
             ]));
         }
+        $this->createSectionsAndBlocksForQuote($seedRunId, $q1Id);
         $q1 = $quoteRepo->findById($q1Id);
         if ($q1 && !$q1->state()->isTerminal()) {
             $q1Total = $q1->totalValue();
@@ -1120,6 +1121,7 @@ final class DemoSeedService
                     ],
                 ]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q2Id);
         }
 
         // Q3: Recurring-only, draft
@@ -1144,6 +1146,7 @@ final class DemoSeedService
                 'internal_cost_per_period' => 900.0,
                 'sla_snapshot' => ['name' => 'Standard', 'response_minutes' => 240, 'resolution_minutes' => 1440]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q3Id);
         }
 
         // Q4: Catalog-only, accepted
@@ -1176,6 +1179,7 @@ final class DemoSeedService
                     ['description' => 'Remote Consulting', 'quantity' => 6, 'unit_sell_price' => 180.0, 'unit_internal_cost' => 100.0, 'catalog_item_id' => $consultId, 'sku' => 'SERV-001', 'type' => 'service', 'role_id' => $consultRoleId],
                 ]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q4Id);
         }
         $q4 = $quoteRepo->findById($q4Id);
         if ($q4 && !$q4->state()->isTerminal()) {
@@ -1266,6 +1270,7 @@ final class DemoSeedService
                 'internal_cost_per_period' => 1100.0,
                 'sla_snapshot' => ['name' => 'Premium', 'response_minutes' => 60, 'resolution_minutes' => 480]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q5Id);
         }
         $q5e = $quoteRepo->findById($q5Id);
         if ($q5e && !$q5e->state()->isTerminal()) {
@@ -1308,9 +1313,10 @@ final class DemoSeedService
                     ['description' => 'SSL Certificates', 'quantity' => 4, 'unit_sell_price' => 25.0, 'unit_internal_cost' => 10.0, 'catalog_item_id' => $sslId, 'sku' => 'PROD-300', 'type' => 'product', 'role_id' => null],
                 ]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q6Id);
         }
 
-        // Q7: RPM Annual Support Renewal (Recurring + Catalog) — sent
+        // Q7: RPM Annual Support Renewal
         $q7Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q7 Annual Support Renewal'));
         $q7New = $q7Existing <= 0;
         $q7Id = $q7Existing > 0 ? $q7Existing : $createQuote->handle(new \Pet\Application\Commercial\Command\CreateQuoteCommand(
@@ -1338,6 +1344,7 @@ final class DemoSeedService
                     ['description' => 'Support Hours', 'quantity' => 20, 'unit_sell_price' => 150.0, 'unit_internal_cost' => 90.0, 'catalog_item_id' => $supportHrId, 'sku' => 'SERV-002', 'type' => 'service', 'role_id' => $supportRoleId],
                 ]
             ]));
+            $this->createSectionsAndBlocksForQuote($seedRunId, $q7Id);
         }
         $q7e = $quoteRepo->findById($q7Id);
         if ($q7e && !$q7e->state()->isTerminal()) {
@@ -1394,10 +1401,11 @@ final class DemoSeedService
                         ],
                     ]
                 ]));
+                $this->createSectionsAndBlocksForQuote($seedRunId, $q8Id);
             }
         }
 
-        // Q9: DevOps Transformation (Implementation, new model) — sent
+        // Q9: DevOps Transformation
         if ($canSeedNewModel && $devopsStId > 0 && $cloudStId > 0) {
             $q9Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q9 DevOps Transformation'));
             $q9New = $q9Existing <= 0;
@@ -1428,6 +1436,7 @@ final class DemoSeedService
                         ],
                     ]
                 ]));
+                $this->createSectionsAndBlocksForQuote($seedRunId, $q9Id);
             }
             $q9e = $quoteRepo->findById($q9Id);
             if ($q9e && !$q9e->state()->isTerminal()) {
@@ -1477,6 +1486,7 @@ final class DemoSeedService
                     'internal_cost_per_period' => 950.0,
                     'sla_snapshot' => ['name' => 'Standard', 'response_minutes' => 240, 'resolution_minutes' => 1440]
                 ]));
+                $this->createSectionsAndBlocksForQuote($seedRunId, $q10Id);
             }
             $q10e = $quoteRepo->findById($q10Id);
             if ($q10e && !$q10e->state()->isTerminal()) {
@@ -1495,6 +1505,200 @@ final class DemoSeedService
 
         $totalQuotes = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $quotesTable");
         return ['quotes' => $totalQuotes];
+    }
+
+    /**
+     * Creates sections + blocks from a quote's existing components so the
+     * block-based UI renderer displays the content.  Idempotent — skips if
+     * sections already exist for the quote.
+     */
+    private function createSectionsAndBlocksForQuote(string $seedRunId, int $quoteId): void
+    {
+        $wpdb = $this->wpdb;
+        $sectionsTable = $wpdb->prefix . 'pet_quote_sections';
+        $blocksTable   = $wpdb->prefix . 'pet_quote_blocks';
+        $compTable     = $wpdb->prefix . 'pet_quote_components';
+        $msTable       = $wpdb->prefix . 'pet_quote_milestones';
+        $taskTable     = $wpdb->prefix . 'pet_quote_tasks';
+        $catItemTable  = $wpdb->prefix . 'pet_quote_catalog_items';
+        $recurTable    = $wpdb->prefix . 'pet_quote_recurring_services';
+
+        // Guard: tables must exist
+        if ($wpdb->get_var("SHOW TABLES LIKE '$sectionsTable'") !== $sectionsTable
+            || $wpdb->get_var("SHOW TABLES LIKE '$blocksTable'") !== $blocksTable) {
+            return;
+        }
+
+        // Idempotent: skip if sections already exist for this quote
+        $existing = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $sectionsTable WHERE quote_id = %d", $quoteId
+        ));
+        if ($existing > 0) {
+            return;
+        }
+
+        // Load components
+        $components = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM $compTable WHERE quote_id = %d ORDER BY id ASC", $quoteId
+        ));
+        if (empty($components)) {
+            return;
+        }
+
+        // Group components by section label
+        $groups = [];
+        foreach ($components as $comp) {
+            $sec = $comp->section ?: 'General';
+            $groups[$sec][] = $comp;
+        }
+
+        $uid = 1; // running counter for unique phase/unit IDs within this quote
+        $sectionOrder = 0;
+
+        foreach ($groups as $sectionName => $comps) {
+            // Create section
+            $wpdb->insert($sectionsTable, [
+                'quote_id' => $quoteId,
+                'name' => $sectionName,
+                'order_index' => $sectionOrder * 1000,
+                'show_total_value' => 1,
+                'show_item_count' => 0,
+                'show_total_hours' => 0,
+            ]);
+            $sectionId = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $sectionsTable, (string)$sectionId);
+            $sectionOrder++;
+
+            $blockOrder = 0;
+
+            foreach ($comps as $comp) {
+                $compId = (int)$comp->id;
+                $type = $comp->type;
+                $desc = $comp->description ?: '';
+
+                if ($type === 'implementation') {
+                    // Build OnceOffProjectBlock payload from milestones → tasks
+                    $milestones = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM $msTable WHERE component_id = %d ORDER BY id ASC", $compId
+                    ));
+                    $phases = [];
+                    $totalValue = 0.0;
+                    foreach ($milestones as $ms) {
+                        $tasks = $wpdb->get_results($wpdb->prepare(
+                            "SELECT * FROM $taskTable WHERE milestone_id = %d ORDER BY id ASC", (int)$ms->id
+                        ));
+                        $units = [];
+                        $phaseTotalValue = 0.0;
+                        foreach ($tasks as $task) {
+                            $qty = (float)$task->duration_hours;
+                            $rate = (float)$task->sell_rate;
+                            $tv = $qty * $rate;
+                            $phaseTotalValue += $tv;
+                            $units[] = [
+                                'id' => 'un-' . $uid++,
+                                'description' => $task->title,
+                                'quantity' => $qty,
+                                'unitPrice' => $rate,
+                                'totalValue' => $tv,
+                            ];
+                        }
+                        $totalValue += $phaseTotalValue;
+                        $phases[] = [
+                            'id' => 'ph-' . $uid++,
+                            'name' => $ms->title,
+                            'order' => count($phases),
+                            'units' => $units,
+                            'phaseTotalValue' => $phaseTotalValue,
+                        ];
+                    }
+                    $payload = [
+                        'description' => $desc,
+                        'totalValue' => $totalValue,
+                        'phases' => $phases,
+                    ];
+                    $wpdb->insert($blocksTable, [
+                        'quote_id' => $quoteId,
+                        'component_id' => $compId,
+                        'section_id' => $sectionId,
+                        'type' => 'OnceOffProjectBlock',
+                        'order_index' => $blockOrder * 1000,
+                        'priced' => 1,
+                        'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    ]);
+                    $this->registryAdd($seedRunId, $blocksTable, (string)(int)$wpdb->insert_id);
+                    $blockOrder++;
+
+                } elseif ($type === 'catalog') {
+                    // One HardwareBlock per catalog item
+                    $items = $wpdb->get_results($wpdb->prepare(
+                        "SELECT * FROM $catItemTable WHERE component_id = %d ORDER BY id ASC", $compId
+                    ));
+                    foreach ($items as $item) {
+                        $qty = (float)$item->quantity;
+                        $price = (float)$item->unit_sell_price;
+                        $tv = $qty * $price;
+                        $payload = [
+                            'description' => $item->description,
+                            'quantity' => $qty,
+                            'unitPrice' => $price,
+                            'totalValue' => $tv,
+                            'catalogItemId' => isset($item->catalog_item_id) ? (int)$item->catalog_item_id : null,
+                        ];
+                        $wpdb->insert($blocksTable, [
+                            'quote_id' => $quoteId,
+                            'component_id' => $compId,
+                            'section_id' => $sectionId,
+                            'type' => 'HardwareBlock',
+                            'order_index' => $blockOrder * 1000,
+                            'priced' => 1,
+                            'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        ]);
+                        $this->registryAdd($seedRunId, $blocksTable, (string)(int)$wpdb->insert_id);
+                        $blockOrder++;
+                    }
+
+                } elseif ($type === 'recurring') {
+                    // RepeatServiceBlock from recurring service data
+                    $recur = $wpdb->get_row($wpdb->prepare(
+                        "SELECT * FROM $recurTable WHERE component_id = %d LIMIT 1", $compId
+                    ));
+                    if ($recur) {
+                        $sellPerPeriod = (float)$recur->sell_price_per_period;
+                        $cadence = $recur->cadence;
+                        $termMonths = (int)$recur->term_months;
+                        $monthsPerPeriod = match ($cadence) {
+                            'quarterly' => 3,
+                            'annually' => 12,
+                            default => 1,
+                        };
+                        $periods = $termMonths / $monthsPerPeriod;
+                        $totalValue = $sellPerPeriod * $periods;
+
+                        $payload = [
+                            'description' => $desc,
+                            'serviceName' => $recur->service_name,
+                            'cadence' => $cadence,
+                            'termMonths' => $termMonths,
+                            'renewalModel' => $recur->renewal_model,
+                            'sellPricePerPeriod' => $sellPerPeriod,
+                            'internalCostPerPeriod' => (float)$recur->internal_cost_per_period,
+                            'totalValue' => $totalValue,
+                        ];
+                        $wpdb->insert($blocksTable, [
+                            'quote_id' => $quoteId,
+                            'component_id' => $compId,
+                            'section_id' => $sectionId,
+                            'type' => 'RepeatServiceBlock',
+                            'order_index' => $blockOrder * 1000,
+                            'priced' => 1,
+                            'payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                        ]);
+                        $this->registryAdd($seedRunId, $blocksTable, (string)(int)$wpdb->insert_id);
+                        $blockOrder++;
+                    }
+                }
+            }
+        }
     }
 
     private function seedBlockBasedQuotes(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -2383,9 +2587,10 @@ final class DemoSeedService
             'billing_context_type' => 'project',
             'is_billable_default' => 1,
             'is_rollup' => 1,
+            'is_baseline_locked' => 1,
             'estimated_minutes' => 2400,
             'sold_minutes' => 2400,
-            'remaining_minutes' => 1200,
+            'sold_value_cents' => 36000000,  // $360,000 = 2400min * $150/hr
             'created_at' => $now,
             'opened_at' => $now,
         ]);
@@ -2395,16 +2600,16 @@ final class DemoSeedService
         // Update root_ticket_id to self
         $wpdb->update($ticketsTable, ['root_ticket_id' => $parentId], ['id' => $parentId]);
 
-        // Child leaf tickets
+        // Child leaf tickets — [subject, status, est_min, sold_min, sold_value_cents, kind]
         $children = [
-            ['Discovery & Requirements', 'planned', 480, 480, 480, 'task'],
-            ['UI/UX Design', 'in_progress', 600, 600, 300, 'task'],
-            ['Frontend Development', 'planned', 720, 720, 720, 'task'],
-            ['Backend Integration', 'planned', 360, 360, 360, 'task'],
-            ['QA & Testing', 'planned', 240, 240, 240, 'task'],
+            ['Discovery & Requirements', 'planned', 480, 480, 7200000, 'task'],   // 8h * $150 = $72,000
+            ['UI/UX Design', 'in_progress', 600, 600, 9000000, 'task'],           // 10h * $150 = $90,000
+            ['Frontend Development', 'planned', 720, 720, 10800000, 'task'],      // 12h * $150 = $108,000
+            ['Backend Integration', 'planned', 360, 360, 5400000, 'task'],        // 6h * $150 = $54,000
+            ['QA & Testing', 'planned', 240, 240, 3600000, 'task'],              // 4h * $150 = $36,000
         ];
         $childIds = [];
-        foreach ($children as [$subject, $status, $est, $sold, $remaining, $kind]) {
+        foreach ($children as [$subject, $status, $est, $sold, $soldCents, $kind]) {
             $wpdb->insert($ticketsTable, [
                 'customer_id' => $customerId,
                 'subject' => $subject,
@@ -2420,15 +2625,42 @@ final class DemoSeedService
                 'billing_context_type' => 'project',
                 'is_billable_default' => 1,
                 'is_rollup' => 0,
+                'is_baseline_locked' => 1,
                 'estimated_minutes' => $est,
                 'sold_minutes' => $sold,
-                'remaining_minutes' => $remaining,
+                'sold_value_cents' => $soldCents,
                 'created_at' => $now,
                 'opened_at' => $now,
             ]);
             $childIds[] = (int)$wpdb->insert_id;
             $this->registryAdd($seedRunId, $ticketsTable, (string)$wpdb->insert_id);
         }
+
+        // --- Change order ticket (independent sold commitment) ---
+        $wpdb->insert($ticketsTable, [
+            'customer_id' => $customerId,
+            'subject' => 'Additional UX Review (Change Order)',
+            'description' => 'Change order: additional UX review scope added after initial acceptance.',
+            'status' => 'planned',
+            'priority' => 'medium',
+            'primary_container' => 'project',
+            'lifecycle_owner' => 'project',
+            'project_id' => $projectId,
+            'ticket_kind' => 'work',
+            'billing_context_type' => 'project',
+            'is_billable_default' => 1,
+            'is_rollup' => 0,
+            'is_baseline_locked' => 1,
+            'estimated_minutes' => 240,
+            'sold_minutes' => 240,
+            'sold_value_cents' => 6000000,  // 4h * $250 = $60,000
+            'change_order_source_ticket_id' => $parentId,
+            'created_at' => $now,
+            'opened_at' => $now,
+        ]);
+        $changeOrderId = (int)$wpdb->insert_id;
+        $wpdb->update($ticketsTable, ['root_ticket_id' => $changeOrderId], ['id' => $changeOrderId]);
+        $this->registryAdd($seedRunId, $ticketsTable, (string)$changeOrderId);
 
         // --- Internal tickets (no customer, no billing) ---
         $internalTickets = [
@@ -2521,7 +2753,7 @@ final class DemoSeedService
         }
 
         return [
-            'project_tickets' => 1 + count($childIds), // parent + children
+            'project_tickets' => 1 + count($childIds) + 1, // parent + children + change order
             'internal_tickets' => $internalCount,
             'ticket_links' => ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable)
                 ? (int)$wpdb->get_var("SELECT COUNT(*) FROM $linksTable")
@@ -3098,6 +3330,8 @@ final class DemoSeedService
         $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
         $createConversation = $c->get(\Pet\Application\Conversation\Command\CreateConversationHandler::class);
         $postMessage = $c->get(\Pet\Application\Conversation\Command\PostMessageHandler::class);
+        $resolveHandler = $c->get(\Pet\Application\Conversation\Command\ResolveConversationHandler::class);
+        $addParticipant = $c->get(\Pet\Application\Conversation\Command\AddParticipantHandler::class);
         $wpdb = $this->wpdb;
 
         $currentUserId = get_current_user_id();
@@ -3117,7 +3351,7 @@ final class DemoSeedService
         $quoteMessages = [
             [
                 ['actor' => $currentUserId, 'body' => 'I\'ve structured this as Implementation + Advisory to cover both delivery and governance. The 4 milestones follow our standard engagement model.'],
-                ['actor' => $miaId, 'body' => 'Looks good. The payment schedule split 50/50 works for RPM. Can we confirm the advisory pack pricing with Ava?'],
+                ['actor' => $miaId, 'body' => 'Looks good. The payment schedule split 50/50 works for RPM. Can we confirm the advisory pack pricing with @[user:' . $avaId . ']?', 'mentions' => [['type' => 'user', 'id' => $avaId]]],
                 ['actor' => $avaId, 'body' => 'Advisory rates confirmed. 4x Governance Review + 3x SLA Design is the right mix for their maturity level.'],
                 ['actor' => $currentUserId, 'body' => 'Perfect. Sending to the client for approval.'],
             ],
@@ -3152,13 +3386,34 @@ final class DemoSeedService
             ],
         ];
 
+        // Backdate offsets (hours before now) per quote for status colour variety
+        // Q1 (idx 0): 4 msgs, last from currentUser >12h ago → 🟢 Green (old, but user's own)
+        // Q2 (idx 1): 2 msgs, last from Mia >10h ago → 🔴 Red
+        // Q3 (idx 2): 2 msgs, last from currentUser, recent → 🟢 Green
+        // Q4 (idx 3): 3 msgs, last from Mia <8h ago → 🟡 Amber
+        // Q5 (idx 4): 4 msgs, last from Ethan <3h ago → 🟡 Amber
+        // Q6 (idx 5): 3 msgs → resolved → 🔵 Blue
+        // Q7 (idx 6): 3 msgs, last from currentUser, recent → 🟢 Green
+        $quoteTimestamps = [
+            0 => [-48, -47, -46, -12],
+            1 => [-26, -10],
+            2 => [-6, -0.5],
+            3 => [-24, -12, -2],
+            4 => [-10, -8, -5, -1],
+            5 => [-72, -48, -24],
+            6 => [-4, -3, -0.25],
+        ];
+        $eventsTable = $wpdb->prefix . 'pet_conversation_events';
+        $convsTable = $wpdb->prefix . 'pet_conversations';
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
         foreach ($quotes as $qi => $q) {
             try {
                 $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
                     'quote',
                     (string)$q->id,
                     'Discussion: ' . $q->title,
-                    'quote-' . $q->id . '-general',
+                    'quote:' . $q->id,
                     $currentUserId
                 ));
                 $messages = $quoteMessages[$qi] ?? [];
@@ -3166,14 +3421,138 @@ final class DemoSeedService
                     $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
                         $convUuid,
                         $msg['body'],
-                        [],
+                        $msg['mentions'] ?? [],
                         [],
                         $msg['actor']
                     ));
                 }
+
+                // Add team participant to quote #1
+                if ($qi === 0) {
+                    $supportTeamId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_teams WHERE name LIKE '%Support%' ORDER BY id ASC LIMIT 1");
+                    if ($supportTeamId) {
+                        try {
+                            $addParticipant->handle(new \Pet\Application\Conversation\Command\AddParticipantCommand(
+                                $convUuid, 'team', $supportTeamId, $currentUserId
+                            ));
+                        } catch (\Throwable $e) { /* skip */ }
+                    }
+                }
+
+                // Resolve quote #6 conversation → Blue
+                if ($qi === 5) {
+                    try {
+                        $resolveHandler->handle(new \Pet\Application\Conversation\Command\ResolveConversationCommand(
+                            $convUuid, $currentUserId
+                        ));
+                    } catch (\Throwable $e) { /* skip */ }
+                }
+
+                // Backdate message timestamps for status colour variety
+                $offsets = $quoteTimestamps[$qi] ?? [];
+                if (!empty($offsets)) {
+                    $convId = (int)$wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM $convsTable WHERE uuid = %s", $convUuid
+                    ));
+                    if ($convId) {
+                        $eventIds = $wpdb->get_col($wpdb->prepare(
+                            "SELECT id FROM $eventsTable WHERE conversation_id = %d AND event_type = 'MessagePosted' ORDER BY id ASC",
+                            $convId
+                        ));
+                        foreach ($eventIds as $ei => $eventId) {
+                            if (isset($offsets[$ei])) {
+                                $backdated = $now->modify((int)($offsets[$ei] * 3600) . ' seconds');
+                                $wpdb->update(
+                                    $eventsTable,
+                                    ['occurred_at' => $backdated->format('Y-m-d H:i:s')],
+                                    ['id' => (int)$eventId]
+                                );
+                            }
+                        }
+                    }
+                }
+
                 $created++;
             } catch (\Throwable $e) {
                 // Skip if conversation already exists
+            }
+        }
+
+        // ── Line-item conversations on the first quote's blocks and sections ──
+        if (!empty($quotes)) {
+            $firstQuoteId = (int)$quotes[0]->id;
+            $blocksTable = $wpdb->prefix . 'pet_quote_blocks';
+            $sectionsTable = $wpdb->prefix . 'pet_quote_sections';
+            $lineBlocks = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, payload_json FROM $blocksTable WHERE quote_id = %d AND type != 'TextBlock' ORDER BY id ASC LIMIT 3",
+                $firstQuoteId
+            ));
+            $lineSections = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, name FROM $sectionsTable WHERE quote_id = %d ORDER BY id ASC LIMIT 2",
+                $firstQuoteId
+            ));
+
+            // Conversations on individual blocks (line items)
+            $blockConversations = [
+                [
+                    ['actor' => $miaId, 'body' => 'Can we revisit the pricing on this line item? The rate feels high compared to our last proposal for RPM.'],
+                    ['actor' => $currentUserId, 'body' => 'It\'s based on the updated rate card. The senior consultant rate went up 8% this quarter.'],
+                    ['actor' => $miaId, 'body' => 'Fair enough. Let\'s keep it — RPM won\'t push back on $200/hr for this scope.'],
+                ],
+                [
+                    ['actor' => $liamId, 'body' => 'The hours on this item look tight. Last time we scoped something similar it took 30% longer.'],
+                    ['actor' => $currentUserId, 'body' => 'Noted. I\'ve padded slightly but let\'s flag it as a risk if they push for fixed price.'],
+                ],
+                [
+                    ['actor' => $avaId, 'body' => 'This block should reference the SLA terms from the recurring component. Client may ask about overlap.'],
+                    ['actor' => $miaId, 'body' => 'Good catch. I\'ll add a note in the description linking to the SLA section.'],
+                ],
+            ];
+            foreach ($lineBlocks as $bi => $block) {
+                $msgs = $blockConversations[$bi] ?? [];
+                if (empty($msgs)) continue;
+                $payload = json_decode($block->payload_json, true) ?: [];
+                $desc = $payload['description'] ?? 'Line Item';
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote',
+                        (string)$firstQuoteId,
+                        'Line: ' . $desc,
+                        'quote_line:' . $block->id,
+                        $currentUserId
+                    ));
+                    foreach ($msgs as $msg) {
+                        $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                            $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                        ));
+                    }
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+
+            // Conversation on the first section
+            if (!empty($lineSections)) {
+                $section = $lineSections[0];
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote',
+                        (string)$firstQuoteId,
+                        'Section: ' . ($section->name ?: 'Untitled'),
+                        'quote_section:' . $section->id,
+                        $currentUserId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid,
+                        'Should we rename this section to better reflect the deliverables? "Delivery" is generic.',
+                        [], [], $miaId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid,
+                        'Agreed — let\'s call it "Implementation & Delivery" to align with the SOW language.',
+                        [], [], $currentUserId
+                    ));
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
             }
         }
 
@@ -3200,7 +3579,7 @@ final class DemoSeedService
             // 4. VPN access (RPM)
             [
                 ['actor' => $avaId, 'body' => 'New contractor needs VPN access for the RPM project. They start Monday.'],
-                ['actor' => $currentUserId, 'body' => 'Ticket escalated — SLA is tight on this one. @Noah can you provision today?'],
+                ['actor' => $currentUserId, 'body' => 'Ticket escalated — SLA is tight on this one. @[user:' . $noahId . '] can you provision today?', 'mentions' => [['type' => 'user', 'id' => $noahId]]],
             ],
             // 5. Printer offline (RPM)
             [
@@ -3312,7 +3691,7 @@ final class DemoSeedService
                     'ticket',
                     (string)$t->id,
                     'Ticket #' . $t->id . ': ' . $t->subject,
-                    'ticket-' . $t->id . '-general',
+                    'ticket:' . $t->id,
                     $currentUserId
                 ));
 
@@ -3334,11 +3713,96 @@ final class DemoSeedService
                     $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
                         $convUuid,
                         $msg['body'],
-                        [],
+                        $msg['mentions'] ?? [],
                         [],
                         $msg['actor']
                     ));
                 }
+
+                // Resolve ticket #3 conversation (server alert — resolved)
+                if ($ti === 2) {
+                    try {
+                        $resolveHandler->handle(new \Pet\Application\Conversation\Command\ResolveConversationCommand(
+                            $convUuid, $noahId
+                        ));
+                    } catch (\Throwable $e) { /* skip */ }
+                }
+
+                $created++;
+            } catch (\Throwable $e) {
+                // Skip on error
+            }
+        }
+
+        // ── Lead conversations (3) with backdated timestamps for status indicators ──
+        $leads = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_leads ORDER BY id ASC LIMIT 6");
+        $leadMessages = [
+            // L3 (index 2): K8s Migration — last msg from Mia, >8h ago → 🔴 Red
+            2 => [
+                ['actor' => $currentUserId, 'body' => 'Spoke with the client about their K8s migration timeline. They want a phased approach over 3 months.'],
+                ['actor' => $miaId, 'body' => 'Good call. The phased approach reduces risk. Can you draft a high-level scope by Thursday?'],
+                ['actor' => $miaId, 'body' => '@[user:' . $currentUserId . '] Just checking — have you had a chance to draft the scope for the K8s migration lead?', 'mentions' => [['type' => 'user', 'id' => $currentUserId]]],
+            ],
+            // L4 (index 3): Security Audit — last msg from Isabella, <8h ago → 🟡 Amber
+            3 => [
+                ['actor' => $isabellaId, 'body' => 'Security audit lead from Acme. Their compliance deadline is end of next quarter.'],
+                ['actor' => $isabellaId, 'body' => 'I\'ve prepared the preliminary assessment checklist. Sending to Acme for initial sign-off.'],
+            ],
+            // L5 (index 4): Backup Add-on — last msg from current user → 🟢 Green
+            4 => [
+                ['actor' => $miaId, 'body' => 'RPM asked about adding managed backup to their existing contract. Good upsell opportunity.'],
+                ['actor' => $currentUserId, 'body' => 'Agreed. I\'ve prepared a pricing breakdown for 3 tiers. Will present to Priya this afternoon.'],
+            ],
+        ];
+
+        // Backdate offsets (hours before now) per lead
+        $leadTimestamps = [
+            2 => [-14, -13, -10],  // L3: all >8h ago
+            3 => [-3, -1],         // L4: recent, <8h
+            4 => [-5, -0.5],       // L5: recent, <8h
+        ];
+
+        $eventsTable = $wpdb->prefix . 'pet_conversation_events';
+        $convsTable = $wpdb->prefix . 'pet_conversations';
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+        foreach ($leadMessages as $li => $msgs) {
+            if (!isset($leads[$li])) continue;
+            $lead = $leads[$li];
+            try {
+                $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                    'lead', (string)$lead->id, 'Lead: ' . $lead->subject, 'lead:' . $lead->id, $currentUserId
+                ));
+                foreach ($msgs as $msg) {
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                    ));
+                }
+
+                // Backdate timestamps
+                $offsets = $leadTimestamps[$li] ?? [];
+                if (!empty($offsets)) {
+                    $convId = (int)$wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM $convsTable WHERE uuid = %s", $convUuid
+                    ));
+                    if ($convId) {
+                        $eventIds = $wpdb->get_col($wpdb->prepare(
+                            "SELECT id FROM $eventsTable WHERE conversation_id = %d AND event_type = 'MessagePosted' ORDER BY id ASC",
+                            $convId
+                        ));
+                        foreach ($eventIds as $ei => $eventId) {
+                            if (isset($offsets[$ei])) {
+                                $backdated = $now->modify((int)($offsets[$ei] * 3600) . ' seconds');
+                                $wpdb->update(
+                                    $eventsTable,
+                                    ['occurred_at' => $backdated->format('Y-m-d H:i:s')],
+                                    ['id' => (int)$eventId]
+                                );
+                            }
+                        }
+                    }
+                }
+
                 $created++;
             } catch (\Throwable $e) {
                 // Skip on error
@@ -3365,7 +3829,7 @@ final class DemoSeedService
         foreach ($projects as $pi => $p) {
             try {
                 $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
-                    'project', (string)$p->id, 'Project: ' . $p->name, 'project-' . $p->id . '-general', $currentUserId
+                    'project', (string)$p->id, 'Project: ' . $p->name, 'project:' . $p->id, $currentUserId
                 ));
                 $messages = $projectMessages[$pi] ?? [];
                 foreach ($messages as $msg) {
@@ -3376,6 +3840,355 @@ final class DemoSeedService
                 $created++;
             } catch (\Throwable $e) {
                 // Skip on error
+            }
+        }
+
+        // ── Block-based quote conversations (BQ1–BQ5) with varied statuses ──
+        $bqTitles = [
+            'BQ1 RPM Digital Transformation',
+            'BQ2 Acme Infrastructure Overhaul',
+            'BQ3 Nexus Cloud-Native Platform',
+            'BQ4 Government Security Programme',
+            'BQ5 RPM Support & Maintenance Package',
+        ];
+        $bqMessages = [
+            // BQ1: active discussion, last from Mia >10h → Red
+            [
+                ['actor' => $currentUserId, 'body' => 'Block-based quote ready for review. Services and project delivery structured in two sections.'],
+                ['actor' => $miaId, 'body' => 'The project block for Website Rebuild looks good. Can Ethan confirm the frontend hours are realistic?'],
+                ['actor' => $miaId, 'body' => '@[user:' . $currentUserId . '] We need to finalize this before the client meeting Friday.', 'mentions' => [['type' => 'user', 'id' => $currentUserId]]],
+            ],
+            // BQ2: last from Ethan <4h → Amber
+            [
+                ['actor' => $isabellaId, 'body' => 'Security assessment section priced at standard rates. The vulnerability assessment at $2,500/day is competitive.'],
+                ['actor' => $ethanId, 'body' => 'Infrastructure migration project block has 3 phases. The Validation phase with smoke testing and security verification is critical.'],
+                ['actor' => $ethanId, 'body' => 'I\'ve reviewed the implementation section — firewall config and server hardening hours look right.'],
+            ],
+            // BQ3: last from currentUser → Green
+            [
+                ['actor' => $ethanId, 'body' => 'Two project blocks in the delivery section: API Platform and Cloud Infrastructure. Both have detailed phases.'],
+                ['actor' => $avaId, 'body' => 'Advisory section with Cloud Strategy and Cost Optimisation — total 9 consulting sessions at $200-220/hr.'],
+                ['actor' => $currentUserId, 'body' => 'Nexus is happy with the structure. Sending for sign-off next week.'],
+            ],
+            // BQ4: resolved → Blue
+            [
+                ['actor' => $isabellaId, 'body' => 'Government security programme covers pen testing, compliance, incident response, and training.'],
+                ['actor' => $miaId, 'body' => 'Policy framework and audit support in the Compliance & Governance section rounds it out.'],
+                ['actor' => $currentUserId, 'body' => 'Quote accepted by the department. Moving to delivery.'],
+            ],
+            // BQ5: last from Noah <2h → Amber
+            [
+                ['actor' => $liamId, 'body' => 'Support package looks comprehensive. 20 helpdesk hours + monitoring + patching covers their needs.'],
+                ['actor' => $currentUserId, 'body' => 'The runbook project in the Escalation Management section is key — RPM needs documented processes.'],
+                ['actor' => $noahId, 'body' => 'Emergency callout hours might need bumping to 10. They burned through 8 last year and traffic is up.'],
+            ],
+        ];
+        $bqTimestamps = [
+            0 => [-30, -20, -11],       // BQ1: Red
+            1 => [-12, -6, -2],         // BQ2: Amber
+            2 => [-8, -4, -0.5],        // BQ3: Green
+            3 => [-96, -72, -48],       // BQ4: Blue (old, resolved)
+            4 => [-8, -4, -1],          // BQ5: Amber
+        ];
+
+        foreach ($bqTitles as $bqi => $bqTitle) {
+            $bqRow = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, title FROM {$wpdb->prefix}pet_quotes WHERE title = %s ORDER BY id DESC LIMIT 1",
+                $bqTitle
+            ));
+            if (!$bqRow) continue;
+            try {
+                $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                    'quote', (string)$bqRow->id, 'Discussion: ' . $bqRow->title, 'quote:' . $bqRow->id, $currentUserId
+                ));
+                $msgs = $bqMessages[$bqi] ?? [];
+                foreach ($msgs as $msg) {
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                    ));
+                }
+                // Resolve BQ4
+                if ($bqi === 3) {
+                    try {
+                        $resolveHandler->handle(new \Pet\Application\Conversation\Command\ResolveConversationCommand(
+                            $convUuid, $currentUserId
+                        ));
+                    } catch (\Throwable $e) { /* skip */ }
+                }
+                // Backdate
+                $offsets = $bqTimestamps[$bqi] ?? [];
+                if (!empty($offsets)) {
+                    $convId = (int)$wpdb->get_var($wpdb->prepare(
+                        "SELECT id FROM $convsTable WHERE uuid = %s", $convUuid
+                    ));
+                    if ($convId) {
+                        $eventIds = $wpdb->get_col($wpdb->prepare(
+                            "SELECT id FROM $eventsTable WHERE conversation_id = %d AND event_type = 'MessagePosted' ORDER BY id ASC",
+                            $convId
+                        ));
+                        foreach ($eventIds as $ei => $eventId) {
+                            if (isset($offsets[$ei])) {
+                                $backdated = $now->modify((int)($offsets[$ei] * 3600) . ' seconds');
+                                $wpdb->update($eventsTable, ['occurred_at' => $backdated->format('Y-m-d H:i:s')], ['id' => (int)$eventId]);
+                            }
+                        }
+                    }
+                }
+                $created++;
+            } catch (\Throwable $e) { /* skip if exists */ }
+        }
+
+        // ── Line-item conversations on BQ1 blocks and BQ2 sections/blocks ──
+        $blocksTable = $wpdb->prefix . 'pet_quote_blocks';
+        $sectionsTable = $wpdb->prefix . 'pet_quote_sections';
+
+        // BQ1: line-item conversations on service blocks and project block
+        $bq1Row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}pet_quotes WHERE title = %s ORDER BY id DESC LIMIT 1",
+            'BQ1 RPM Digital Transformation'
+        ));
+        if ($bq1Row) {
+            $bq1Id = (int)$bq1Row->id;
+            $bq1Blocks = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, type, payload_json FROM $blocksTable WHERE quote_id = %d AND type != 'TextBlock' ORDER BY id ASC LIMIT 4",
+                $bq1Id
+            ));
+            $bq1BlockMsgs = [
+                // Architecture Review & Roadmap
+                [
+                    ['actor' => $avaId, 'body' => 'I can handle this one. 4 days at $200/day is standard for our architecture review deliverable.'],
+                    ['actor' => $miaId, 'body' => 'Confirmed. Make sure the roadmap includes a 12-month phased implementation timeline.'],
+                ],
+                // API Integration Development
+                [
+                    ['actor' => $ethanId, 'body' => '8 days might be tight for the API integration. Can we build in 2 days contingency?'],
+                    ['actor' => $currentUserId, 'body' => 'Good point. Let\'s keep 8 on the quote but flag it internally as a risk.'],
+                    ['actor' => $liamId, 'body' => 'I can assist with the testing portion if the team needs capacity.'],
+                ],
+                // Technical Support Setup
+                [
+                    ['actor' => $liamId, 'body' => 'Support setup at 6 days covers: tool configuration, escalation paths, and knowledge base structure.'],
+                    ['actor' => $noahId, 'body' => 'Make sure we include monitoring agent deployment in the scope — RPM expects it.'],
+                ],
+                // Website Rebuild Project block
+                [
+                    ['actor' => $miaId, 'body' => 'Project block with Discovery and Build phases. 30 hours total across 5 units.'],
+                    ['actor' => $ethanId, 'body' => 'Frontend Development at 10 hours and Backend API at 8 hours — these are the big items.'],
+                    ['actor' => $avaId, 'body' => 'Requirements Analysis in Discovery looks right at 5 hours. Stakeholder Workshops at 3 hours is standard.'],
+                    ['actor' => $currentUserId, 'body' => 'Approved. This is a solid breakdown for the project delivery.'],
+                ],
+            ];
+            foreach ($bq1Blocks as $bi => $block) {
+                $msgs = $bq1BlockMsgs[$bi] ?? [];
+                if (empty($msgs)) continue;
+                $payload = json_decode($block->payload_json, true) ?: [];
+                $desc = $payload['description'] ?? 'Line Item';
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$bq1Id, 'Line: ' . $desc, 'quote_line:' . $block->id, $currentUserId
+                    ));
+                    foreach ($msgs as $msg) {
+                        $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                            $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                        ));
+                    }
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+            // BQ1 section conversations
+            $bq1Sections = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, name FROM $sectionsTable WHERE quote_id = %d ORDER BY id ASC",
+                $bq1Id
+            ));
+            $bq1SectionMsgs = [
+                // Professional Services section
+                [
+                    ['actor' => $miaId, 'body' => 'Professional Services section has 3 line items totalling $3,140. Good margin on all three.'],
+                    ['actor' => $currentUserId, 'body' => 'The catalog links are correct — ADVIS-001, SERV-001, SERV-002. Pricing auto-resolved from rate cards.'],
+                ],
+                // Project Delivery section
+                [
+                    ['actor' => $avaId, 'body' => 'Project Delivery section should show total hours for RPM\'s project manager to review.'],
+                    ['actor' => $miaId, 'body' => 'Agreed. I\'ve enabled the "Show total hours" toggle on this section.'],
+                    ['actor' => $currentUserId, 'body' => 'Website Rebuild Project at $5,200 is the anchor. RPM knows this is the main deliverable.'],
+                ],
+            ];
+            foreach ($bq1Sections as $si => $section) {
+                $msgs = $bq1SectionMsgs[$si] ?? [];
+                if (empty($msgs)) continue;
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$bq1Id, 'Section: ' . ($section->name ?: 'Untitled'), 'quote_section:' . $section->id, $currentUserId
+                    ));
+                    foreach ($msgs as $msg) {
+                        $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                            $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                        ));
+                    }
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+        }
+
+        // BQ2: line-item conversations on assessment and implementation blocks
+        $bq2Row = $wpdb->get_row($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}pet_quotes WHERE title = %s ORDER BY id DESC LIMIT 1",
+            'BQ2 Acme Infrastructure Overhaul'
+        ));
+        if ($bq2Row) {
+            $bq2Id = (int)$bq2Row->id;
+            $bq2Blocks = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, type, payload_json FROM $blocksTable WHERE quote_id = %d AND type != 'TextBlock' ORDER BY id ASC LIMIT 6",
+                $bq2Id
+            ));
+            $bq2BlockMsgs = [
+                // Security Vulnerability Assessment
+                [
+                    ['actor' => $isabellaId, 'body' => 'Vulnerability assessment at $2,500/day — 2 full days covers their external and internal perimeter.'],
+                    ['actor' => $currentUserId, 'body' => 'Acme specifically asked for OWASP Top 10 coverage. Make sure the report template includes it.'],
+                ],
+                // Network Architecture Review
+                [
+                    ['actor' => $ethanId, 'body' => 'Network review at 3 days should cover their Stellenbosch and Cape Town sites.'],
+                ],
+                // Firewall & WAF Configuration
+                [
+                    ['actor' => $ethanId, 'body' => '5 days for firewall and WAF config. Includes Sophos XG migration and Cloudflare WAF rules.'],
+                    ['actor' => $noahId, 'body' => 'Don\'t forget to include the VPN tunnel reconfiguration — that\'s always underestimated.'],
+                ],
+                // Server Hardening & Patching (skip)
+                [],
+                // Monitoring & Alerting Setup (skip)
+                [],
+                // Infrastructure Migration Project
+                [
+                    ['actor' => $miaId, 'body' => 'The 3-phase migration project is well structured: Assessment, Execution, Validation.'],
+                    ['actor' => $ethanId, 'body' => 'VM Provisioning and Data Migration in the Execution phase are the biggest risk items.'],
+                    ['actor' => $isabellaId, 'body' => 'Security Verification in Validation is non-negotiable for Acme — their compliance team requires it.'],
+                ],
+            ];
+            foreach ($bq2Blocks as $bi => $block) {
+                $msgs = $bq2BlockMsgs[$bi] ?? [];
+                if (empty($msgs)) continue;
+                $payload = json_decode($block->payload_json, true) ?: [];
+                $desc = $payload['description'] ?? 'Line Item';
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$bq2Id, 'Line: ' . $desc, 'quote_line:' . $block->id, $currentUserId
+                    ));
+                    foreach ($msgs as $msg) {
+                        $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                            $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                        ));
+                    }
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+            // BQ2 section conversation on Project Work
+            $bq2ProjSection = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, name FROM $sectionsTable WHERE quote_id = %d AND name = 'Project Work' LIMIT 1",
+                $bq2Id
+            ));
+            if ($bq2ProjSection) {
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$bq2Id, 'Section: Project Work', 'quote_section:' . $bq2ProjSection->id, $currentUserId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'The Project Work section carries the bulk of the value at $7,680. Three phases with clear deliverables.', [], [], $miaId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'Acme wants a fixed-price option for this section. We should add a 15% contingency buffer.', [], [], $currentUserId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'Agreed. I\'ll prepare a separate fixed-price addendum for their procurement team.', [], [], $isabellaId
+                    ));
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+        }
+
+        // ── Q8 & Q9: Child-only conversations (no header conversation) ──
+        // Demonstrates the "child badge only, no header dot" scenario.
+        $q8Row = $wpdb->get_row("SELECT id, title FROM {$wpdb->prefix}pet_quotes WHERE title LIKE '%Security Assessment%Remediation%' ORDER BY id DESC LIMIT 1");
+        if ($q8Row) {
+            $q8Id = (int)$q8Row->id;
+            $q8Blocks = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, payload_json FROM $blocksTable WHERE quote_id = %d AND type != 'TextBlock' ORDER BY id ASC LIMIT 2",
+                $q8Id
+            ));
+            $q8BlockMsgs = [
+                [
+                    ['actor' => $isabellaId, 'body' => 'The pen testing scope needs to include their external-facing APIs. Government compliance requires OWASP coverage.'],
+                    ['actor' => $ethanId, 'body' => 'Agreed. I\'ll add API security testing to the remediation checklist. Two extra days should cover it.'],
+                    ['actor' => $avaId, 'body' => 'Make sure the report template meets their audit format — they rejected a generic format last time.'],
+                ],
+                [
+                    ['actor' => $ethanId, 'body' => 'Firewall rule review at 3 days is tight if we\'re including both sites. Suggest 4 days.'],
+                    ['actor' => $currentUserId, 'body' => 'Let\'s keep it at 3 on the quote but build contingency into the project plan.'],
+                ],
+            ];
+            foreach ($q8Blocks as $bi => $block) {
+                $msgs = $q8BlockMsgs[$bi] ?? [];
+                if (empty($msgs)) continue;
+                $payload = json_decode($block->payload_json, true) ?: [];
+                $desc = $payload['description'] ?? 'Line Item';
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$q8Id, 'Line: ' . $desc, 'quote_line:' . $block->id, $currentUserId
+                    ));
+                    foreach ($msgs as $msg) {
+                        $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                            $convUuid, $msg['body'], $msg['mentions'] ?? [], [], $msg['actor']
+                        ));
+                    }
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+        }
+
+        $q9Row = $wpdb->get_row("SELECT id, title FROM {$wpdb->prefix}pet_quotes WHERE title LIKE '%DevOps Transformation%' ORDER BY id DESC LIMIT 1");
+        if ($q9Row) {
+            $q9Id = (int)$q9Row->id;
+            $q9Blocks = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, payload_json FROM $blocksTable WHERE quote_id = %d AND type != 'TextBlock' ORDER BY id ASC LIMIT 1",
+                $q9Id
+            ));
+            if (!empty($q9Blocks)) {
+                $block = $q9Blocks[0];
+                $payload = json_decode($block->payload_json, true) ?: [];
+                $desc = $payload['description'] ?? 'Line Item';
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$q9Id, 'Line: ' . $desc, 'quote_line:' . $block->id, $currentUserId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'CI/CD pipeline design should factor in their existing GitLab setup. Full migration to GitHub Actions would blow the budget.', [], [], $ethanId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'Hybrid approach works — GitLab for source, GitHub Actions for deployment. We\'ve done this pattern before.', [], [], $liamId
+                    ));
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
+            }
+            $q9Sections = $wpdb->get_results($wpdb->prepare(
+                "SELECT id, name FROM $sectionsTable WHERE quote_id = %d ORDER BY id ASC LIMIT 1",
+                $q9Id
+            ));
+            if (!empty($q9Sections)) {
+                $section = $q9Sections[0];
+                try {
+                    $convUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                        'quote', (string)$q9Id, 'Section: ' . ($section->name ?: 'Untitled'), 'quote_section:' . $section->id, $currentUserId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'This section title is too generic. \'DevOps Tooling\' doesn\'t tell the client what they\'re getting.', [], [], $avaId
+                    ));
+                    $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                        $convUuid, 'Good point. Renaming to \'CI/CD Pipeline & Infrastructure Automation\' to match the SOW.', [], [], $currentUserId
+                    ));
+                    $created++;
+                } catch (\Throwable $e) { /* skip if exists */ }
             }
         }
 
@@ -3519,6 +4332,29 @@ final class DemoSeedService
                 'complete_first_n_tasks' => 1,
             ],
         ];
+
+        // ─── Seed a standalone intake project (pre-delivery inbox demo) ───
+        // Pick a customer that has an existing quote-sourced project for realism
+        $intakeCustomerId = !empty($projects) ? (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT customer_id FROM $projTable WHERE id = %d", (int)$projects[0]->id
+        )) : 1;
+        $wpdb->insert($projTable, [
+            'customer_id'              => $intakeCustomerId,
+            'source_quote_id'          => null,
+            'name'                     => 'New Website Redesign (Awaiting Allocation)',
+            'state'                    => 'intake',
+            'sold_hours'               => 40.00,
+            'start_date'               => null,
+            'end_date'                 => null,
+            'malleable_schema_version' => 1,
+            'malleable_data'           => json_encode(['source' => 'sales_handoff', 'notes' => 'Pending PM assignment and scoping']),
+            'created_at'               => $seededAt,
+            'updated_at'               => $seededAt,
+        ]);
+        $intakeId = (int)$wpdb->insert_id;
+        if ($intakeId > 0) {
+            $this->registryAdd($seedRunId, $projTable, (string)$intakeId);
+        }
 
         $enrichedCount = 0;
         foreach ($projects as $pi => $project) {
@@ -4034,11 +4870,13 @@ final class DemoSeedService
         $insertJourneyEvent = function (string $projId, string $eventType, string $title, string $summary, array $metadata, string $eventDate) use ($wpdb, $feedTable, $seedRunId, &$count) {
             $seedKey = $metadata['seed_key'] ?? null;
             if ($seedKey) {
+                // Check idempotency scoped to this specific project ID
                 $exists = (int)$wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM $feedTable WHERE metadata_json LIKE %s",
+                    "SELECT COUNT(*) FROM $feedTable WHERE source_entity_id = %s AND metadata_json LIKE %s",
+                    $projId,
                     '%"seed_key":"' . $seedKey . '"%'
                 ));
-                if ($exists > 0) return; // already seeded
+                if ($exists > 0) return; // already seeded for this project
             }
             $wpdb->insert($feedTable, [
                 'id' => $this->uuid(),

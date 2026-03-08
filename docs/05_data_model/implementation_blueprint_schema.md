@@ -17,9 +17,9 @@
 -   title (varchar 255)
 -   description (text)
 -   duration_hours (decimal 8,2)
--   role_catalog_item_id (UUID, FK)
--   base_rate_snapshot (decimal 12,2)
--   sell_rate_snapshot (decimal 12,2)
+-   role_id (BIGINT, FK → pet_roles) — renamed from role_catalog_item_id
+-   base_internal_rate (decimal 12,2) — snapshot from Role
+-   sell_rate (decimal 12,2) — snapshot from RateCard
 -   internal_cost_snapshot (decimal 14,2)
 -   sell_value_snapshot (decimal 14,2)
 -   sequence (int)

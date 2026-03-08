@@ -184,7 +184,7 @@ aspirational at the application layer.
 
 *(Parked per agreement — noted for completeness)*
 
-There is a `docs/05_data_model/docs_05_data_model_procurement_intent_schema.md` and
+There is a `docs/05_data_model/procurement_intent_schema.md` and
 `docs/21_supplier_governance/` covering procurement intent. The schema tables exist
 (`CreateBillingExportTables`, etc.). However, the link between accepted product quote lines
 and any procurement workflow is not implemented. CatalogProducts exist in the quote but

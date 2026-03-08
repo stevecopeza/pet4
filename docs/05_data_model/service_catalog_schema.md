@@ -1,6 +1,8 @@
 # Service Catalog -- Data Model
 
-## Table: service_catalog_items
+> **⚠️ SUPERSEDED** — Service economics are now modelled via `pet_roles` (internal cost), `pet_service_types` (classification), and `pet_rate_cards` (sell pricing). See `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`. Table retained for legacy read access only.
+
+## Table: service_catalog_items (legacy)
 
 -   id (UUID, PK)
 -   name (varchar 255, required)

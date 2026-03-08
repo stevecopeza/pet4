@@ -3,7 +3,9 @@
 ``` mermaid
 erDiagram
 
-SERVICE_CATALOG_ITEMS ||--o{ QUOTE_TASKS : referenced_by
+ROLES ||--o{ QUOTE_TASKS : referenced_by
+SERVICE_TYPES ||--o{ RATE_CARDS : prices
+ROLES ||--o{ RATE_CARDS : prices
 QUOTES ||--o{ QUOTE_COMPONENTS : contains
 QUOTE_COMPONENTS ||--o{ QUOTE_MILESTONES : contains
 QUOTE_MILESTONES ||--o{ QUOTE_TASKS : contains

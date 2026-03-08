@@ -97,8 +97,8 @@ Team members log time against leaf tickets. This is largely built (timesheets, `
 ## Reference Documents
 * `docs/00_foundations/02_Ticket_Architecture_Decisions_v1.md` — Binding architecture decisions (10 decisions)
 * `docs/00_foundations/01_Ticket_Backbone_Principles_and_Invariants_v1.md` (v2) — Core invariants
-* `docs/03_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md` (v2) — Full acceptance→ticket→project flow including WBS and change orders
-* `docs/03_commercial/05_Sold_Ticket_Structural_Spec_v1.md` — Sold ticket fields, invariants, lifecycle, prohibited behaviours, stress tests
-* `docs/04_features/docs_04_features_project_delivery.md` — Delivery principles ("planning may evolve, sold totals may not")
-* `docs/04_features/docs_04_features_commercial_transition_rules.md` — Acceptance sequence and WBS mapping
-* `docs/Planning/PET_Lifecycle_Gap_Analysis_v1_0.md` — Current state assessment
+* `docs/07_commercial/04_Quote_to_Ticket_to_Project_Flow_v1.md` (v2) — Full acceptance→ticket→project flow including WBS and change orders
+* `docs/07_commercial/05_Sold_Ticket_Structural_Spec_v1.md` — Sold ticket fields, invariants, lifecycle, prohibited behaviours, stress tests
+* `docs/06_features/project_delivery.md` — Delivery principles ("planning may evolve, sold totals may not")
+* `docs/06_features/commercial_transition_rules.md` — Acceptance sequence and WBS mapping
+* `docs/15_implementation_blueprint/PET_Lifecycle_Gap_Analysis_v1_0.md` — Current state assessment

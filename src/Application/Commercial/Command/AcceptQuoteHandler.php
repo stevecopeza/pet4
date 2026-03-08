@@ -14,8 +14,10 @@ use Pet\Domain\Commercial\Entity\Component\ImplementationComponent;
 use Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent;
 use Pet\Domain\Event\EventBus;
 use Pet\Application\System\Service\TouchedTracker;
-use Pet\Application\Support\Command\CreateTicketHandler;
-use Pet\Application\Support\Command\CreateTicketCommand;
+use Pet\Application\Commercial\Command\CreateProjectTicketHandler;
+use Pet\Application\Commercial\Command\CreateProjectTicketCommand;
+use Pet\Domain\Support\Repository\TicketRepository;
+use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Application\Conversation\Service\ActionGatingService;
 use Pet\Application\System\Service\AdminAuditLogger;
 
@@ -25,7 +27,9 @@ class AcceptQuoteHandler
     private QuoteRepository $quoteRepository;
     private EventBus $eventBus;
     private ?TouchedTracker $touched;
-    private ?CreateTicketHandler $createTicketHandler;
+    private ?CreateProjectTicketHandler $createProjectTicketHandler;
+    private ?TicketRepository $ticketRepository;
+    private ?ProjectRepository $projectRepository;
     private ?ActionGatingService $gatingService;
     private ?AdminAuditLogger $auditLogger;
 
@@ -33,7 +37,9 @@ class AcceptQuoteHandler
         QuoteRepository $quoteRepository,
         EventBus $eventBus,
         ?TouchedTracker $touched = null,
-        ?CreateTicketHandler $createTicketHandler = null,
+        ?CreateProjectTicketHandler $createProjectTicketHandler = null,
+        ?TicketRepository $ticketRepository = null,
+        ?ProjectRepository $projectRepository = null,
         ?ActionGatingService $gatingService = null,
         ?AdminAuditLogger $auditLogger = null
     ) {
@@ -41,7 +47,9 @@ class AcceptQuoteHandler
         $this->quoteRepository = $quoteRepository;
         $this->eventBus = $eventBus;
         $this->touched = $touched;
-        $this->createTicketHandler = $createTicketHandler;
+        $this->createProjectTicketHandler = $createProjectTicketHandler;
+        $this->ticketRepository = $ticketRepository;
+        $this->projectRepository = $projectRepository;
         $this->gatingService = $gatingService;
         $this->auditLogger = $auditLogger;
     }
@@ -98,97 +106,71 @@ class AcceptQuoteHandler
 
     private function createTicketsFromQuote(Quote $quote): void
     {
-        if ($this->createTicketHandler === null) {
+        if ($this->createProjectTicketHandler === null) {
             return;
         }
 
+        // Idempotency guard: if tickets already exist for this quote, skip creation
+        if ($this->ticketRepository !== null) {
+            $existingTickets = $this->ticketRepository->findByQuoteId((int) $quote->id());
+            if (!empty($existingTickets)) {
+                return;
+            }
+        }
+
         $customerId = $quote->customerId();
+        $quoteId = (int) $quote->id();
+
+        // Resolve projectId — CreateProjectFromQuoteListener runs synchronously
+        // before this method, so the project should exist by now.
+        $projectId = null;
+        if ($this->projectRepository !== null) {
+            $project = $this->projectRepository->findByQuoteId($quoteId);
+            if ($project) {
+                $projectId = $project->id();
+            }
+        }
 
         foreach ($quote->components() as $component) {
             if ($component instanceof ImplementationComponent) {
                 foreach ($component->milestones() as $milestone) {
                     foreach ($milestone->tasks() as $task) {
-                        $description = $task->description() ?? '';
+                        $soldMinutes = (int) ($task->durationHours() * 60);
+                        $soldValueCents = (int) round($task->sellValue() * 100);
 
-                        $malleableData = [
-                            'source' => 'quote',
-                            'quote_id' => $quote->id(),
-                            'quote_component_id' => $component->id(),
-                            'quote_milestone_id' => $milestone->id(),
-                            'quote_task_row_id' => $task->id(),
-                            'sold_hours' => $task->durationHours(),
-                            'role_id' => $task->roleId(),
-                            'ticket_mode' => 'execution',
-                        ];
-
-                        $command = new CreateTicketCommand(
+                        $command = new CreateProjectTicketCommand(
                             $customerId,
-                            null,
-                            null,
+                            $projectId,
+                            $quoteId,
                             $task->title(),
-                            $description,
-                            'medium',
-                            $malleableData
+                            $task->description() ?? '',
+                            $soldMinutes,
+                            $soldValueCents,
+                            $soldMinutes,   // estimatedMinutes = soldMinutes initially
+                            null,           // phaseId
+                            $task->roleId(),
+                            null            // departmentIdExt
                         );
 
-                        $this->createTicketHandler->handle($command);
+                        $this->createProjectTicketHandler->handle($command);
                     }
                 }
             } elseif ($component instanceof OnceOffServiceComponent) {
-                if ($component->topology() === OnceOffServiceComponent::TOPOLOGY_SIMPLE) {
-                    foreach ($component->units() as $unit) {
-                        $malleableData = [
-                            'source' => 'quote',
-                            'quote_id' => $quote->id(),
-                            'quote_component_id' => $component->id(),
-                            'quote_simple_unit_id' => $unit->id(),
-                            'unit_quantity' => $unit->quantity(),
-                            'unit_sell_price' => $unit->unitSellPrice(),
-                            'unit_internal_cost' => $unit->unitInternalCost(),
-                            'ticket_mode' => 'execution',
-                        ];
+                foreach ($component->units() as $unit) {
+                    $soldValueCents = (int) round($unit->sellValue() * 100);
 
-                        $command = new CreateTicketCommand(
-                            $customerId,
-                            null,
-                            null,
-                            $unit->title(),
-                            $unit->description() ?? '',
-                            'medium',
-                            $malleableData
-                        );
+                    $command = new CreateProjectTicketCommand(
+                        $customerId,
+                        $projectId,
+                        $quoteId,
+                        $unit->title(),
+                        $unit->description() ?? '',
+                        0,              // soldMinutes — catalog units have no duration
+                        $soldValueCents,
+                        0               // estimatedMinutes
+                    );
 
-                        $this->createTicketHandler->handle($command);
-                    }
-                } else {
-                    foreach ($component->phases() as $phase) {
-                        foreach ($phase->units() as $unit) {
-                            $malleableData = [
-                                'source' => 'quote',
-                                'quote_id' => $quote->id(),
-                                'quote_component_id' => $component->id(),
-                                'quote_phase_id' => $phase->id(),
-                                'quote_phase_name' => $phase->name(),
-                                'quote_simple_unit_id' => $unit->id(),
-                                'unit_quantity' => $unit->quantity(),
-                                'unit_sell_price' => $unit->unitSellPrice(),
-                                'unit_internal_cost' => $unit->unitInternalCost(),
-                                'ticket_mode' => 'execution',
-                            ];
-
-                            $command = new CreateTicketCommand(
-                                $customerId,
-                                null,
-                                null,
-                                $unit->title(),
-                                $unit->description() ?? '',
-                                'medium',
-                                $malleableData
-                            );
-
-                            $this->createTicketHandler->handle($command);
-                        }
-                    }
+                    $this->createProjectTicketHandler->handle($command);
                 }
             }
         }
