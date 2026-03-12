@@ -36,6 +36,7 @@ final class OutboxDispatcherService
         foreach ($due as $row) {
             $outboxId = (int)$row['id'];
             $eventId = (int)$row['event_id'];
+            $currentExportId = 0;
             try {
                 $event = $this->events->findById($eventId);
                 if (!$event) {
@@ -43,6 +44,7 @@ final class OutboxDispatcherService
                 }
                 $payload = json_decode($event->payloadJson, true) ?: [];
                 $exportId = isset($payload['export_id']) ? (int)$payload['export_id'] : 0;
+                $currentExportId = $exportId;
                 $export = $this->exports->findById($exportId);
                 if (!$export) {
                     throw new \RuntimeException('Export not found for outbox row ' . $outboxId);
@@ -57,14 +59,18 @@ final class OutboxDispatcherService
                 $this->qbInvoices->recordInvoiceSnapshot($export->customerId(), $envelope);
                 $this->mappings->upsert('quickbooks', 'invoice', $exportId, $qbInvoiceId, null);
                 $this->outbox->markSent($outboxId);
-                $this->exports->setStatus($exportId, 'sent');
+                $export->markSent();
+                $this->exports->save($export);
             } catch (\Throwable $e) {
                 $attempt = ((int)$row['attempt_count']) + 1;
                 if ($attempt >= 6) {
                     $this->outbox->markDead($outboxId, $e->getMessage());
-                    $exportId = (int)$row['event_id'];
-                    if ($exportId > 0) {
-                        $this->exports->setStatus($exportId, 'failed');
+                    if ($currentExportId > 0) {
+                        $export = $this->exports->findById($currentExportId);
+                        if ($export) {
+                            $export->markFailed();
+                            $this->exports->save($export);
+                        }
                     }
                     continue;
                 }

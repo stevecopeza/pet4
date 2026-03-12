@@ -19,12 +19,18 @@ demo-ready and production-safe
 -   SLA Warning / Breached
 -   Escalated (if escalation enabled)
 
-### 2) Assignment (single conceptual "Assignee")
+### 2) Assignment (team + optional individual)
 
-Supports: - Team assignment (unclaimed) - Employee assignment (claimed)
+Supports: - Team assignment (queue ownership) - Employee assignment (individual owner)
 
-Invariant: - Exactly one of assigned_team_id OR assigned_employee_id is
-set.
+Rules:
+- `assigned_team_id` (queue) is required.
+- `assigned_employee_id` (individual owner) is optional.
+- Tickets may exist in either state:
+  - Team queue only (unassigned individual)
+  - Team queue + individual owner (assigned)
+- Assigning an employee preserves the team/queue context.
+- Do not enforce XOR between these fields.
 
 ### 3) SLA Timers
 

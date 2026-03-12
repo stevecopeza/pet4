@@ -92,7 +92,7 @@ class SqlLeadRepository implements LeadRepository
     private function hydrate($row): Lead
     {
         return new Lead(
-            (int) $row->customer_id,
+            isset($row->customer_id) && $row->customer_id !== null ? (int) $row->customer_id : null,
             $row->subject,
             $row->description,
             $row->status,

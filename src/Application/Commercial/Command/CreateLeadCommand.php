@@ -6,7 +6,7 @@ namespace Pet\Application\Commercial\Command;
 
 class CreateLeadCommand
 {
-    private int $customerId;
+    private ?int $customerId;
     private string $subject;
     private string $description;
     private ?string $source;
@@ -14,7 +14,7 @@ class CreateLeadCommand
     private array $malleableData;
 
     public function __construct(
-        int $customerId,
+        ?int $customerId,
         string $subject,
         string $description,
         ?string $source = null,
@@ -29,7 +29,7 @@ class CreateLeadCommand
         $this->malleableData = $malleableData;
     }
 
-    public function customerId(): int
+    public function customerId(): ?int
     {
         return $this->customerId;
     }

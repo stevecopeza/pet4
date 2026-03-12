@@ -253,8 +253,15 @@ new → open → pending → resolved → closed
 
 Project:
 ```
-planned → ready → in_progress → blocked → done → closed
+planned → ready → in_progress → done → closed
+                ↓           ↓
+             blocked    blocked
+                ↓           ↓
+     ready or in_progress
 ```
+
+> Authoritative lifecycle rules including all allowed transitions
+> are defined in `03_Ticket_Lifecycle_and_State_Machines_v1.md`.
 
 Internal:
 ```

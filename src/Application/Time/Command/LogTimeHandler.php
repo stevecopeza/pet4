@@ -40,7 +40,10 @@ class LogTimeHandler
 
             $ticket = $this->ticketRepository->findById($command->ticketId());
             if ($ticket && !$ticket->canAcceptTimeEntries()) {
-                throw new \DomainException("Ticket {$command->ticketId()} is a rollup ticket and cannot accept time entries directly.");
+                throw new \DomainException(
+                    "Ticket {$command->ticketId()} cannot accept time entries. "
+                    . "Time may only be logged against leaf tickets in 'in_progress' status."
+                );
             }
 
             $timeEntry = new TimeEntry(

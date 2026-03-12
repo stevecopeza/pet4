@@ -363,12 +363,15 @@ class Ticket
     public function soldValueCents(): ?int { return $this->soldValueCents; }
 
     /**
-     * Rollup tickets (WBS parents) cannot accept time entries directly.
-     * Only leaf tickets accept time logging.
+     * Whether this ticket can accept time entries.
+     *
+     * Rules:
+     * - Rollup tickets (WBS parents) cannot accept time entries directly.
+     * - Only tickets in an executable lifecycle state (in_progress) may accept time.
      */
     public function canAcceptTimeEntries(): bool
     {
-        return !$this->isRollup;
+        return !$this->isRollup && $this->status === 'in_progress';
     }
 
     /**

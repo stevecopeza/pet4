@@ -62,9 +62,9 @@ class TicketStatus
             ],
             'project' => [
                 self::PLANNED => [self::READY],
-                self::READY => [self::IN_PROGRESS],
+                self::READY => [self::IN_PROGRESS, self::BLOCKED],
                 self::IN_PROGRESS => [self::BLOCKED, self::DONE],
-                self::BLOCKED => [self::IN_PROGRESS],
+                self::BLOCKED => [self::READY, self::IN_PROGRESS],
                 self::DONE => [self::CLOSED],
                 self::CLOSED => [],
             ],

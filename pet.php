@@ -26,9 +26,12 @@ add_action('plugins_loaded', function () {
         $runner = $container->get(\Pet\Infrastructure\Persistence\Migration\MigrationRunner::class);
         $runner->run(\Pet\Infrastructure\Persistence\Migration\MigrationManifest::getAll());
 
+        $featureFlagService = $container->get(\Pet\Application\System\Service\FeatureFlagService::class);
+
         $uiRegistry = new \Pet\UI\Admin\AdminPageRegistry(
             __DIR__,
-            plugin_dir_url(__FILE__)
+            plugin_dir_url(__FILE__),
+            $featureFlagService
         );
         $uiRegistry->register();
 
@@ -68,8 +71,19 @@ add_action('plugins_loaded', function () {
         $eventBus->subscribe(\Pet\Domain\Support\Event\TicketCreated::class, [$feedProjectionListener, 'onTicketCreated']);
         $eventBus->subscribe(\Pet\Domain\Support\Event\TicketWarningEvent::class, [$feedProjectionListener, 'onTicketWarning']);
         $eventBus->subscribe(\Pet\Domain\Support\Event\TicketBreachedEvent::class, [$feedProjectionListener, 'onTicketBreached']);
-        $eventBus->subscribe(\Pet\Domain\Support\Event\EscalationTriggeredEvent::class, [$feedProjectionListener, 'onEscalationTriggered']);
+        // SLA-side escalation feed entry removed — the richer Escalation domain event handles this (see below)
         $eventBus->subscribe(\Pet\Domain\Delivery\Event\MilestoneCompletedEvent::class, [$feedProjectionListener, 'onMilestoneCompleted']);
+
+        // Feed Projection – Escalation Domain events (gated by feature flag)
+        if ($featureFlagService->isEscalationEngineEnabled()) {
+            $eventBus->subscribe(\Pet\Domain\Escalation\Event\EscalationTriggeredEvent::class, [$feedProjectionListener, 'onDomainEscalationTriggered']);
+            $eventBus->subscribe(\Pet\Domain\Escalation\Event\EscalationAcknowledgedEvent::class, [$feedProjectionListener, 'onEscalationAcknowledged']);
+            $eventBus->subscribe(\Pet\Domain\Escalation\Event\EscalationResolvedEvent::class, [$feedProjectionListener, 'onEscalationResolved']);
+        }
+
+        // Escalation Domain Bridge – creates Escalation aggregates from SLA breach events
+        $slaEscalationBridge = $container->get(\Pet\Application\Escalation\Listener\SlaEscalationBridgeListener::class);
+        $eventBus->subscribe(\Pet\Domain\Support\Event\EscalationTriggeredEvent::class, $slaEscalationBridge);
         $eventBus->subscribe(\Pet\Domain\Commercial\Event\ChangeOrderApprovedEvent::class, [$feedProjectionListener, 'onChangeOrderApproved']);
 
         // Work Item Projector Listener

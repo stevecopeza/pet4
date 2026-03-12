@@ -60,6 +60,13 @@ class ConvertLeadToQuoteHandler
             );
             $this->leadRepository->save($lead);
 
+            // Guard: customerId is required for quote creation
+            if ($lead->customerId() === null) {
+                throw new \DomainException(
+                    "Cannot convert lead #{$lead->id()} to quote: customerId is required. Assign a customer first."
+                );
+            }
+
             // Create the linked quote
             $title = $command->title() ?: $lead->subject();
             $description = $command->description() ?? $lead->description();

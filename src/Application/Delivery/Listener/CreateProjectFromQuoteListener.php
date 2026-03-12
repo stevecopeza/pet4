@@ -32,10 +32,12 @@ class CreateProjectFromQuoteListener
             return;
         }
         
+        // Accumulate sold hours and value from implementation components.
+        // Note: Backbone Tickets are created separately by AcceptQuoteHandler
+        // via CreateProjectTicketHandler — do NOT create legacy Task entities here.
         $soldHours = 0.0;
         $implementationValue = 0.0;
         $hasImplementation = false;
-        $projectTasks = [];
 
         foreach ($quote->components() as $component) {
             if ($component instanceof ImplementationComponent) {
@@ -44,13 +46,6 @@ class CreateProjectFromQuoteListener
                 foreach ($component->milestones() as $milestone) {
                     foreach ($milestone->tasks() as $task) {
                         $soldHours += $task->durationHours();
-                        $projectTasks[] = new \Pet\Domain\Delivery\Entity\Task(
-                            $task->title(),
-                            $task->durationHours(),
-                            false,
-                            null,
-                            $task->roleId()
-                        );
                     }
                 }
             }
@@ -59,14 +54,13 @@ class CreateProjectFromQuoteListener
         if ($hasImplementation) {
             $command = new CreateProjectCommand(
                 $quote->customerId(),
-                'Project for Quote #' . $quote->id(), // Default name
+                'Project for Quote #' . $quote->id(),
                 $soldHours,
                 $quote->id(),
                 $implementationValue,
                 null, // startDate
                 null, // endDate
-                [], // malleableData
-                $projectTasks
+                []    // malleableData
             );
 
             $this->createProjectHandler->handle($command);

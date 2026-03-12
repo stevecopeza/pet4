@@ -7,7 +7,7 @@ namespace Pet\Domain\Commercial\Entity;
 class Lead
 {
     private ?int $id;
-    private int $customerId;
+    private ?int $customerId;
     private string $subject;
     private string $description;
     private string $status;
@@ -20,7 +20,7 @@ class Lead
     private ?\DateTimeImmutable $convertedAt;
 
     public function __construct(
-        int $customerId,
+        ?int $customerId,
         string $subject,
         string $description,
         string $status = 'new',
@@ -52,7 +52,7 @@ class Lead
         return $this->id;
     }
 
-    public function customerId(): int
+    public function customerId(): ?int
     {
         return $this->customerId;
     }

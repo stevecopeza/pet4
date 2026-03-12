@@ -119,7 +119,7 @@ class LeadController implements RestController
         
         try {
             $command = new CreateLeadCommand(
-                (int) $params['customerId'],
+                isset($params['customerId']) ? (int) $params['customerId'] : null,
                 $params['subject'],
                 $params['description'],
                 $params['source'] ?? null,

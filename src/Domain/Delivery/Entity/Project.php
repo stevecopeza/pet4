@@ -24,6 +24,8 @@ class Project
     private ?\DateTimeImmutable $archivedAt;
 
     /**
+     * @deprecated Legacy task array — use backbone Tickets via the Support domain instead.
+     *             Retained for backward compatibility in the repository read path only.
      * @var Task[]
      */
     private array $tasks = [];
@@ -102,6 +104,9 @@ class Project
         return $this->name;
     }
 
+    /**
+     * @deprecated Use Ticket status transitions instead.
+     */
     public function completeTask(string $taskName): void
     {
         foreach ($this->tasks as $index => $task) {
@@ -150,6 +155,7 @@ class Project
     }
 
     /**
+     * @deprecated Use backbone Tickets via the Support domain instead.
      * @return Task[]
      */
     public function tasks(): array
@@ -157,6 +163,9 @@ class Project
         return $this->tasks;
     }
 
+    /**
+     * @deprecated Use CreateProjectTicketHandler to create backbone Tickets instead.
+     */
     public function addTask(Task $task): void
     {
         $this->tasks[] = $task;

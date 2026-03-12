@@ -1,5 +1,10 @@
 # SLA Escalation & Notification Model
 
+> **Scope:** This document describes escalation triggered by SLA evaluation.
+>
+> The full escalation domain model (escalation records, acknowledgement,
+> resolution lifecycle) is defined in `docs/22_escalation_and_risk/`.
+
 ## Escalation Types
 
 -   Time-based breach

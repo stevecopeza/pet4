@@ -1,7 +1,14 @@
 # PET – Domain Model: State Machines
 
+> **Ticket lifecycle note:** The authoritative lifecycle for tickets is defined in
+> `docs/03_domain_model/03_Ticket_Lifecycle_and_State_Machines_v1.md`.
+>
+> This document describes generic state machine patterns used across PET domains.
+
 ## Purpose of this Document
-This document defines the **authoritative state machines** for PET domain entities.
+This document defines state machines for PET domain entities other than Ticket.
+
+For Ticket lifecycle semantics, see the authoritative document referenced above.
 
 It specifies:
 - Allowed states
@@ -246,46 +253,10 @@ Forbidden transitions:
 
 ## Ticket State Machine
 
-Tickets use context-specific state machines, enforced by `TicketStatus` value object.
+**This section is superseded.** The authoritative ticket lifecycle is defined in:
+`docs/03_domain_model/03_Ticket_Lifecycle_and_State_Machines_v1.md`
 
-### Support (lifecycle_owner='support')
-States: new, open, pending, resolved, closed
-
-Allowed transitions:
-- new → open
-- open → pending
-- open → resolved
-- open → closed
-- pending → open
-- pending → resolved
-- pending → closed
-- resolved → closed
-- resolved → open
-
-### Project (lifecycle_owner='project')
-States: planned, ready, in_progress, blocked, done, closed
-
-Allowed transitions:
-- planned → ready
-- ready → in_progress
-- in_progress → blocked
-- in_progress → done
-- blocked → in_progress
-- done → closed
-
-### Internal (lifecycle_owner='internal')
-States: planned, in_progress, done, closed
-
-Allowed transitions:
-- planned → in_progress
-- in_progress → done
-- done → closed
-
-Forbidden transitions (all contexts):
-- Any transition from `closed` (terminal state)
-- Cross-context transitions (e.g. support status on a project ticket)
-
-Note: `baseline_locked` is NOT a lifecycle status. It is an orthogonal boolean property (`is_baseline_locked`) on the ticket. A ticket can be both `in_progress` and baseline-locked simultaneously. See `00_foundations/02_Ticket_Architecture_Decisions_v1.md` Decision 6.
+That document governs all ticket status definitions, allowed transitions, and context-specific lifecycle rules for support, project, and internal tickets.
 
 ---
 
@@ -338,7 +309,6 @@ No silent fallback is permitted.
 
 ---
 
-**Authority**: Normative
-
-This document defines all allowed state transitions in PET. Implementation must conform.
+**Authority**: This document is normative for non-ticket state machines.
+For ticket lifecycle authority, see `docs/03_domain_model/03_Ticket_Lifecycle_and_State_Machines_v1.md`.
 

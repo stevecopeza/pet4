@@ -98,6 +98,8 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddContractIdToQuotes::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateRoleTeamsTable::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketSoldArchitectureColumns::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateEscalationTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationDedupeKey::class,
         ];
     }
 }

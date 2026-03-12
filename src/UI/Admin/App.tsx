@@ -18,6 +18,7 @@ import Finance from './components/Finance';
 import Conversations from './components/Conversations';
 import Approvals from './components/Approvals';
 import EscalationRules from './components/EscalationRules';
+import Escalations from './components/Escalations';
 import PulsewayRmm from './components/PulsewayRmm';
 
 declare global {
@@ -51,6 +52,7 @@ const App = () => {
       case 'pet-finance': return 'Finance';
       case 'pet-conversations': return 'Conversations';
       case 'pet-approvals': return 'Approvals';
+      case 'pet-escalations': return 'Escalations';
       case 'pet-escalation-rules': return 'Escalation Rules';
       case 'pet-pulseway': return 'Pulseway RMM';
       default: return 'PET';
@@ -93,6 +95,8 @@ const App = () => {
         return <Settings />;
       case 'pet-finance':
         return <Finance />;
+      case 'pet-escalations':
+        return <Escalations />;
       case 'pet-escalation-rules':
         return <EscalationRules />;
       case 'pet-pulseway':

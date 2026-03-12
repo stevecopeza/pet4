@@ -8,11 +8,13 @@ class AdminPageRegistry
 {
     private string $pluginPath;
     private string $pluginUrl;
+    private ?\Pet\Application\System\Service\FeatureFlagService $featureFlags;
 
-    public function __construct(string $pluginPath, string $pluginUrl)
+    public function __construct(string $pluginPath, string $pluginUrl, ?\Pet\Application\System\Service\FeatureFlagService $featureFlags = null)
     {
         $this->pluginPath = rtrim($pluginPath, '/');
         $this->pluginUrl = rtrim($pluginUrl, '/');
+        $this->featureFlags = $featureFlags;
     }
 
     public function register(): void
@@ -44,6 +46,14 @@ class AdminPageRegistry
             'pet-time' => 'Time',
             'pet-support' => 'Support',
             'pet-conversations' => 'Conversations',
+        ];
+
+        // Conditionally add Escalations submenu when feature is enabled
+        if ($this->featureFlags !== null && $this->featureFlags->isEscalationEngineEnabled()) {
+            $submenus['pet-escalations'] = 'Escalations';
+        }
+
+        $submenus += [
             'pet-approvals' => 'Approvals',
             'pet-knowledge' => 'Knowledge',
             'pet-people' => 'Staff',

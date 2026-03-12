@@ -37,9 +37,12 @@ class CreateLeadHandler
     public function handle(CreateLeadCommand $command): void
     {
         $this->transactionManager->transactional(function () use ($command) {
-        $customer = $this->customerRepository->findById($command->customerId());
-        if (!$customer) {
-            throw new \DomainException("Customer not found: {$command->customerId()}");
+        // customerId is optional — validate only if provided
+        if ($command->customerId() !== null) {
+            $customer = $this->customerRepository->findById($command->customerId());
+            if (!$customer) {
+                throw new \DomainException("Customer not found: {$command->customerId()}");
+            }
         }
 
         $activeSchema = $this->schemaRepository->findActiveByEntityType('lead');

@@ -116,11 +116,13 @@ class TicketStatusTest extends TestCase
         $this->assertFalse($status->canTransitionTo('in_progress', 'project'));
     }
 
-    public function testProjectReadyToInProgress(): void
+    public function testProjectReadyTransitions(): void
     {
         $status = TicketStatus::fromString('ready', 'project');
         $this->assertTrue($status->canTransitionTo('in_progress', 'project'));
+        $this->assertTrue($status->canTransitionTo('blocked', 'project'));
         $this->assertFalse($status->canTransitionTo('done', 'project'));
+        $this->assertFalse($status->canTransitionTo('planned', 'project'));
     }
 
     public function testProjectInProgressTransitions(): void
@@ -131,11 +133,13 @@ class TicketStatusTest extends TestCase
         $this->assertFalse($status->canTransitionTo('ready', 'project'));
     }
 
-    public function testProjectBlockedToInProgress(): void
+    public function testProjectBlockedTransitions(): void
     {
         $status = TicketStatus::fromString('blocked', 'project');
         $this->assertTrue($status->canTransitionTo('in_progress', 'project'));
+        $this->assertTrue($status->canTransitionTo('ready', 'project'));
         $this->assertFalse($status->canTransitionTo('done', 'project'));
+        $this->assertFalse($status->canTransitionTo('planned', 'project'));
     }
 
     public function testProjectDoneToClosed(): void

@@ -204,6 +204,21 @@ Finance: - View service credit exposure
 6.  Contract Snapshot Logic
 7.  Reporting Dashboard
 
+  -------------------------------------------
+  12\. EVENT MAPPING (DOCUMENTATION → CODE)
+  -------------------------------------------
+
+Documentation terminology differs from implementation event class names.
+The following mapping applies:
+
+- SLABreachWarning → `TicketWarningEvent` (`Domain\Support\Event\TicketWarningEvent`)
+- SLABreachOccurred → `TicketBreachedEvent` (`Domain\Support\Event\TicketBreachedEvent`)
+- SLAEscalationTriggered → `EscalationTriggeredEvent` (`Domain\Support\Event\EscalationTriggeredEvent`)
+- SLATierTransitioned → `SLATierTransitionedEvent` (`Domain\Support\Event\SLATierTransitionedEvent`)
+
+When tracing from this specification to code, use the code class names above.
+Documentation event names are retained for conceptual clarity.
+
   ----------------------
   END OF SPECIFICATION
   ----------------------

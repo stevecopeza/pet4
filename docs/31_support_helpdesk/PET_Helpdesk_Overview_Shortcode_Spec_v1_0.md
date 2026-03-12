@@ -1,5 +1,11 @@
 # PET Helpdesk Overview Shortcode Spec v1.0
 
+> **Supersession note:** Sections describing the "Unassigned" ticket definition
+> (§5) and wallboard refresh defaults (§2, §3, §8) are superseded by:
+> `PET_Helpdesk_Overview_Additive_Clarifications_v1_1.md`
+>
+> Where v1.1 conflicts with this document, v1.1 is authoritative.
+
 Status: **IMPLEMENTATION SPEC (demo-safe, read-only)**  
 Owner: PET  
 Scope: Frontend shortcode that renders an operational helpdesk overview for **manager** and **ops wallboard** use.

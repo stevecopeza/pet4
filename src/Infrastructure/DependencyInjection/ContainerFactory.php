@@ -583,6 +583,17 @@ class ContainerFactory
             \Pet\UI\Rest\Controller\ServiceTypeController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\RateCardController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\CatalogProductController::class => \DI\autowire(),
+
+            // ── Escalation Domain ──
+            \Pet\Domain\Escalation\Repository\EscalationRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlEscalationRepository($wpdb);
+            },
+            \Pet\Application\Escalation\Command\TriggerEscalationHandler::class => \DI\autowire(\Pet\Application\Escalation\Command\TriggerEscalationHandler::class),
+            \Pet\Application\Escalation\Command\AcknowledgeEscalationHandler::class => \DI\autowire(\Pet\Application\Escalation\Command\AcknowledgeEscalationHandler::class),
+            \Pet\Application\Escalation\Command\ResolveEscalationHandler::class => \DI\autowire(\Pet\Application\Escalation\Command\ResolveEscalationHandler::class),
+            \Pet\Application\Escalation\Listener\SlaEscalationBridgeListener::class => \DI\autowire(\Pet\Application\Escalation\Listener\SlaEscalationBridgeListener::class),
+            \Pet\UI\Rest\Controller\EscalationController::class => \DI\autowire(),
         ];
     }
 }
