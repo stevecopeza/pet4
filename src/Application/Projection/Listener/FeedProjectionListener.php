@@ -20,7 +20,9 @@ use Pet\Domain\Delivery\Event\MilestoneCompletedEvent;
 use Pet\Domain\Support\Event\TicketCreated;
 use Pet\Domain\Support\Event\TicketWarningEvent;
 use Pet\Domain\Support\Event\TicketBreachedEvent;
-use Pet\Domain\Support\Event\EscalationTriggeredEvent;
+use Pet\Domain\Escalation\Event\EscalationTriggeredEvent as DomainEscalationTriggered;
+use Pet\Domain\Escalation\Event\EscalationAcknowledgedEvent;
+use Pet\Domain\Escalation\Event\EscalationResolvedEvent;
 
 class FeedProjectionListener
 {
@@ -312,26 +314,7 @@ class FeedProjectionListener
         ));
     }
 
-    public function onEscalationTriggered(EscalationTriggeredEvent $event): void
-    {
-        $ticketId = (string)$event->ticketId();
-        $this->log('escalation_triggered', "Ticket {$ticketId} escalated to stage {$event->stage()}", null, 'ticket', (int)$ticketId);
-
-        $this->feedRepo->save(FeedEvent::create(
-            $this->generateUuid(),
-            'support.escalation_triggered',
-            'support',
-            $ticketId,
-            'critical',
-            'Ticket Escalated',
-            "Ticket #{$ticketId} escalated to stage {$event->stage()}.",
-            ['stage' => $event->stage()],
-            'role', // Support Manager
-            'support_manager_role_id' // Placeholder
-        ));
-    }
-
-    public function onMilestoneCompleted(MilestoneCompletedEvent $event): void
+    public function onMilestoneCompleted
     {
         $projectId = (string)$event->projectId();
         $this->log('milestone_completed', "Milestone '{$event->milestoneTitle()}' completed for Project {$projectId}", null, 'project', (int)$projectId);
@@ -347,6 +330,92 @@ class FeedProjectionListener
             [],
             'department', // Delivery department
             'delivery_dept_id'
+        ));
+    }
+
+    public function onDomainEscalationTriggered(DomainEscalationTriggered $event): void
+    {
+        $entityId = (string)$event->sourceEntityId();
+        $this->log(
+            'escalation_created',
+            "Escalation created for {$event->sourceEntityType()} {$entityId}: {$event->reason()}",
+            null,
+            $event->sourceEntityType(),
+            (int)$entityId
+        );
+
+        $this->feedRepo->save(FeedEvent::create(
+            $this->generateUuid(),
+            'escalation.triggered',
+            'escalation',
+            $event->escalationId(),
+            'critical',
+            'Escalation Triggered',
+            "Escalation raised for {$event->sourceEntityType()} #{$entityId} [{$event->severity()}]: {$event->reason()}",
+            [
+                'severity' => $event->severity(),
+                'source_entity_type' => $event->sourceEntityType(),
+                'source_entity_id' => $event->sourceEntityId(),
+            ],
+            'role',
+            'support_manager_role_id'
+        ));
+    }
+
+    public function onEscalationAcknowledged(EscalationAcknowledgedEvent $event): void
+    {
+        $entityId = (string)$event->sourceEntityId();
+        $this->log(
+            'escalation_acknowledged',
+            "Escalation {$event->escalationId()} acknowledged by user {$event->acknowledgedBy()}",
+            $event->acknowledgedBy(),
+            $event->sourceEntityType(),
+            (int)$entityId
+        );
+
+        $this->feedRepo->save(FeedEvent::create(
+            $this->generateUuid(),
+            'escalation.acknowledged',
+            'escalation',
+            $event->escalationId(),
+            'operational',
+            'Escalation Acknowledged',
+            "Escalation for {$event->sourceEntityType()} #{$entityId} acknowledged by user {$event->acknowledgedBy()}.",
+            [
+                'severity' => $event->severity(),
+                'acknowledged_by' => $event->acknowledgedBy(),
+            ],
+            'role',
+            'support_manager_role_id'
+        ));
+    }
+
+    public function onEscalationResolved(EscalationResolvedEvent $event): void
+    {
+        $entityId = (string)$event->sourceEntityId();
+        $this->log(
+            'escalation_resolved',
+            "Escalation {$event->escalationId()} resolved by user {$event->resolvedBy()}",
+            $event->resolvedBy(),
+            $event->sourceEntityType(),
+            (int)$entityId
+        );
+
+        $this->feedRepo->save(FeedEvent::create(
+            $this->generateUuid(),
+            'escalation.resolved',
+            'escalation',
+            $event->escalationId(),
+            'informational',
+            'Escalation Resolved',
+            "Escalation for {$event->sourceEntityType()} #{$entityId} resolved.",
+            [
+                'severity' => $event->severity(),
+                'resolved_by' => $event->resolvedBy(),
+                'resolution_note' => $event->resolutionNote(),
+            ],
+            'global',
+            null
         ));
     }
 
