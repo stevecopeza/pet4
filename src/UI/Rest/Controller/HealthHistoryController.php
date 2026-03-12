@@ -193,6 +193,9 @@ class HealthHistoryController implements RestController
             $eventsByProject[$pid][] = $event;
         }
 
+        // Fetch escalation counts: tickets linked to these projects that have escalation events
+        $escalationCounts = $this->getEscalationCounts($projectIds);
+
         // Build journey response for each requested project
         $now = (new \DateTimeImmutable())->format('Y-m-d\TH:i:s\Z');
         $result = [];
@@ -211,6 +214,7 @@ class HealthHistoryController implements RestController
             $result[$pid] = [
                 'segments' => $segments,
                 'totals' => $totals,
+                'escalations' => $escalationCounts[$pid] ?? 0,
             ];
         }
 
@@ -327,6 +331,64 @@ class HealthHistoryController implements RestController
             'pct_amber' => $totalDays > 0 ? (int) round(($days['amber'] / $totalDays) * 100) : 0,
             'pct_red' => $totalDays > 0 ? (int) round(($days['red'] / $totalDays) * 100) : 0,
         ];
+    }
+
+    /**
+     * Count escalation events for tickets linked to the given projects.
+     * Returns [project_id => count].
+     */
+    private function getEscalationCounts(array $projectIds): array
+    {
+        $ticketsTable = $this->wpdb->prefix . 'pet_tickets';
+        $feedTable = $this->wpdb->prefix . 'pet_feed_events';
+
+        $idPlaceholders = implode(',', array_fill(0, count($projectIds), '%d'));
+
+        // Find ticket IDs linked to these projects
+        $ticketRows = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT id, project_id FROM $ticketsTable WHERE project_id IN ($idPlaceholders)",
+                ...$projectIds
+            )
+        );
+
+        if (empty($ticketRows)) {
+            return [];
+        }
+
+        // Map ticket_id → project_id
+        $ticketToProject = [];
+        foreach ($ticketRows as $row) {
+            $ticketToProject[(int)$row->id] = (int)$row->project_id;
+        }
+
+        $ticketIds = array_keys($ticketToProject);
+        $tidPlaceholders = implode(',', array_fill(0, count($ticketIds), '%s'));
+        $ticketIdStrs = array_map('strval', $ticketIds);
+
+        // Count escalation_triggered events for those tickets
+        $rows = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT source_entity_id, COUNT(*) as cnt
+                 FROM $feedTable
+                 WHERE source_entity_id IN ($tidPlaceholders)
+                 AND event_type = 'escalation_triggered'
+                 GROUP BY source_entity_id",
+                ...$ticketIdStrs
+            )
+        );
+
+        // Aggregate by project
+        $counts = [];
+        foreach ($rows as $row) {
+            $tid = (int)$row->source_entity_id;
+            $pid = $ticketToProject[$tid] ?? null;
+            if ($pid !== null) {
+                $counts[$pid] = ($counts[$pid] ?? 0) + (int)$row->cnt;
+            }
+        }
+
+        return $counts;
     }
 
     private function daysBetween(string $start, string $end): float

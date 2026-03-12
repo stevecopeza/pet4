@@ -169,6 +169,12 @@ class ConversationController
             'permission_callback' => [$this, 'checkPermission'],
         ]);
         
+        register_rest_route('pet/v1', '/conversations/summary', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getSummary'],
+            'permission_callback' => [$this, 'checkPermission'],
+        ]);
+
         // GET endpoints
         register_rest_route('pet/v1', '/conversations', [
             'methods' => 'GET',
@@ -630,6 +636,27 @@ class ConversationController
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }
+    }
+
+    public function getSummary(WP_REST_Request $request): WP_REST_Response
+    {
+        $contextType = $request->get_param('context_type');
+        $contextIdsParam = $request->get_param('context_ids');
+
+        if (!$contextType || !$contextIdsParam) {
+            return new WP_REST_Response(['error' => 'context_type and context_ids are required'], 400);
+        }
+
+        $contextIds = array_filter(array_map('trim', explode(',', $contextIdsParam)));
+
+        if (empty($contextIds)) {
+            return new WP_REST_Response([], 200);
+        }
+
+        $userId = get_current_user_id();
+        $summary = $this->conversationRepository->getSummaryForContexts($contextType, $contextIds, $userId);
+
+        return new WP_REST_Response($summary, 200);
     }
 
     public function getConversation(WP_REST_Request $request): WP_REST_Response

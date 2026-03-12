@@ -130,7 +130,6 @@ final class PulsewayTicketCreationService
 
             $malleableData = [
                 'intake_source' => 'pulseway',
-                'ticket_mode' => $rule['output_ticket_kind'] ?? 'support',
                 'queue_id' => $rule['output_queue_id'] ?? null,
                 'owner_user_id' => $rule['output_owner_user_id'] ?? null,
                 'category' => $notification['category'] ?? null,

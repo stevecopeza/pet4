@@ -57,6 +57,9 @@ class Ticket
     private ?int $remainingMinutes = null;
     private bool $isRollup = false;
     private string $lifecycleOwner = 'support';
+    private bool $isBaselineLocked = false;
+    private ?int $changeOrderSourceTicketId = null;
+    private ?int $soldValueCents = null;
 
     public function __construct(
         int $customerId,
@@ -102,7 +105,10 @@ class Ticket
         ?int $estimatedMinutes = null,
         ?int $remainingMinutes = null,
         bool $isRollup = false,
-        string $lifecycleOwner = 'support'
+        string $lifecycleOwner = 'support',
+        bool $isBaselineLocked = false,
+        ?int $changeOrderSourceTicketId = null,
+        ?int $soldValueCents = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -148,6 +154,9 @@ class Ticket
         $this->remainingMinutes = $remainingMinutes;
         $this->isRollup = $isRollup;
         $this->lifecycleOwner = $lifecycleOwner;
+        $this->isBaselineLocked = $isBaselineLocked;
+        $this->changeOrderSourceTicketId = $changeOrderSourceTicketId;
+        $this->soldValueCents = $soldValueCents;
     }
 
     public function id(): ?int
@@ -349,6 +358,9 @@ class Ticket
     public function remainingMinutes(): ?int { return $this->remainingMinutes; }
     public function isRollup(): bool { return $this->isRollup; }
     public function lifecycleOwner(): string { return $this->lifecycleOwner; }
+    public function isBaselineLocked(): bool { return $this->isBaselineLocked; }
+    public function changeOrderSourceTicketId(): ?int { return $this->changeOrderSourceTicketId; }
+    public function soldValueCents(): ?int { return $this->soldValueCents; }
 
     /**
      * Rollup tickets (WBS parents) cannot accept time entries directly.
@@ -357,6 +369,18 @@ class Ticket
     public function canAcceptTimeEntries(): bool
     {
         return !$this->isRollup;
+    }
+
+    /**
+     * Set root_ticket_id to self after insert (auto-increment ID not known at construction time).
+     * Only callable when rootTicketId has not been set yet.
+     */
+    public function setRootTicketId(int $id): void
+    {
+        if ($this->rootTicketId !== null) {
+            throw new \DomainException('root_ticket_id is already set and cannot be changed.');
+        }
+        $this->rootTicketId = $id;
     }
 
     /**
@@ -429,6 +453,18 @@ class Ticket
         ?int $slaId,
         array $malleableData
     ): void {
+        // Baseline-locked tickets: reject mutation of immutable commercial fields via malleable data
+        if ($this->isBaselineLocked) {
+            $immutableKeys = ['sold_minutes', 'sold_value_cents', 'sold_hours', 'is_baseline_locked'];
+            foreach ($immutableKeys as $key) {
+                if (array_key_exists($key, $malleableData)) {
+                    throw new \DomainException(
+                        "Cannot modify '$key' on a baseline-locked ticket (id: {$this->id})."
+                    );
+                }
+            }
+        }
+
         $this->subject = $subject;
         $this->description = $description;
         $this->priority = $priority;

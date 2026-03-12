@@ -3,7 +3,7 @@ import { Sla } from '../types';
 import { DataTable, Column } from './DataTable';
 import SlaDefinitionForm from './SlaDefinitionForm';
 import KebabMenu from './KebabMenu';
-import ConversationPanel from './ConversationPanel';
+import useConversation from '../hooks/useConversation';
 
 const SlaDefinitions = () => {
   const [slas, setSlas] = useState<Sla[]>([]);
@@ -11,7 +11,7 @@ const SlaDefinitions = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingSla, setEditingSla] = useState<Sla | null>(null);
-  const [discussingSla, setDiscussingSla] = useState<Sla | null>(null);
+  const { openConversation } = useConversation();
 
   const fetchSlas = async () => {
     try {
@@ -160,7 +160,7 @@ const SlaDefinitions = () => {
         emptyMessage="No SLA definitions found."
         actions={(item) => (
           <KebabMenu items={[
-            { type: 'action', label: 'Discuss', onClick: () => setDiscussingSla(item) },
+            { type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'sla', contextId: String(item.id), subject: `SLA: ${item.name}` }) },
             { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
             { type: 'divider' },
             { type: 'action', label: 'Delete', onClick: () => handleDelete(item.id), danger: true },
@@ -168,28 +168,6 @@ const SlaDefinitions = () => {
         )}
       />
 
-      {discussingSla && (
-        <div className="pet-modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div className="pet-modal-content" style={{
-            background: 'white', padding: '20px', borderRadius: '5px', width: '800px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0 }}>Discuss: {discussingSla.name}</h3>
-              <button onClick={() => setDiscussingSla(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.2em' }}>&times;</button>
-            </div>
-            <ConversationPanel
-              contextType="sla"
-              contextId={String(discussingSla.id)}
-              defaultSubject={`SLA: ${discussingSla.name}`}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

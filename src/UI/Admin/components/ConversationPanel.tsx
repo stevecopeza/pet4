@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Conversation, Decision } from '../types';
+import { NameMap } from '../hooks/useNameMap';
+import MentionInput, { parseMentionTokens, renderMentionPills } from './MentionInput';
 
 interface ConversationPanelProps {
   uuid?: string;
@@ -8,6 +10,9 @@ interface ConversationPanelProps {
   contextVersion?: string;
   defaultSubject?: string;
   subjectKey?: string;
+  nameMap?: NameMap | null;
+  onConversationChange?: (conv: Conversation | null) => void;
+  refreshSignal?: number;
 }
 
 interface PetSettings {
@@ -39,13 +44,22 @@ type TimelineItemType =
   | { id: string; kind: 'decision_req'; occurred_at: string; payload: Decision }
   | { id: string; kind: 'decision_res'; occurred_at: string; payload: Decision };
 
+const resolveName = (actorId: number, nameMap?: NameMap | null): string => {
+  if (!nameMap) return `User #${actorId}`;
+  const entry = nameMap.users.get(actorId);
+  return entry?.name ?? `User #${actorId}`;
+};
+
 const ConversationPanel: React.FC<ConversationPanelProps> = ({ 
   uuid,
   contextType, 
   contextId, 
   contextVersion,
   defaultSubject, 
-  subjectKey 
+  subjectKey,
+  nameMap,
+  onConversationChange,
+  refreshSignal,
 }) => {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [timelineItems, setTimelineItems] = useState<TimelineItemType[]>([]);
@@ -169,13 +183,22 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
     fetchConversation();
   }, [uuid, contextType, contextId, contextVersion, subjectKey]);
 
+  // Re-fetch when refreshSignal changes (e.g. after resolve/reopen)
+  useEffect(() => {
+    if (refreshSignal !== undefined && refreshSignal > 0) {
+      fetchConversation();
+    }
+  }, [refreshSignal]);
+
   // Process timeline whenever conversation changes
   useEffect(() => {
     if (!conversation) {
         setTimelineItems([]);
+        onConversationChange?.(null);
         return;
     }
     setTimelineItems(processTimeline(conversation));
+    onConversationChange?.(conversation);
   }, [conversation]);
 
   const processTimeline = (conv: Conversation): TimelineItemType[] => {
@@ -298,7 +321,8 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
 
   const postMessage = async (uuid: string, body: string) => {
     try {
-      const payload: any = { body };
+      const mentions = parseMentionTokens(body);
+      const payload: any = { body, mentions };
       if (replyToId) {
         payload.reply_to_message_id = replyToId;
       }
@@ -405,7 +429,10 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
 
   return (
     <div className="pet-conversation-panel" style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '4px', background: '#f9f9f9', display: 'flex', flexDirection: 'column', height: '600px' }}>
-      <h3 style={{ marginTop: 0, flexShrink: 0 }}>Conversation: {conversation ? conversation.subject : defaultSubject}</h3>
+      {/* Subject heading hidden when rendered inside drawer (drawer has its own header) */}
+      {!onConversationChange && (
+        <h3 style={{ marginTop: 0, flexShrink: 0 }}>Conversation: {conversation ? conversation.subject : defaultSubject}</h3>
+      )}
       
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
 
@@ -434,36 +461,42 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
             onReact={handleReaction}
             onReply={handleReplyClick}
             currentUserId={getSettings().currentUserId}
+            nameMap={nameMap}
           />
         ))}
       </div>
 
       <div className="pet-compose" style={{ flexShrink: 0 }}>
-        {replyToMessage && (
-            <div style={{ background: '#f0f0f0', padding: '5px 10px', fontSize: '12px', borderLeft: '3px solid #007cba', marginBottom: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Replying to User {replyToMessage.actor_id}: "{replyToMessage.payload.body.substring(0, 50)}..."</span>
-                <button onClick={() => setReplyToId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px' }}>&times;</button>
+        {conversation?.state === 'resolved' ? (
+          <div style={{ padding: '10px', background: '#f0f6ff', border: '1px solid #c3dafe', borderRadius: '4px', color: '#4a5568', fontSize: '13px', textAlign: 'center' }}>
+            This conversation has been resolved.
+          </div>
+        ) : (
+          <>
+            {replyToMessage && (
+                <div style={{ background: '#f0f0f0', padding: '5px 10px', fontSize: '12px', borderLeft: '3px solid #007cba', marginBottom: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Replying to {resolveName(replyToMessage.actor_id, nameMap)}: "{replyToMessage.payload.body.substring(0, 50)}..."</span>
+                    <button onClick={() => setReplyToId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '14px' }}>&times;</button>
+                </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <MentionInput
+                  value={newMessage}
+                  onChange={setNewMessage}
+                  onSubmit={handleSend}
+                  disabled={isPosting}
+                  nameMap={nameMap}
+                />
+                <button 
+                onClick={handleSend}
+                disabled={isPosting || !newMessage.trim()}
+                style={{ padding: '8px 16px', background: '#007cba', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                >
+                {isPosting ? 'Sending...' : 'Send'}
+                </button>
             </div>
+          </>
         )}
-        <div style={{ display: 'flex', gap: '10px' }}>
-            <input 
-            ref={inputRef}
-            type="text" 
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            style={{ flex: 1, padding: '8px' }}
-            disabled={isPosting}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            />
-            <button 
-            onClick={handleSend}
-            disabled={isPosting || !newMessage.trim()}
-            style={{ padding: '8px 16px', background: '#007cba', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
-            >
-            {isPosting ? 'Sending...' : 'Send'}
-            </button>
-        </div>
       </div>
     </div>
   );
@@ -475,7 +508,8 @@ const TimelineItem: React.FC<{
   onReact: (msgId: number, type: string, isRemoval: boolean) => void;
   onReply: (msgId: number) => void;
   currentUserId: number;
-}> = ({ item, onRespond, onReact, onReply, currentUserId }) => {
+  nameMap?: NameMap | null;
+}> = ({ item, onRespond, onReact, onReply, currentUserId, nameMap }) => {
   const style: React.CSSProperties = {
     padding: '10px',
     background: 'white',
@@ -495,18 +529,18 @@ const TimelineItem: React.FC<{
       <div style={{ ...style, alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%', background: isMe ? '#eef' : 'white' }}>
         {msg.replyTo && (
             <div style={{ fontSize: '11px', color: '#666', borderLeft: '2px solid #ccc', paddingLeft: '5px', marginBottom: '5px' }}>
-                Replying to User {msg.replyTo.actor_id}: {msg.replyTo.payload.body.substring(0, 30)}...
+                Replying to {resolveName(msg.replyTo.actor_id, nameMap)}: {msg.replyTo.payload.body.substring(0, 30)}...
             </div>
         )}
         
         <div style={{ fontWeight: 'bold', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>User {item.actor_id}</span>
+            <span>{resolveName(item.actor_id, nameMap)}</span>
             <span style={{ fontWeight: 'normal', color: '#999', fontSize: '11px', marginLeft: '10px' }}>
                 {new Date(item.occurred_at).toLocaleString()}
             </span>
         </div>
         
-        <div style={{ whiteSpace: 'pre-wrap' }}>{item.payload.body}</div>
+        <div style={{ whiteSpace: 'pre-wrap' }}>{renderMentionPills(item.payload.body, nameMap)}</div>
 
         <div style={{ marginTop: '8px', display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Reactions Display */}
@@ -527,7 +561,7 @@ const TimelineItem: React.FC<{
                             alignItems: 'center',
                             gap: '3px'
                         }}
-                        title={`Reacted by: ${actors.join(', ')}`}
+                        title={`Reacted by: ${actors.map(a => resolveName(a, nameMap)).join(', ')}`}
                     >
                         <span>{type}</span>
                         <span style={{ fontWeight: 'bold' }}>{actors.length}</span>
@@ -592,10 +626,19 @@ const TimelineItem: React.FC<{
   }
 
   if (item.kind === 'event') {
+    // Render system events with resolved names
+    const actorName = resolveName(item.actor_id, nameMap);
+    let eventLabel = item.type;
+    if (item.type === 'ConversationResolved') eventLabel = `${actorName} resolved this conversation`;
+    else if (item.type === 'ConversationReopened') eventLabel = `${actorName} reopened this conversation`;
+    else if (item.type === 'ParticipantAdded') eventLabel = `${actorName} added a participant`;
+    else if (item.type === 'ParticipantRemoved') eventLabel = `${actorName} removed a participant`;
+    else eventLabel = `[${item.type}] by ${actorName}`;
+
     return (
         <div style={{ ...style, color: '#666', textAlign: 'center', background: 'none', border: 'none' }}>
           <span style={{ fontSize: '11px' }}>
-            [{item.type}] {new Date(item.occurred_at).toLocaleString()}
+            {eventLabel} — {new Date(item.occurred_at).toLocaleString()}
           </span>
         </div>
     );

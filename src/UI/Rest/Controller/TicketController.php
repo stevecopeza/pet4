@@ -63,6 +63,7 @@ class TicketController implements RestController
                     'customer_id' => V::optionalIntArg(),
                     'status' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'ticket_mode' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
+                    'lifecycle_owner' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'assigned_user_id' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                 ],
             ],
@@ -173,6 +174,7 @@ class TicketController implements RestController
         $customerId = $request->get_param('customer_id');
         $status = $request->get_param('status');
         $ticketMode = $request->get_param('ticket_mode');
+        $lifecycleOwner = $request->get_param('lifecycle_owner');
         $assignedUserId = $request->get_param('assigned_user_id');
         $unassigned = $request->get_param('unassigned');
 
@@ -190,6 +192,13 @@ class TicketController implements RestController
             });
         }
 
+        if ($lifecycleOwner) {
+            $tickets = array_filter($tickets, function ($ticket) use ($lifecycleOwner) {
+                return $ticket->lifecycleOwner() === $lifecycleOwner;
+            });
+        }
+
+        // Backward compat: filter by ticket_mode from malleable data (legacy tickets)
         if ($ticketMode) {
             $tickets = array_filter($tickets, function ($ticket) use ($ticketMode) {
                 $data = $ticket->malleableData();
@@ -281,6 +290,18 @@ class TicketController implements RestController
                 'lifecycleOwner' => $ticket->lifecycleOwner(),
                 'isBillableDefault' => $ticket->isBillableDefault(),
                 'billingContextType' => $ticket->billingContextType(),
+                // Backbone fields
+                'soldMinutes' => $ticket->soldMinutes(),
+                'estimatedMinutes' => $ticket->estimatedMinutes(),
+                'isBaselineLocked' => $ticket->isBaselineLocked(),
+                'isRollup' => $ticket->isRollup(),
+                'parentTicketId' => $ticket->parentTicketId(),
+                'rootTicketId' => $ticket->rootTicketId(),
+                'changeOrderSourceTicketId' => $ticket->changeOrderSourceTicketId(),
+                'projectId' => $ticket->projectId(),
+                'quoteId' => $ticket->quoteId(),
+                'ticketKind' => $ticket->ticketKind(),
+                'soldValueCents' => $ticket->soldValueCents(),
             ];
         }, $tickets);
 
@@ -293,9 +314,6 @@ class TicketController implements RestController
         
         try {
             $malleableData = $params['malleableData'] ?? [];
-            if (!isset($malleableData['ticket_mode'])) {
-                $malleableData['ticket_mode'] = 'support';
-            }
 
             $category = $params['category'] ?? null;
             $subcategory = $params['subcategory'] ?? null;
@@ -362,6 +380,21 @@ class TicketController implements RestController
         $params = $request->get_json_params();
 
         try {
+            // Guard: baseline-locked tickets reject sold field mutations
+            $existing = $this->ticketRepository->findById($id);
+            if ($existing && $existing->isBaselineLocked()) {
+                $malleableData = $params['malleableData'] ?? [];
+                $forbidden = ['sold_minutes', 'sold_value_cents', 'is_baseline_locked'];
+                foreach ($forbidden as $key) {
+                    if (array_key_exists($key, $malleableData)) {
+                        return new WP_REST_Response(
+                            ['error' => "Cannot modify '$key' on a baseline-locked ticket."],
+                            400
+                        );
+                    }
+                }
+            }
+
             $command = new UpdateTicketCommand(
                 $id,
                 isset($params['siteId']) ? (int) $params['siteId'] : null,

@@ -139,7 +139,7 @@ class SqlConversationRepository implements ConversationRepository
         return $rows ?: [];
     }
 
-    public function findByContext(string $contextType, string $contextId, ?string $contextVersion = null, ?string $subjectKey = null): ?Conversation
+    public function findByContext(string $contextType, string $contextId, ?string $contextVersion = null, ?string $subjectKey = null, bool $strict = false): ?Conversation
     {
         global $wpdb;
         $table = $wpdb->prefix . 'pet_conversations';
@@ -160,6 +160,24 @@ class SqlConversationRepository implements ConversationRepository
         $sql = "SELECT * FROM $table WHERE " . implode(' AND ', $where) . " ORDER BY id DESC LIMIT 1";
 
         $row = $wpdb->get_row($wpdb->prepare($sql, ...$args));
+
+        // Backward-compatibility fallback:
+        // If a subject key was provided but no exact match exists, find the most
+        // recent conversation for this context regardless of its subject_key.
+        // Skipped in strict mode (used by CreateConversationHandler to avoid
+        // returning an unrelated conversation as a false duplicate).
+        if (!$row && $subjectKey !== null && !$strict) {
+            $fallbackWhere = ["context_type = %s", "context_id = %s"];
+            $fallbackArgs = [$contextType, $contextId];
+
+            if ($contextVersion !== null) {
+                $fallbackWhere[] = "context_version = %s";
+                $fallbackArgs[] = $contextVersion;
+            }
+
+            $fallbackSql = "SELECT * FROM $table WHERE " . implode(' AND ', $fallbackWhere) . " ORDER BY id DESC LIMIT 1";
+            $row = $wpdb->get_row($wpdb->prepare($fallbackSql, ...$fallbackArgs));
+        }
 
         if (!$row) {
             return null;
@@ -282,7 +300,7 @@ class SqlConversationRepository implements ConversationRepository
 
         $rows = $wpdb->get_results($sql);
 
-        return array_map(function($row) {
+        return array_values(array_filter(array_map(function($row) {
             if ($row->user_id) {
                 return [
                     'type' => 'user',
@@ -306,7 +324,7 @@ class SqlConversationRepository implements ConversationRepository
                 ];
             }
             return null;
-        }, $rows);
+        }, $rows)));
     }
 
     public function messageExistsInConversation(int $conversationId, int $messageId): bool
@@ -423,6 +441,162 @@ class SqlConversationRepository implements ConversationRepository
         
         $count = (int)$wpdb->get_var($sql);
         return $count;
+    }
+
+    public function getSummaryForContexts(string $contextType, array $contextIds, int $userId): array
+    {
+        if (empty($contextIds)) {
+            return [];
+        }
+
+        // Cap at 50 IDs
+        $contextIds = array_slice($contextIds, 0, 50);
+
+        global $wpdb;
+        $conversations = $wpdb->prefix . 'pet_conversations';
+        $events = $wpdb->prefix . 'pet_conversation_events';
+        $readState = $wpdb->prefix . 'pet_conversation_read_state';
+
+        $placeholders = implode(',', array_fill(0, count($contextIds), '%s'));
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+        // ── Part 1: Header conversations (subject_key = 'quote:{context_id}' or
+        //    generic header pattern CONCAT(context_type, ':', context_id)) ──
+        $headerArgs = array_merge([$userId, $contextType], $contextIds, [$contextType, $contextType]);
+        $headerSql = $wpdb->prepare("
+            SELECT
+                c.id,
+                c.context_id,
+                c.state,
+                last_msg.actor_id AS last_message_actor_id,
+                last_msg.occurred_at AS last_message_at,
+                COALESCE(unread.cnt, 0) AS unread_count
+            FROM $conversations c
+            LEFT JOIN (
+                SELECT conversation_id, actor_id, occurred_at
+                FROM $events e1
+                WHERE e1.event_type = 'MessagePosted'
+                AND e1.id = (
+                    SELECT MAX(e2.id) FROM $events e2
+                    WHERE e2.conversation_id = e1.conversation_id
+                    AND e2.event_type = 'MessagePosted'
+                )
+            ) last_msg ON last_msg.conversation_id = c.id
+            LEFT JOIN (
+                SELECT e3.conversation_id, COUNT(*) AS cnt
+                FROM $events e3
+                LEFT JOIN $readState rs ON rs.conversation_id = e3.conversation_id AND rs.user_id = %d
+                WHERE e3.id > COALESCE(rs.last_seen_event_id, 0)
+                GROUP BY e3.conversation_id
+            ) unread ON unread.conversation_id = c.id
+            WHERE c.context_type = %s
+            AND c.context_id IN ($placeholders)
+            AND c.subject_key = CONCAT(%s, ':', c.context_id)
+            AND c.id = (
+                SELECT MAX(c2.id) FROM $conversations c2
+                WHERE c2.context_type = c.context_type
+                AND c2.context_id = c.context_id
+                AND c2.subject_key = CONCAT(%s, ':', c2.context_id)
+            )
+        ", ...$headerArgs);
+
+        $headerRows = $wpdb->get_results($headerSql);
+
+        $result = [];
+
+        foreach ($headerRows as $row) {
+            $result[$row->context_id] = [
+                'status' => $this->computeRagStatus($row->state, $row->last_message_at, $row->last_message_actor_id, $userId, $now),
+                'unread_count' => (int)$row->unread_count,
+                'last_message_at' => $row->last_message_at,
+                'last_message_actor_id' => $row->last_message_actor_id ? (int)$row->last_message_actor_id : null,
+                'conversation_state' => $row->state,
+                'child_discussion_count' => 0,
+                'child_worst_status' => 'none',
+            ];
+        }
+
+        // ── Part 2: Child conversation aggregate (subject_key != header pattern,
+        //    state != 'resolved') ──
+        $childArgs = array_merge([$contextType], $contextIds, [$contextType]);
+        $childSql = $wpdb->prepare("
+            SELECT
+                c.context_id,
+                c.state,
+                last_msg.actor_id AS last_message_actor_id,
+                last_msg.occurred_at AS last_message_at
+            FROM $conversations c
+            LEFT JOIN (
+                SELECT conversation_id, actor_id, occurred_at
+                FROM $events e1
+                WHERE e1.event_type = 'MessagePosted'
+                AND e1.id = (
+                    SELECT MAX(e2.id) FROM $events e2
+                    WHERE e2.conversation_id = e1.conversation_id
+                    AND e2.event_type = 'MessagePosted'
+                )
+            ) last_msg ON last_msg.conversation_id = c.id
+            WHERE c.context_type = %s
+            AND c.context_id IN ($placeholders)
+            AND c.subject_key != CONCAT(%s, ':', c.context_id)
+            AND c.state != 'resolved'
+        ", ...$childArgs);
+
+        $childRows = $wpdb->get_results($childSql);
+
+        // Aggregate child rows per context_id
+        $statusPriority = ['red' => 4, 'amber' => 3, 'green' => 2, 'blue' => 1, 'none' => 0];
+        $childAgg = []; // context_id => ['count' => int, 'worst' => string]
+        foreach ($childRows as $row) {
+            $cid = $row->context_id;
+            if (!isset($childAgg[$cid])) {
+                $childAgg[$cid] = ['count' => 0, 'worst' => 'none'];
+            }
+            $childAgg[$cid]['count']++;
+            $childStatus = $this->computeRagStatus($row->state, $row->last_message_at, $row->last_message_actor_id, $userId, $now);
+            if (($statusPriority[$childStatus] ?? 0) > ($statusPriority[$childAgg[$cid]['worst']] ?? 0)) {
+                $childAgg[$cid]['worst'] = $childStatus;
+            }
+        }
+
+        // Merge child data into result (and create entries for context_ids that
+        // have children but no header conversation)
+        foreach ($childAgg as $cid => $agg) {
+            if (!isset($result[$cid])) {
+                $result[$cid] = [
+                    'status' => 'none',
+                    'unread_count' => 0,
+                    'last_message_at' => null,
+                    'last_message_actor_id' => null,
+                    'conversation_state' => null,
+                    'child_discussion_count' => 0,
+                    'child_worst_status' => 'none',
+                ];
+            }
+            $result[$cid]['child_discussion_count'] = $agg['count'];
+            $result[$cid]['child_worst_status'] = $agg['worst'];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Compute the RAG status for a single conversation row.
+     */
+    private function computeRagStatus(?string $state, ?string $lastMessageAt, $lastMessageActorId, int $userId, \DateTimeImmutable $now): string
+    {
+        if ($state === 'resolved') {
+            return 'blue';
+        }
+        if ($lastMessageAt !== null) {
+            if ((int)$lastMessageActorId === $userId) {
+                return 'green';
+            }
+            $lastAt = new \DateTimeImmutable($lastMessageAt, new \DateTimeZone('UTC'));
+            $diffHours = ($now->getTimestamp() - $lastAt->getTimestamp()) / 3600;
+            return $diffHours > 8 ? 'red' : 'amber';
+        }
+        return 'none';
     }
 
     private function hydrate(object $row): Conversation

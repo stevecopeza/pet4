@@ -1,5 +1,6 @@
 import React from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
+import ConversationProvider from './components/ConversationProvider';
 import Dashboard from './components/Dashboard';
 import Dashboards from './components/Dashboards';
 import Projects from './components/Projects';
@@ -110,23 +111,27 @@ const App = () => {
   if (isDashboardsPage) {
     return (
       <ErrorBoundary>
-        {renderContent()}
+        <ConversationProvider>
+          {renderContent()}
+        </ConversationProvider>
       </ErrorBoundary>
     );
   }
 
   return (
     <ErrorBoundary>
-      <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
-        <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
-          <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
-          <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
-        </header>
-        
-        <main>
-          {renderContent()}
-        </main>
-      </div>
+      <ConversationProvider>
+        <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
+          <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
+            <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
+            <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
+          </header>
+          
+          <main>
+            {renderContent()}
+          </main>
+        </div>
+      </ConversationProvider>
     </ErrorBoundary>
   );
 };

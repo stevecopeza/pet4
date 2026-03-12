@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Quote, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
@@ -6,6 +6,8 @@ import QuoteForm from './QuoteForm';
 import QuoteDetails from './QuoteDetails';
 import { computeQuoteTotals } from '../utils/quoteTotals';
 import { computeQuoteHealth } from '../healthCompute';
+import useConversation from '../hooks/useConversation';
+import useConversationStatus from '../hooks/useConversationStatus';
 
 interface QuotesProps {
   initialQuoteId?: number | null;
@@ -21,6 +23,11 @@ const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed 
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const { openConversation } = useConversation();
+
+  const quoteIds = useMemo(() => quotes.map(q => String(q.id)), [quotes]);
+  const { statuses: convStatuses } = useConversationStatus('quote', quoteIds);
+  const statusColors: Record<string, string> = { red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' };
 
   const fetchSchema = async () => {
     try {
@@ -196,24 +203,55 @@ const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed 
     {
       header: 'Title',
       key: 'title',
-      render: (val: any, item: Quote) => (
-        <button
-          type="button"
-          onClick={() => setSelectedQuoteId(item.id)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#2271b1',
-            cursor: 'pointer',
-            padding: 0,
-            textAlign: 'left',
-            fontWeight: 500,
-            fontSize: 'inherit',
-          }}
-        >
-          {String(val) || '(untitled)'}
-        </button>
-      )
+      render: (val: any, item: Quote) => {
+        const s = convStatuses.get(String(item.id));
+        const dot = s && s.status !== 'none' ? (
+          <button
+            type="button"
+            title={`Conversation: ${s.status} — click to open`}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); openConversation({ contextType: 'quote', contextId: String(item.id), subject: `Quote: ${item.title}`, subjectKey: `quote:${item.id}` }); }}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: 'transparent', marginRight: 2, marginLeft: -7, verticalAlign: 'middle', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+          >
+            <span style={{ display: 'block', width: 10, height: 10, borderRadius: '50%', background: statusColors[s.status] || 'transparent' }} />
+          </button>
+        ) : null;
+        const childCount = s?.child_discussion_count ?? 0;
+        const childBadge = childCount > 0 ? (
+          <button
+            type="button"
+            title={`${childCount} active discussion${childCount !== 1 ? 's' : ''} on line items — click to view`}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setSelectedQuoteId(item.id); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 2, height: 20, borderRadius: 10, background: statusColors[s?.child_worst_status ?? 'none'] || '#999', color: '#fff', fontSize: 11, fontWeight: 600, padding: '0 6px', border: 'none', cursor: 'pointer', verticalAlign: 'middle', marginRight: 4, flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <path d="M2 2h12a1 1 0 011 1v7a1 1 0 01-1 1h-3l-3 3v-3H2a1 1 0 01-1-1V3a1 1 0 011-1z" fill="currentColor" />
+            </svg>
+            {childCount}
+          </button>
+        ) : null;
+        return (
+          <>
+            {dot}
+            {childBadge}
+            <button
+              type="button"
+              onClick={() => setSelectedQuoteId(item.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#2271b1',
+                cursor: 'pointer',
+                padding: 0,
+                textAlign: 'left',
+                fontWeight: 500,
+                fontSize: 'inherit',
+              }}
+            >
+              {String(val) || '(untitled)'}
+            </button>
+          </>
+        );
+      }
     },
     { header: 'State', key: 'state', render: (val: any) => {
       const state = val as string;
@@ -322,6 +360,7 @@ const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed 
               actions={(quote) => (
                 <KebabMenu items={[
                   { type: 'action', label: 'Open', onClick: () => setSelectedQuoteId(quote.id) },
+                  { type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'quote', contextId: String(quote.id), subject: `Quote: ${quote.title}`, subjectKey: `quote:${quote.id}` }) },
                   { type: 'action', label: 'Archive', onClick: () => handleArchive(quote.id), danger: true },
                 ]} />
               )}

@@ -51,7 +51,7 @@ PET provides 9 WordPress shortcodes for embedding operational surfaces into page
 
 All shortcodes are listed with copy-to-clipboard under **PET → Shortcodes** in the admin menu.
 
-Full implementation reference: [docs/24_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md](docs/24_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md)
+Full implementation reference: [docs/30_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md](docs/30_frontend_shortcodes/PET_Implemented_Shortcodes_Reference_v2_0.md)
 
 ## 🏗 Architecture
 
@@ -127,11 +127,11 @@ npx playwright test
 ## 📚 Documentation
 
 Extensive architectural and functional documentation is available in the `docs/` directory:
-*   [Architecture](docs/01_architecture/)
-*   [Domain Model](docs/02_domain_model/)
+*   [Architecture](docs/02_architecture/)
+*   [Domain Model](docs/03_domain_model/)
 *   [Data Model](docs/05_data_model/)
-*   [API Contract](docs/19_api_contract/)
-*   [Event Registry](docs/20_event_registry/)
+*   [API Contract](docs/26_api_contract/)
+*   [Event Registry](docs/27_event_registry/)
 
 ---
 *Built with ❤️ by Trae for Steve Cope.*

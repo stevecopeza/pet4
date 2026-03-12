@@ -416,6 +416,7 @@ class ContainerFactory
             \Pet\Application\Commercial\Command\UpdateQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateQuoteHandler::class),
             \Pet\Application\Commercial\Command\SendQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\SendQuoteHandler::class),
             \Pet\Application\Commercial\Command\AcceptQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AcceptQuoteHandler::class),
+            \Pet\Application\Commercial\Command\CreateProjectTicketHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateProjectTicketHandler::class),
             \Pet\Application\Commercial\Command\SetPaymentScheduleHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\SetPaymentScheduleHandler::class),
             \Pet\Application\Commercial\Command\AddQuoteLineHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddQuoteLineHandler::class),
             \Pet\Application\Commercial\Command\AddComponentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddComponentHandler::class),

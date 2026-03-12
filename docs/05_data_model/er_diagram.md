@@ -1,0 +1,18 @@
+# ER Diagram
+
+``` mermaid
+erDiagram
+
+ROLES ||--o{ QUOTE_TASKS : referenced_by
+SERVICE_TYPES ||--o{ RATE_CARDS : prices
+ROLES ||--o{ RATE_CARDS : prices
+QUOTES ||--o{ QUOTE_COMPONENTS : contains
+QUOTE_COMPONENTS ||--o{ QUOTE_MILESTONES : contains
+QUOTE_MILESTONES ||--o{ QUOTE_TASKS : contains
+QUOTES ||--o{ QUOTE_RECURRING_SERVICES : contains
+QUOTES ||--|| CONTRACTS : converts_to
+CONTRACTS ||--o{ CONTRACT_PAYMENT_SCHEDULE : has
+CONTRACTS ||--|| PROJECT_BASELINES : generates
+PROJECT_BASELINES ||--o{ VARIANCE_ORDERS : governs
+CONTRACTS ||--o{ PROCUREMENT_INTENTS : triggers
+```

@@ -29,6 +29,15 @@ final class ProjectHealthTransitionEmitter
         'red'   => 'Project Critical',
     ];
 
+    /** Thresholds used for health evaluation (recorded in metadata for auditability). */
+    private const THRESHOLDS = [
+        'burn_amber_pct'     => 80,  // burn % above this triggers amber (if progress also below)
+        'progress_amber_pct' => 80,  // progress % below this triggers amber (if burn also above)
+    ];
+
+    /** Minimum seconds between transitions for the same project (flapping suppression). */
+    private const QUIET_WINDOW_SECONDS = 1800; // 30 minutes
+
     public function __construct()
     {
         global $wpdb;
@@ -71,13 +80,23 @@ final class ProjectHealthTransitionEmitter
         }
 
         // Fetch the most recent transition event for this project
-        $lastState = $this->getLastState($projectId);
+        $lastTransition = $this->getLastTransition($projectId);
+        $lastState = $lastTransition['state'] ?? null;
+        $lastTimestamp = $lastTransition['created_at'] ?? null;
 
         // Idempotency guard: only write if state changed
         // null last_state means no events yet → implicit green
         $effectiveLastState = $lastState ?? 'green';
         if ($newState === $effectiveLastState) {
             return;
+        }
+
+        // Quiet window guard: suppress rapid flapping
+        if ($lastTimestamp !== null) {
+            $elapsed = time() - strtotime($lastTimestamp);
+            if ($elapsed < self::QUIET_WINDOW_SECONDS) {
+                return;
+            }
         }
 
         // Write the transition event
@@ -133,7 +152,7 @@ final class ProjectHealthTransitionEmitter
 
         // Amber triggers (only if not already red)
         if ($worstState !== 'red') {
-            if ($burnPct > 80 && $progressPct < 80) {
+            if ($burnPct > self::THRESHOLDS['burn_amber_pct'] && $progressPct < self::THRESHOLDS['progress_amber_pct']) {
                 $reasons[] = 'AT RISK';
                 $reasonCodes[] = 'AT_RISK';
                 $worstState = 'amber';
@@ -157,21 +176,23 @@ final class ProjectHealthTransitionEmitter
                 'progress_pct' => $progressPct,
                 'hours_used' => round($hoursUsed, 2),
                 'sold_hours' => round($soldH, 2),
+                'thresholds' => self::THRESHOLDS,
             ],
         ];
     }
 
     /**
-     * Fetch the last recorded health state for a project from pet_feed_events.
+     * Fetch the last recorded health transition for a project from pet_feed_events.
+     * Returns ['state' => string, 'created_at' => string] or ['state' => null, 'created_at' => null].
      */
-    private function getLastState(int $projectId): ?string
+    private function getLastTransition(int $projectId): array
     {
         $table = $this->wpdb->prefix . 'pet_feed_events';
         $eventTypes = implode("','", array_values(self::EVENT_MAP));
 
         $row = $this->wpdb->get_row(
             $this->wpdb->prepare(
-                "SELECT event_type FROM $table
+                "SELECT event_type, created_at FROM $table
                  WHERE source_entity_id = %s
                  AND event_type IN ('$eventTypes')
                  ORDER BY created_at DESC
@@ -181,12 +202,15 @@ final class ProjectHealthTransitionEmitter
         );
 
         if (!$row) {
-            return null;
+            return ['state' => null, 'created_at' => null];
         }
 
         // Reverse lookup: event_type → state
         $stateMap = array_flip(self::EVENT_MAP);
-        return $stateMap[$row->event_type] ?? null;
+        return [
+            'state' => $stateMap[$row->event_type] ?? null,
+            'created_at' => $row->created_at,
+        ];
     }
 
     /**

@@ -1,0 +1,230 @@
+/* ── Conversation Drawer (slide-over) ── */
+
+.pet-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 9998;
+  animation: pet-fade-in 0.15s ease-out;
+}
+
+.pet-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 95vw;
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  animation: pet-slide-in 0.2s ease-out;
+}
+
+.pet-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #f9f9f9;
+  gap: 8px;
+  position: relative;
+}
+
+.pet-drawer-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pet-drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pet-drawer-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pet-drawer-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pet-drawer-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+.pet-drawer-close:hover {
+  color: #000;
+}
+
+.pet-drawer-participants-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #555;
+  white-space: nowrap;
+}
+
+.pet-drawer-participants-btn:hover {
+  background: #f0f0f0;
+}
+
+.pet-drawer-action-btn {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #555;
+  white-space: nowrap;
+}
+
+.pet-drawer-action-btn:hover {
+  background: #f0f0f0;
+}
+
+/* ── Participant popover ── */
+
+.pet-drawer-popover {
+  position: absolute;
+  top: 100%;
+  right: 16px;
+  width: 280px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 12px;
+  z-index: 10;
+}
+
+.pet-drawer-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.pet-drawer-popover-type {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.pet-drawer-popover-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.pet-drawer-popover-remove:hover {
+  color: #d63638;
+}
+
+.pet-drawer-popover-add-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.pet-drawer-popover-add-item:hover {
+  background: #f0f0f0;
+}
+
+.pet-drawer-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make ConversationPanel fill the drawer body */
+.pet-drawer-body .pet-conversation-panel {
+  border: none;
+  border-radius: 0;
+  height: 100% !important;
+}
+
+/* ── Mobile: full-screen sheet ── */
+@media (max-width: 768px) {
+  .pet-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .pet-drawer-backdrop {
+    /* hide backdrop on mobile — drawer is full-screen */
+    pointer-events: none;
+    background: transparent;
+  }
+
+  .pet-drawer-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  /* Sticky compose at bottom with safe-area inset for notch devices */
+  .pet-drawer-body .pet-conversation-panel .pet-conversation-compose {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #fff;
+    border-top: 1px solid #eee;
+    z-index: 2;
+  }
+
+  .pet-drawer-popover {
+    right: 8px;
+    width: calc(100vw - 32px);
+  }
+}
+
+@keyframes pet-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes pet-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

@@ -88,6 +88,9 @@ class SqlTicketRepository implements TicketRepository
         $this->conditionallyAddColumn($data, $formats, 'remaining_minutes', $ticket->remainingMinutes(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'is_rollup', $ticket->isRollup() ? 1 : 0, '%d');
         $this->conditionallyAddColumn($data, $formats, 'lifecycle_owner', $ticket->lifecycleOwner(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'is_baseline_locked', $ticket->isBaselineLocked() ? 1 : 0, '%d');
+        $this->conditionallyAddColumn($data, $formats, 'change_order_source_ticket_id', $ticket->changeOrderSourceTicketId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'sold_value_cents', $ticket->soldValueCents(), '%d');
 
         if ($ticket->id()) {
             $this->wpdb->update($table, $data, ['id' => $ticket->id()], $formats, ['%d']);
@@ -101,6 +104,12 @@ class SqlTicketRepository implements TicketRepository
                     $prop = $ref->getProperty('id');
                     $prop->setAccessible(true);
                     $prop->setValue($ticket, $insertId);
+                }
+
+                // Post-insert: set root_ticket_id = self for top-level tickets
+                if ($ticket->rootTicketId() === null && $this->hasColumn('root_ticket_id')) {
+                    $ticket->setRootTicketId($insertId);
+                    $this->wpdb->update($table, ['root_ticket_id' => $insertId], ['id' => $insertId]);
                 }
             }
         }
@@ -167,6 +176,23 @@ class SqlTicketRepository implements TicketRepository
         $this->wpdb->delete($table, ['id' => $id], ['%d']);
     }
 
+    public function findByQuoteId(int $quoteId): array
+    {
+        $table = $this->wpdb->prefix . 'pet_tickets';
+        $this->ensureColumnsCached($table);
+
+        if (!$this->hasColumn('quote_id')) {
+            return [];
+        }
+
+        $rows = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT * FROM $table WHERE quote_id = %d ORDER BY id ASC",
+            $quoteId
+        ));
+
+        return array_map([$this, 'hydrate'], $rows);
+    }
+
     private function hydrate($row): Ticket
     {
         return new Ticket(
@@ -213,7 +239,10 @@ class SqlTicketRepository implements TicketRepository
             isset($row->estimated_minutes) && $row->estimated_minutes !== null ? (int) $row->estimated_minutes : null,
             isset($row->remaining_minutes) && $row->remaining_minutes !== null ? (int) $row->remaining_minutes : null,
             isset($row->is_rollup) ? (bool) $row->is_rollup : false,
-            isset($row->lifecycle_owner) ? (string) $row->lifecycle_owner : 'support'
+            isset($row->lifecycle_owner) ? (string) $row->lifecycle_owner : 'support',
+            isset($row->is_baseline_locked) ? (bool) $row->is_baseline_locked : false,
+            isset($row->change_order_source_ticket_id) && $row->change_order_source_ticket_id ? (int) $row->change_order_source_ticket_id : null,
+            isset($row->sold_value_cents) && $row->sold_value_cents !== null ? (int) $row->sold_value_cents : null
         );
     }
 

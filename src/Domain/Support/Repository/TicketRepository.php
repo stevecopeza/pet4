@@ -15,4 +15,5 @@ interface TicketRepository
     public function findActive(): array;
     public function countActiveUnassigned(): int;
     public function delete(int $id): void;
+    public function findByQuoteId(int $quoteId): array;
 }

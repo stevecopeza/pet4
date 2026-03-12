@@ -1,8 +1,12 @@
 STATUS: IMPLEMENTED
 SCOPE: Ticket Backbone Schema Extension
-VERSION: v1.1
+VERSION: v2
+SUPERSEDES: v1.1
+DATE: 2026-03-06
 
-# Ticket Backbone — Data Model and Migrations (v1)
+# Ticket Backbone — Data Model and Migrations (v2)
+
+> Governed by `00_foundations/02_Ticket_Architecture_Decisions_v1.md`.
 
 This document defines the **required tables/fields** to make Ticket the universal work unit while maintaining backward compatibility.
 
@@ -24,11 +28,12 @@ Additive columns (names are normative; exact types may follow existing conventio
 **Identity / container**
 - `primary_container` ENUM('support','project','internal') NOT NULL DEFAULT 'support'
 - `project_id` BIGINT UNSIGNED NULL  (when primary_container = 'project' or linked)
-- `quote_id` BIGINT UNSIGNED NULL     (draft quote tickets and baseline linkage)
+- `quote_id` BIGINT UNSIGNED NULL     (links ticket to the accepted quote)
 - `quote_version` INT NULL            (optional: snapshot version)
 - `phase_id` BIGINT UNSIGNED NULL     (quote/project phase grouping)
-- `parent_ticket_id` BIGINT UNSIGNED NULL  (WBS tree)
-- `root_ticket_id` BIGINT UNSIGNED NULL    (denormalized for reporting; optional)
+- `parent_ticket_id` BIGINT UNSIGNED NULL  (WBS tree — immediate structural parent)
+- `root_ticket_id` BIGINT UNSIGNED NULL    (always points to the top-level sold commitment ticket for the WBS chain; denormalized for reporting)
+- `change_order_source_ticket_id` BIGINT UNSIGNED NULL  (links a change order ticket to the original sold ticket it amends; NOT a parent/child relationship)
 
 **Classification**
 - `ticket_kind` VARCHAR(50) NOT NULL DEFAULT 'work'  
@@ -44,14 +49,19 @@ Additive columns (names are normative; exact types may follow existing conventio
 - `is_billable_default` TINYINT(1) NOT NULL DEFAULT 1
 
 **Sold baseline / estimation**
-- `sold_minutes` INT NULL (baseline sold effort for labour)
-- `sold_value_cents` BIGINT NULL (optional; depends on money approach)
-- `estimated_minutes` INT NULL (execution estimate; may differ)
-- `remaining_minutes` INT NULL (derived or projection; optional)
+- `sold_minutes` INT NULL (baseline sold effort for labour; immutable once set at acceptance)
+- `sold_value_cents` BIGINT NULL (baseline sold value; immutable once set at acceptance)
+- `estimated_minutes` INT NULL (execution estimate; may differ from sold_minutes; mutable)
+- `is_baseline_locked` TINYINT(1) NOT NULL DEFAULT 0  
+  Set to 1 when ticket is created from an accepted quote. When 1, `sold_minutes` and `sold_value_cents` are immutable. This is an orthogonal property, NOT a lifecycle status.
+
+Note: `planned_minutes` (sum of children's `estimated_minutes`) is NOT stored. It is derived at query time: `SELECT SUM(estimated_minutes) FROM wp_pet_tickets WHERE parent_ticket_id = ?`
+
+Note: `remaining_minutes` is NOT stored. It is derived from actual time logged vs estimated.
 
 **Leaf-only enforcement**
 - `is_rollup` TINYINT(1) NOT NULL DEFAULT 0  
-  Rule: if a ticket has children, set is_rollup=1; time logging must enforce leaf-only.
+  Rule: if a ticket has children, set is_rollup=1; time logging must enforce leaf-only. An unsplit sold ticket is a leaf.
 
 **Lifecycle authority markers**
 - `lifecycle_owner` ENUM('support','project','internal') NOT NULL DEFAULT 'support'  
@@ -90,13 +100,17 @@ Rules:
 - For existing tasks, create corresponding tickets and backfill `tasks.ticket_id`.
 - New work should create tickets first; tasks become a projection/compatibility view.
 
-### 5) Quotes: optional ticket linkage fields
+### 5) Quotes: ticket linkage fields
 
 Additive:
-- In `wp_pet_quote_tasks` add `ticket_id` BIGINT NULL (draft quote tickets).
+- In `wp_pet_quote_tasks` add `ticket_id` BIGINT NULL (set at quote acceptance, NOT during quoting).
 - In `wp_pet_quote_milestones` add `phase_id` BIGINT NULL (if phases become first-class).
 
-If quote components are retained, they must be able to reference tickets directly.
+Quote tasks reference tickets only after acceptance. No tickets exist during the draft/sent phase.
+
+### 6) Deprecated / removed fields
+
+- `ticket_mode` — to be dropped. Was used for values like 'execution', 'baseline', 'draft_quote'. No longer meaningful under the single-ticket model. Replace with `lifecycle_owner` (context), `ticket_kind` (classification), and `is_baseline_locked` (commercial lock).
 
 ## Migration sequencing (forward-only)
 
@@ -105,12 +119,22 @@ M2. ✅ Create `wp_pet_ticket_links`. (Migration 008)
 M3. ✅ Verify `ticket_id` on `wp_pet_time_entries` — already present.
 M4. ✅ Add `ticket_id` to `wp_pet_tasks`. (Migration 008)
 M5. ✅ Backfill: seed creates tickets with full backbone fields; existing tasks bridged.
-M6. Add ticket_id to quote task records (draft linkage) — future.
+M6. Add ticket_id to quote task records (set at acceptance, not during quoting) — future.
+M7. ✅ Add `change_order_source_ticket_id` to `wp_pet_tickets`. (Migration: `AddTicketSoldArchitectureColumns`)
+M8. ✅ Add `is_baseline_locked` to `wp_pet_tickets`. (Migration: `AddTicketSoldArchitectureColumns`)
+M9. Drop `ticket_mode` column from `wp_pet_tickets` — future (column still in use by TicketController).
 
 All backfills must be idempotent and safe to re-run.
 
 ### Namespace decision
 Ticket entity remains in `Domain\Support\Entity\Ticket`. Although tickets now serve support, project, and internal contexts, a migration to a dedicated `Domain\Ticket` namespace was deferred to avoid churn. The `lifecycle_owner` field governs context-specific behaviour within the single entity.
+
+### `root_ticket_id` semantics
+- For a top-level sold ticket: `root_ticket_id` = self.
+- For WBS children/grandchildren: `root_ticket_id` = the top-level sold ticket.
+- For change order tickets: `root_ticket_id` = self (a change order is its own sold commitment).
+- For children of change order tickets: `root_ticket_id` = the change order ticket.
+- Reporting aggregates across original + change orders by following `change_order_source_ticket_id`.
 
 ## Data safety rules
 

@@ -10,7 +10,7 @@
 
 _Fields not specified in docs._
 
-Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commercial_task_breakdown.md`
+Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 
 ### `quotes`
 
@@ -22,7 +22,7 @@ Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commer
 | `id` | UUID, PK |
 | `supersedes_quote_id` | UUID, FK, nullable |
 | `total_sell_value` | decimal 14,2 |
-| `status` | (enum: draft, pending_approval, approved, sent, accepted, |
+| `status` | enum: draft, sent, accepted, rejected, archived |
 | `currency` | char 3 |
 | `total_margin` | decimal 14,2 |
 | `version_number` | int |
@@ -30,7 +30,7 @@ Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commer
 | `created_at` | datetime |
 | `quote_number` | varchar 50, unique |
 | `valid_until` | date |
-| `opportunity_id` | UUID, FK, required |
+| `opportunity_id` | UUID, FK, nullable (Opportunity entity not yet implemented) |
 | ``quote_number`` | (varchar 50, unique) |
 | `title` | varchar 255, required |
 | `description` | text, required |
@@ -39,7 +39,7 @@ Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commer
 
 Quote `contract_id` is set at quote creation. If non-null, rate card resolution tries contract-specific cards first, then global fallback. If null, only global rate cards are considered.
 
-Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_quote_schema.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `05_data_model/06_complete_field_definitions.md`, `05_data_model/quote_schema.md`, `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `quote_components`
 
@@ -52,7 +52,7 @@ Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `0
 | `sell_value` | decimal 14,2 |
 | `internal_cost` | decimal 14,2 |
 
-Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`
+Sources: `05_data_model/06_complete_field_definitions.md`
 
 ### `quote_catalog_items`
 
@@ -72,7 +72,7 @@ Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`
 | `**Products**:` | Must have `sku`. Cannot have `wbs_snapshot`. |
 | `**Services**:` | Must have `role_id`. |
 
-Sources: `05_data_model/docs_05_data_model_quote_schema.md`
+Sources: `05_data_model/quote_schema.md`
 
 ### `quote_milestones`
 
@@ -84,7 +84,7 @@ Sources: `05_data_model/docs_05_data_model_quote_schema.md`
 | `description` | text |
 | `sequence` | int |
 
-Sources: `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`
+Sources: `05_data_model/implementation_blueprint_schema.md`
 
 ### `quote_tasks`
 
@@ -107,7 +107,7 @@ Sources: `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`
 
 All rate values snapshotted at line creation. Internal cost ceiling derived at sale. `role_catalog_item_id` renamed to `role_id`; now references `pet_roles` directly. `service_type_id` and `rate_card_id` are new fields for the refactored model.
 
-Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `05_data_model/docs_05_data_model_implementation_blueprint_schema.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `05_data_model/06_complete_field_definitions.md`, `05_data_model/implementation_blueprint_schema.md`, `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `quote_recurring_services`
 
@@ -123,7 +123,7 @@ Sources: `05_data_model/docs_05_data_model_06_complete_field_definitions.md`, `0
 | `sell_price` | decimal 14,2 |
 | `internal_cost` | decimal 14,2 |
 
-Sources: `05_data_model/docs_05_data_model_recurring_services_schema.md`
+Sources: `05_data_model/recurring_services_schema.md`
 
 ### `contracts`
 
@@ -138,7 +138,7 @@ Sources: `05_data_model/docs_05_data_model_recurring_services_schema.md`
 | `sla_snapshot_json` | json |
 | `baseline_id` | UUID, FK |
 
-Sources: `05_data_model/docs_05_data_model_contract_schema.md`
+Sources: `05_data_model/contract_schema.md`
 
 ### `contract_payment_schedule`
 
@@ -151,7 +151,7 @@ Sources: `05_data_model/docs_05_data_model_contract_schema.md`
 | `trigger_reference` | varchar 255 |
 | `status` | enum: pending, invoiced, paid, overdue |
 
-Sources: `05_data_model/docs_05_data_model_payment_plan_schema.md`
+Sources: `05_data_model/payment_plan_schema.md`
 
 ### `project_baselines`
 
@@ -164,7 +164,7 @@ Sources: `05_data_model/docs_05_data_model_payment_plan_schema.md`
 | `internal_cost_ceiling` | decimal 14,2 |
 | `created_at` | datetime |
 
-Sources: `05_data_model/docs_05_data_model_baseline_variance_schema.md`
+Sources: `05_data_model/baseline_variance_schema.md`
 
 ### `variance_orders`
 
@@ -176,7 +176,7 @@ Sources: `05_data_model/docs_05_data_model_baseline_variance_schema.md`
 | `reason` | text |
 | `approved_by` | UUID |
 
-Sources: `05_data_model/docs_05_data_model_baseline_variance_schema.md`
+Sources: `05_data_model/baseline_variance_schema.md`
 
 ### `procurement_intents`
 
@@ -188,31 +188,31 @@ Sources: `05_data_model/docs_05_data_model_baseline_variance_schema.md`
 | `bundling_group_id` | UUID, nullable |
 | `status` | enum: draft, confirmed, ordered, received |
 
-Sources: `05_data_model/docs_05_data_model_procurement_intent_schema.md`
+Sources: `05_data_model/procurement_intent_schema.md`
 
 ### `procurement_forecast`
 
 _Fields not specified in docs._
 
-Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commercial_task_breakdown.md`
+Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 
 ### `cost_adjustments`
 
 _Fields not specified in docs._
 
-Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commercial_task_breakdown.md`
+Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 
 ### `forecast_capacity`
 
 _Fields not specified in docs._
 
-Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commercial_task_breakdown.md`
+Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 
 ### `quote_activity`
 
 _Fields not specified in docs._
 
-Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commercial_task_breakdown.md`
+Sources: `15_implementation_blueprint/07_commercial_task_breakdown.md`
 
 ### `quote_payment_plan_rules`
 
@@ -223,15 +223,15 @@ Sources: `08_implementation_blueprint/docs_08_implementation_blueprint_07_commer
 | `trigger_type` | enum |
 | `configuration_json` | json |
 
-Sources: `05_data_model/docs_05_data_model_payment_plan_schema.md`
+Sources: `05_data_model/payment_plan_schema.md`
 
 ### `service_catalog_items`
 
-> **⚠️ SUPERSEDED** — This entity has been removed. Service economics are now modelled via `pet_roles` (internal cost), `pet_service_types` (classification), and `pet_rate_cards` (sell pricing). See `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`.
+> **⚠️ SUPERSEDED** — This entity has been removed. Service economics are now modelled via `pet_roles` (internal cost), `pet_service_types` (classification), and `pet_rate_cards` (sell pricing). See `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`.
 
 _Table retained for legacy read access only. No new rows should be created._
 
-Sources: `05_data_model/docs_05_data_model_service_catalog_schema.md` (historical)
+Sources: `05_data_model/service_catalog_schema.md` (historical)
 
 ### `pet_catalog_products` (NEW)
 
@@ -250,7 +250,7 @@ Sources: `05_data_model/docs_05_data_model_service_catalog_schema.md` (historica
 
 Products only — no labour/service items. Replaces product-type rows from `pet_catalog_items`.
 
-Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `pet_service_types` (NEW)
 
@@ -265,7 +265,7 @@ Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 Classification of labour categories (Consulting, Support, Training, etc.).
 
-Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `pet_rate_cards` (NEW)
 
@@ -284,7 +284,7 @@ Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 Composite index on `(role_id, service_type_id, contract_id, valid_from)`. No overlapping date ranges per tuple.
 
-Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 
 ---
@@ -302,7 +302,7 @@ Sources: `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 | `status` | VARCHAR: 'active', 'archived' |
 | `created_at` | DATETIME |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_skills`
 
@@ -315,7 +315,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `status` | VARCHAR: 'active', 'archived' |
 | `created_at` | DATETIME |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_proficiency_levels`
 
@@ -327,7 +327,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `definition` | TEXT |
 | `created_at` | DATETIME |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_roles`
 
@@ -346,7 +346,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 
 `base_internal_rate` represents the hourly internal cost of a person in this role. Must be > 0 for published roles. Roles do NOT carry sell rates.
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`, `03_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
+Sources: `34_work_domain/14_implementation_guide.md`, `07_commercial/07_Products_Roles_ServiceTypes_and_RateCards_v2.md`
 
 ### `pet_role_skills`
 
@@ -358,7 +358,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`, `03_co
 | `importance_weight` | INT |
 | ``primary` | key` (role_id, skill_id) |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_person_skills`
 
@@ -373,7 +373,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `effective_date` | DATE |
 | `created_at` | DATETIME |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_certifications`
 
@@ -385,7 +385,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `expiry_months` | INT |
 | `status` | VARCHAR |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_person_certifications`
 
@@ -399,7 +399,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `evidence_url` | VARCHAR, NULL |
 | `status` | VARCHAR: 'valid', 'expired' |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_person_role_assignments`
 
@@ -414,13 +414,13 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `status` | VARCHAR: 'active', 'completed' |
 | `created_at` | DATETIME |
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 ### `pet_employees`
 
 _Fields not specified in docs._
 
-Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
+Sources: `34_work_domain/14_implementation_guide.md`
 
 
 ---
@@ -444,7 +444,7 @@ Sources: `26_work_domain/docs_26_work_domain_14_implementation_guide.md`
 | `created_at` | datetime Immutable |
 | `archived_at` | datetime nullable |
 
-Sources: `05_data_model/docs_05_data_model_teams.md`
+Sources: `05_data_model/teams.md`
 
 ### `pet_team_members`
 
@@ -457,7 +457,7 @@ Sources: `05_data_model/docs_05_data_model_teams.md`
 | `assigned_at` | datetime |
 | `removed_at` | datetime nullable |
 
-Sources: `05_data_model/docs_05_data_model_teams.md`
+Sources: `05_data_model/teams.md`
 
 ### `pet_assets`
 
@@ -470,7 +470,7 @@ Sources: `05_data_model/docs_05_data_model_teams.md`
 | `version` | int |
 | `created_at` | datetime |
 
-Sources: `05_data_model/docs_05_data_model_assets.md`
+Sources: `05_data_model/assets.md`
 
 
 ---
@@ -491,13 +491,13 @@ Sources: `05_data_model/docs_05_data_model_assets.md`
 | `published_at` | datetime, Nullable: Yes |
 | `published_by` | bigint, Nullable: Yes |
 
-Sources: `25_schema_management_backend/docs_25_schema_management_backend_02_data_model_updates.md`
+Sources: `32_schema_management/02_data_model_updates.md`
 
 ### `pet_migrations`
 
 _Fields not specified in docs._
 
-Sources: `05_data_model/docs_05_data_model_04_migration_execution_model.md`
+Sources: `05_data_model/04_migration_execution_model.md`
 
 
 ---
@@ -526,7 +526,7 @@ Sources: `05_data_model/docs_05_data_model_04_migration_execution_model.md`
 | ``time_entry.submitted`` |  |
 | ``sla.breached`` |  |
 
-Sources: `05_data_model/docs_05_data_model_03_domain_events_schema.md`
+Sources: `05_data_model/03_domain_events_schema.md`
 
 
 ---

@@ -38,8 +38,12 @@ function formatDuration(days: number): string {
 
 const JourneyBar: React.FC<JourneyBarProps> = ({ segments, progress, trajectoryLabel, trajectoryClass, trajectoryTitle, onSegmentClick }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tappedIndex, setTappedIndex] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const clampedProgress = Math.min(Math.max(progress, 0), 100);
+
+  // Active tooltip: tapped (mobile) takes precedence over hovered (desktop)
+  const activeIndex = tappedIndex !== null ? tappedIndex : hoveredIndex;
 
   // Empty/no-data state
   if (!segments || segments.length === 0) {
@@ -61,7 +65,7 @@ const JourneyBar: React.FC<JourneyBarProps> = ({ segments, progress, trajectoryL
   const totalDuration = segments.reduce((sum, s) => sum + s.duration_days, 0);
 
   // Tooltip content — rendered via portal to escape overflow:hidden
-  const hoveredSeg = hoveredIndex !== null ? segments[hoveredIndex] : null;
+  const activeSeg = activeIndex !== null ? segments[activeIndex] : null;
 
   return (
     <div className="jb-row">
@@ -84,7 +88,17 @@ const JourneyBar: React.FC<JourneyBarProps> = ({ segments, progress, trajectoryL
                 onMouseEnter={(e) => { setHoveredIndex(i); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
                 onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
                 onMouseLeave={() => setHoveredIndex(null)}
-                onClick={() => onSegmentClick?.(seg)}
+                onClick={(e) => {
+                  // Mobile tap-to-toggle tooltip; desktop click-through to segment action
+                  if ('ontouchstart' in window) {
+                    e.preventDefault();
+                    const rect = (e.target as HTMLElement).getBoundingClientRect();
+                    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+                    setTappedIndex(prev => prev === i ? null : i);
+                  } else {
+                    onSegmentClick?.(seg);
+                  }
+                }}
               />
             );
           })}
@@ -92,30 +106,36 @@ const JourneyBar: React.FC<JourneyBarProps> = ({ segments, progress, trajectoryL
         {/* Remaining unfilled portion */}
         <div className="jb-unfilled" style={{ width: `${100 - clampedProgress}%` }} />
       </div>
-      <span className="jb-progress-label">
+      <span className="jb-progress-label" title={`Task completion: ${clampedProgress}%`}>
         {clampedProgress}%
         {trajectoryLabel && <span className={`jb-traj ${trajectoryClass || ''}`} title={trajectoryTitle}>{trajectoryLabel}</span>}
       </span>
 
       {/* Portal tooltip — rendered at document.body to escape overflow:hidden */}
-      {hoveredSeg && createPortal(
-        <div className="jb-tooltip" style={{ left: tooltipPos.x, top: tooltipPos.y - 12 }}>
+      {activeSeg && createPortal(
+        <div
+          className="jb-tooltip"
+          style={{ left: tooltipPos.x, top: tooltipPos.y - 12 }}
+          onClick={() => setTappedIndex(null)} // dismiss on tap
+        >
+          <div className="jb-tooltip-header">Timeline</div>
           <div className="jb-tooltip-state">
-            <span className="jb-tooltip-dot" style={{ background: STATE_COLORS[hoveredSeg.state] }} />
-            {STATE_LABELS[hoveredSeg.state] || hoveredSeg.state}
+            <span className="jb-tooltip-dot" style={{ background: STATE_COLORS[activeSeg.state] }} />
+            {STATE_LABELS[activeSeg.state] || activeSeg.state}
           </div>
           <div className="jb-tooltip-dates">
-            {formatDate(hoveredSeg.start_at)} – {formatDate(hoveredSeg.end_at)}
+            {formatDate(activeSeg.start_at)} – {formatDate(activeSeg.end_at)}
           </div>
           <div className="jb-tooltip-duration">
-            {formatDuration(hoveredSeg.duration_days)}
+            {formatDuration(activeSeg.duration_days)}
           </div>
-          {hoveredSeg.reason && (
-            <div className="jb-tooltip-reason">{hoveredSeg.reason}</div>
+          {activeSeg.reason && (
+            <div className="jb-tooltip-reason">{activeSeg.reason}</div>
           )}
-          {!hoveredSeg.reason && hoveredSeg.state === 'green' && segments.length === 1 && (
+          {!activeSeg.reason && activeSeg.state === 'green' && segments.length === 1 && (
             <div className="jb-tooltip-reason">No health transitions recorded yet</div>
           )}
+          <div className="jb-tooltip-completion">Task completion: {clampedProgress}%</div>
         </div>,
         document.body
       )}

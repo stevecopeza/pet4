@@ -111,6 +111,13 @@ export interface Quote {
   }>;
 }
 
+export interface ConversationParticipant {
+  type: 'user' | 'contact' | 'team';
+  id: number;
+  name: string;
+  added_at: string;
+}
+
 export interface Conversation {
   uuid: string;
   context_type: string;
@@ -118,6 +125,7 @@ export interface Conversation {
   subject: string;
   state: string;
   created_at: string;
+  participants: ConversationParticipant[];
   decisions: Decision[];
   timeline: TimelineEvent[];
 }
@@ -157,12 +165,32 @@ export interface QuoteComponent {
   sellValue: number;
   internalCost: number;
   topology?: string;
+  // ImplementationComponent
+  milestones?: {
+    id: number | null;
+    title: string;
+    description?: string | null;
+    tasks: {
+      id: number | null;
+      title: string;
+      description?: string | null;
+      durationHours: number;
+      sellRate: number;
+      baseInternalRate: number;
+      sellValue: number;
+      internalCost: number;
+    }[];
+    sellValue: number;
+    internalCost: number;
+  }[];
+  // CatalogComponent
   items?: {
     description: string;
     quantity: number;
     unitSellPrice: number;
     sellValue: number;
   }[];
+  // OnceOffServiceComponent (simple)
   units?: {
     id: number | null;
     title: string;
@@ -173,6 +201,7 @@ export interface QuoteComponent {
     sellValue: number;
     internalCost: number;
   }[];
+  // OnceOffServiceComponent (complex)
   phases?: {
     id: number | null;
     name: string;
@@ -190,6 +219,13 @@ export interface QuoteComponent {
     sellValue: number;
     internalCost: number;
   }[];
+  // RecurringServiceComponent
+  serviceName?: string;
+  cadence?: string;
+  termMonths?: number;
+  renewalModel?: string;
+  sellPricePerPeriod?: number;
+  internalCostPerPeriod?: number;
 }
 
 export interface QuoteSection {
@@ -391,6 +427,18 @@ export interface Ticket {
   lifecycleOwner?: string;
   isBillableDefault?: boolean;
   billingContextType?: string;
+  // Backbone fields
+  soldMinutes?: number | null;
+  estimatedMinutes?: number | null;
+  isBaselineLocked?: boolean;
+  isRollup?: boolean;
+  parentTicketId?: number | null;
+  rootTicketId?: number | null;
+  changeOrderSourceTicketId?: number | null;
+  projectId?: number | null;
+  quoteId?: number | null;
+  ticketKind?: string;
+  soldValueCents?: number | null;
 }
 
 export interface Article {

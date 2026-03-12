@@ -1,26 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Ticket, Employee } from '../types';
 import { DataTable, Column } from './DataTable';
 import TicketForm from './TicketForm';
 import TicketDetails from './TicketDetails';
 import { computeTicketHealth } from '../healthCompute';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import useConversation from '../hooks/useConversation';
+import useConversationStatus from '../hooks/useConversationStatus';
 
 const Support = () => {
+  const { openConversation } = useConversation();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [showConversation, setShowConversation] = useState(false);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
-  const [modeFilter, setModeFilter] = useState<string>('');
+  const [lifecycleFilter, setLifecycleFilter] = useState<string>('');
   const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [pendingSelectId, setPendingSelectId] = useState<number | null>(null);
+
+  const ticketIds = useMemo(() => tickets.map(t => String(t.id)), [tickets]);
+  const { statuses: convStatuses } = useConversationStatus('ticket', ticketIds);
 
   useEffect(() => {
     // Restore selection from URL hash (e.g., #ticket=123)
@@ -93,8 +98,8 @@ const Support = () => {
       if (statusFilter) {
         params.append('status', statusFilter);
       }
-      if (modeFilter) {
-        params.append('ticket_mode', modeFilter);
+      if (lifecycleFilter) {
+        params.append('lifecycle_owner', lifecycleFilter);
       }
       if (customerFilter) {
         params.append('customer_id', customerFilter);
@@ -151,7 +156,7 @@ const Support = () => {
 
   useEffect(() => {
     fetchTickets();
-  }, [statusFilter, modeFilter, assignmentFilter, customerFilter]);
+  }, [statusFilter, lifecycleFilter, assignmentFilter, customerFilter]);
 
   const handleFormSuccess = () => {
     setShowAddForm(false);
@@ -216,10 +221,23 @@ const Support = () => {
     fetchTickets();
   };
 
+  const statusColors: Record<string, string> = { red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' };
+
   const columns: Column<Ticket>[] = [
     { key: 'id', header: 'ID' },
-    { key: 'subject', header: 'Subject', render: (val, item) => (
-      <button 
+    { key: 'subject', header: 'Subject', render: (val, item) => {
+      const cs = convStatuses.get(String(item.id));
+      const dot = cs && cs.status !== 'none' ? (
+        <button
+          type="button"
+          title={`Conversation: ${cs.status} — click to open`}
+          onClick={(e) => { e.stopPropagation(); openConversation({ contextType: 'ticket', contextId: String(item.id), subject: `Ticket #${item.id}: ${item.subject}`, subjectKey: `ticket:${item.id}` }); }}
+          style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: statusColors[cs.status] || 'transparent', marginRight: 6, verticalAlign: 'middle', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0 }}
+        />
+      ) : null;
+      return (<>
+        {dot}
+        <button 
         type="button"
         onClick={(e) => { 
           e.preventDefault(); 
@@ -235,7 +253,8 @@ const Support = () => {
       >
         {String(val)}
       </button>
-    ) },
+      </>);
+    } },
     { 
       key: 'malleableData', 
       header: 'Source', 
@@ -262,7 +281,7 @@ const Support = () => {
       } 
     },
     { key: 'customerId', header: 'Customer ID' },
-    { key: 'ticketMode', header: 'Mode' },
+    { key: 'lifecycleOwner', header: 'Lifecycle' },
     { 
       key: 'assignedUserId', 
       header: 'Assigned To',
@@ -286,10 +305,8 @@ const Support = () => {
     return (
       <TicketDetails 
         ticket={selectedTicket} 
-        initialShowConversation={showConversation}
         onBack={() => {
           setSelectedTicket(null);
-          setShowConversation(false);
           fetchTickets();
         }} 
       />
@@ -324,11 +341,12 @@ const Support = () => {
           </select>
         </div>
         <div>
-          <label style={{ display: 'block', marginBottom: '4px' }}>Mode</label>
-          <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)}>
+          <label style={{ display: 'block', marginBottom: '4px' }}>Lifecycle</label>
+          <select value={lifecycleFilter} onChange={(e) => setLifecycleFilter(e.target.value)}>
             <option value="">All</option>
             <option value="support">Support</option>
-            <option value="execution">Execution</option>
+            <option value="project">Project</option>
+            <option value="internal">Internal</option>
           </select>
         </div>
         <div>
@@ -355,7 +373,7 @@ const Support = () => {
             className="button"
             onClick={() => {
               setStatusFilter('');
-              setModeFilter('');
+              setLifecycleFilter('');
               setAssignmentFilter('all');
               setCustomerFilter('');
             }}
@@ -399,9 +417,12 @@ const Support = () => {
         actions={(item) => (
           <KebabMenu items={[
             { type: 'action', label: 'Discuss', onClick: () => {
-              setSelectedTicket(item);
-              try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#ticket=${item.id}`); } catch (_) {}
-              setShowConversation(true);
+              openConversation({
+                contextType: 'ticket',
+                contextId: String(item.id),
+                subject: `Ticket #${item.id}: ${item.subject}`,
+                subjectKey: `ticket:${item.id}`,
+              });
             }},
             { type: 'action', label: 'View', onClick: () => {
               setSelectedTicket(item);

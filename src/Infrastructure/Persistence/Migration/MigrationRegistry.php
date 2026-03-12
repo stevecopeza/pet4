@@ -97,6 +97,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddServiceTypeAndRateCardToQuoteTasks::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddContractIdToQuotes::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateRoleTeamsTable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketSoldArchitectureColumns::class,
         ];
     }
 }

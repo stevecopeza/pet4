@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 import { Customer, SchemaDefinition, Lead } from '../types';
+import useConversation from '../hooks/useConversation';
+import useConversationStatus from '../hooks/useConversationStatus';
 
 interface LeadFormProps {
   initialData?: Lead;
@@ -24,6 +26,9 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
   const [loading, setLoading] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { openConversation } = useConversation();
+  const leadIdArr = useMemo(() => isEditMode ? [String(initialData!.id)] : [], [isEditMode, initialData]);
+  const { statuses: convStatuses } = useConversationStatus('lead', leadIdArr);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -136,9 +141,32 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
     }
   };
 
+  const leadConvStatus = isEditMode ? convStatuses.get(String(initialData!.id)) : undefined;
+  const statusDotColor = leadConvStatus && leadConvStatus.status !== 'none'
+    ? ({ red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' }[leadConvStatus.status] || undefined)
+    : undefined;
+
   return (
     <div className="pet-form-card">
-      <h3>{isEditMode ? 'Edit Lead' : 'Create New Lead'}</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0 }}>{isEditMode ? 'Edit Lead' : 'Create New Lead'}</h3>
+        {isEditMode && (
+          <button
+            type="button"
+            className="button"
+            onClick={() => openConversation({
+              contextType: 'lead',
+              contextId: String(initialData!.id),
+              subject: `Lead: ${initialData!.subject}`,
+              subjectKey: `lead:${initialData!.id}`
+            })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            {statusDotColor && <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: statusDotColor }} />}
+            Discuss
+          </button>
+        )}
+      </div>
       {error && <div className="notice notice-error inline"><p>{error}</p></div>}
       <form onSubmit={handleSubmit}>
         <div className="pet-field">
