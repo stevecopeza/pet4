@@ -10,7 +10,7 @@ class SqlWorkItemRepository implements WorkItemRepository
 {
     private $wpdb;
 
-    public function __construct(\wpdb $wpdb)
+    public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
     }
@@ -24,6 +24,10 @@ class SqlWorkItemRepository implements WorkItemRepository
             'source_id' => $workItem->getSourceId(),
             'assigned_user_id' => $workItem->getAssignedUserId(),
             'department_id' => $workItem->getDepartmentId(),
+            'assigned_team_id' => $workItem->getAssignedTeamId(),
+            'assignment_mode' => $workItem->getAssignmentMode(),
+            'queue_key' => $workItem->getQueueKey(),
+            'routing_reason' => $workItem->getRoutingReason(),
             'sla_snapshot_id' => $workItem->getSlaSnapshotId(),
             'sla_time_remaining_minutes' => $workItem->getSlaTimeRemainingMinutes(),
             'priority_score' => $workItem->getPriorityScore(),
@@ -41,7 +45,7 @@ class SqlWorkItemRepository implements WorkItemRepository
         ];
 
         $formats = [
-            '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%f', '%s', '%s', '%f', '%s', '%d', '%s', '%s', '%f', '%d', '%f', '%d'
+            '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%f', '%s', '%s', '%f', '%s', '%d', '%s', '%s', '%f', '%d', '%f', '%d'
         ];
 
         $exists = $this->findById($workItem->getId());
@@ -125,6 +129,10 @@ class SqlWorkItemRepository implements WorkItemRepository
         $clientTier = isset($row->client_tier) ? (int)$row->client_tier : 1;
         $managerPriorityOverride = isset($row->manager_priority_override) ? (float)$row->manager_priority_override : 0.0;
         $requiredRoleId = isset($row->required_role_id) ? (int)$row->required_role_id : null;
+        $assignedTeamId = isset($row->assigned_team_id) ? ($row->assigned_team_id !== null ? (string)$row->assigned_team_id : null) : null;
+        $assignmentMode = isset($row->assignment_mode) ? ($row->assignment_mode !== null ? (string)$row->assignment_mode : null) : null;
+        $queueKey = isset($row->queue_key) ? ($row->queue_key !== null ? (string)$row->queue_key : null) : null;
+        $routingReason = isset($row->routing_reason) ? ($row->routing_reason !== null ? (string)$row->routing_reason : null) : null;
 
         return new WorkItem(
             $row->id,
@@ -132,6 +140,10 @@ class SqlWorkItemRepository implements WorkItemRepository
             $row->source_id,
             $row->assigned_user_id,
             $row->department_id,
+            $assignedTeamId,
+            $assignmentMode,
+            $queueKey,
+            $routingReason,
             $requiredRoleId,
             $row->sla_snapshot_id,
             $row->sla_time_remaining_minutes !== null ? (int)$row->sla_time_remaining_minutes : null,

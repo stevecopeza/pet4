@@ -8,6 +8,7 @@ use Pet\Application\Work\Command\AssignWorkItemCommand;
 use Pet\Application\Work\Command\AssignWorkItemHandler;
 use Pet\Application\Work\Command\OverrideWorkItemPriorityCommand;
 use Pet\Application\Work\Command\OverrideWorkItemPriorityHandler;
+use Pet\Application\System\Service\FeatureFlagService;
 use Pet\Domain\Work\Repository\WorkItemRepository;
 use Pet\Domain\Advisory\Repository\AdvisorySignalRepository;
 use WP_REST_Request;
@@ -22,6 +23,7 @@ class WorkItemController implements RestController
     public function __construct(
         private WorkItemRepository $repository,
         private AdvisorySignalRepository $signalRepository,
+        private FeatureFlagService $featureFlags,
         private AssignWorkItemHandler $assignHandler,
         private OverrideWorkItemPriorityHandler $overrideHandler
     ) {}
@@ -133,12 +135,19 @@ class WorkItemController implements RestController
             return new WP_REST_Response(['message' => 'Missing assigned_user_id'], 400);
         }
 
+        $item = $this->repository->findById((string)$id);
+        if ($item && $item->getSourceType() === 'ticket') {
+            return new WP_REST_Response(['message' => 'Ticket-sourced work must be assigned via ticket command endpoints'], 409);
+        }
+
         try {
             $command = new AssignWorkItemCommand($id, $userId);
             $this->assignHandler->handle($command);
             return new WP_REST_Response(['message' => 'Assigned'], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to assign work item', 'details' => []]], 500);
         }
     }
 
@@ -155,14 +164,19 @@ class WorkItemController implements RestController
             $command = new OverrideWorkItemPriorityCommand($id, (float)$override);
             $this->overrideHandler->handle($command);
             return new WP_REST_Response(['message' => 'Priority Override Applied'], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to prioritize work item', 'details' => []]], 500);
         }
     }
 
     private function serializeWorkItem($item): array
     {
-        $signals = $this->signalRepository->findActiveByWorkItemId($item->getId());
+        $signals = [];
+        if ($this->featureFlags->isAdvisoryEnabled()) {
+            $signals = $this->signalRepository->findActiveByWorkItemId($item->getId());
+        }
 
         return [
             'id' => $item->getId(),
@@ -170,6 +184,10 @@ class WorkItemController implements RestController
             'source_id' => $item->getSourceId(),
             'assigned_user_id' => $item->getAssignedUserId(),
             'department_id' => $item->getDepartmentId(),
+            'assigned_team_id' => $item->getAssignedTeamId(),
+            'assignment_mode' => $item->getAssignmentMode(),
+            'queue_key' => $item->getQueueKey(),
+            'routing_reason' => $item->getRoutingReason(),
             'priority_score' => $item->getPriorityScore(),
             'status' => $item->getStatus(),
             'sla_time_remaining' => $item->getSlaTimeRemainingMinutes(),

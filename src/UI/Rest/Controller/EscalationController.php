@@ -114,7 +114,7 @@ class EscalationController
         }
 
         $data = $this->serialize($escalation);
-        $data['transitions'] = $this->repository->findTransitionsByEscalationId($id);
+        $data['transitions'] = array_map([$this, 'normalizeTransition'], $this->repository->findTransitionsByEscalationId($id));
 
         return new WP_REST_Response($data, 200);
     }
@@ -161,13 +161,28 @@ class EscalationController
             'severity' => $escalation->severity(),
             'status' => $escalation->status(),
             'reason' => $escalation->reason(),
+            'summary' => $escalation->summary(),
             'metadata' => json_decode($escalation->metadataJson(), true),
             'created_by' => $escalation->createdBy(),
             'acknowledged_by' => $escalation->acknowledgedBy(),
             'resolved_by' => $escalation->resolvedBy(),
             'created_at' => $escalation->createdAt()->format('c'),
+            'opened_at' => $escalation->openedAt()->format('c'),
             'acknowledged_at' => $escalation->acknowledgedAt()?->format('c'),
             'resolved_at' => $escalation->resolvedAt()?->format('c'),
+            'resolution_note' => $escalation->resolutionNote(),
+        ];
+    }
+
+    private function normalizeTransition(object $row): array
+    {
+        return [
+            'id' => (int)$row->id,
+            'from_status' => $row->from_status !== null ? (string)$row->from_status : null,
+            'to_status' => (string)$row->to_status,
+            'transitioned_by' => $row->transitioned_by !== null ? (int)$row->transitioned_by : null,
+            'transitioned_at' => (string)$row->transitioned_at,
+            'reason' => $row->reason !== null ? (string)$row->reason : null,
         ];
     }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Team, Employee } from '../types';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface TeamFormProps {
   initialData?: Team;
@@ -247,7 +248,7 @@ const TeamForm: React.FC<TeamFormProps> = ({ initialData, onSuccess, onCancel, t
                         onClick={() => {
                           // @ts-ignore
                           if (typeof wp === 'undefined' || !wp.media) {
-                            alert('WordPress Media Library is not available.');
+                            legacyAlert('WordPress Media Library is not available.');
                             return;
                           }
                       

@@ -8,6 +8,7 @@ import { computeQuoteTotals } from '../utils/quoteTotals';
 import { computeQuoteHealth } from '../healthCompute';
 import useConversation from '../hooks/useConversation';
 import useConversationStatus from '../hooks/useConversationStatus';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface QuotesProps {
   initialQuoteId?: number | null;
@@ -131,7 +132,7 @@ const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed 
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this quote?')) return;
+    if (!legacyConfirm('Are you sure you want to archive this quote?')) return;
 
     try {
       // @ts-ignore
@@ -152,12 +153,12 @@ const Quotes: React.FC<QuotesProps> = ({ initialQuoteId, onInitialQuoteConsumed 
 
       fetchQuotes();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to archive');
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} quotes?`)) return;
+    if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} quotes?`)) return;
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;

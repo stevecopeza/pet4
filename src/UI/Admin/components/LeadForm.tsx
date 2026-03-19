@@ -243,10 +243,9 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
               onChange={(e) => setStatus(e.target.value)}
             >
               <option value="new">New</option>
-              <option value="contacted">Contacted</option>
               <option value="qualified">Qualified</option>
               <option value="converted">Converted</option>
-              <option value="lost">Lost</option>
+              <option value="disqualified">Disqualified</option>
             </select>
           </div>
         )}

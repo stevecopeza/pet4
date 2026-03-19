@@ -12,6 +12,7 @@ class TriggerEscalationCommand
     private string $reason;
     private ?int $createdBy;
     private array $metadata;
+    private ?string $summary;
 
     public function __construct(
         string $sourceEntityType,
@@ -19,7 +20,8 @@ class TriggerEscalationCommand
         string $severity,
         string $reason,
         ?int $createdBy = null,
-        array $metadata = []
+        array $metadata = [],
+        ?string $summary = null
     ) {
         $this->sourceEntityType = $sourceEntityType;
         $this->sourceEntityId = $sourceEntityId;
@@ -27,6 +29,7 @@ class TriggerEscalationCommand
         $this->reason = $reason;
         $this->createdBy = $createdBy;
         $this->metadata = $metadata;
+        $this->summary = $summary;
     }
 
     public function sourceEntityType(): string { return $this->sourceEntityType; }
@@ -35,4 +38,5 @@ class TriggerEscalationCommand
     public function reason(): string { return $this->reason; }
     public function createdBy(): ?int { return $this->createdBy; }
     public function metadata(): array { return $this->metadata; }
+    public function summary(): ?string { return $this->summary; }
 }

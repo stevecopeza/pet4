@@ -6,6 +6,7 @@ import LeadForm from './LeadForm';
 import useConversation from '../hooks/useConversation';
 import useConversationStatus from '../hooks/useConversationStatus';
 import { computeLeadHealth } from '../healthCompute';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface LeadsProps {
   onNavigateToQuote?: (quoteId: number) => void;
@@ -63,7 +64,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this lead?')) return;
+    if (!legacyConfirm('Are you sure you want to delete this lead?')) return;
 
     try {
       // @ts-ignore
@@ -84,12 +85,12 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
 
       fetchLeads();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to delete');
     }
   };
 
   const handleConvertToQuote = async (lead: Lead) => {
-    if (!confirm(`Convert lead "${lead.subject}" to a quote?`)) return;
+    if (!legacyConfirm(`Convert lead "${lead.subject}" to a quote?`)) return;
 
     try {
       // @ts-ignore
@@ -117,12 +118,12 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
         onNavigateToQuote(data.quoteId);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to convert lead');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to convert lead');
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${selectedIds.length} leads?`)) return;
+    if (!legacyConfirm(`Are you sure you want to delete ${selectedIds.length} leads?`)) return;
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
@@ -166,7 +167,8 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
     }},
     { key: 'customerId', header: 'Customer', render: (val) => val ? val.toString() : '' },
     { key: 'status', header: 'Status', render: (val) => {
-      const status = val as string;
+      const statusRaw = val as string;
+      const status = statusRaw === 'lost' ? 'disqualified' : statusRaw;
       return <span className={`pet-status-badge status-${status}`}>{status}</span>;
     }},
     { key: 'estimatedValue', header: 'Est. Value', render: (val) => val ? `$${val}` : '-' },

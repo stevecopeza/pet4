@@ -66,6 +66,7 @@ export interface Project {
   id: number;
   name: string;
   customerId: number;
+  sourceQuoteId?: number | null;
   soldHours: number;
   soldValue: number;
   state: string;

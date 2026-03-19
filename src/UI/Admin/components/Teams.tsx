@@ -4,6 +4,7 @@ import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import TeamForm from './TeamForm';
 import TeamView from './TeamView';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface FlatTeam extends Team {
   depth: number;
@@ -128,7 +129,7 @@ const Teams = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this team?')) return;
+    if (!legacyConfirm('Are you sure you want to archive this team?')) return;
 
     try {
       // @ts-ignore
@@ -150,12 +151,12 @@ const Teams = () => {
 
       fetchTeams();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to archive');
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} teams?`)) return;
+    if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} teams?`)) return;
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;

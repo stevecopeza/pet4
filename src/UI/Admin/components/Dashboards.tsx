@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import '../dashboard-styles.css';
 import { computeTicketHealth, computeProjectHealth, computeQuoteHealth, computeLeadHealth, HealthResult, HealthHistory } from '../healthCompute';
 import type { JourneyData } from '../healthCompute';
 import JourneyBar from './JourneyBar';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 /* ============================================================
    Types
@@ -144,6 +145,40 @@ interface SalesData {
 }
 
 type Persona = 'manager' | 'support' | 'pm' | 'sales' | 'timesheets';
+
+/* Server-side dashboard summary types (from DashboardCompositionService) */
+interface ServerPanel {
+  panel_key: string;
+  title: string;
+  metric_value: number | string | null;
+  metric_unit: string | null;
+  severity: string | null;
+  scope_type: string;
+  scope_id: number;
+  as_of: string;
+  count_breakdown: Record<string, any> | null;
+  items: any[];
+  source_summary: string | null;
+  actions?: { label: string; method: string; path: string; body?: any }[];
+}
+
+interface ServerScope {
+  scope_type: string;
+  scope_id: number;
+  visibility_scope: 'TEAM' | 'MANAGERIAL' | 'ADMIN';
+  label: string;
+}
+
+interface ServerSummary {
+  as_of: string;
+  scopes: ServerScope[];
+  active_scope: ServerScope | null;
+  allowed_personas: Persona[];
+  personas: Record<string, { panels: ServerPanel[] }>;
+}
+
+const findPanel = (panels: ServerPanel[] | undefined, key: string): ServerPanel | undefined =>
+  panels?.find(p => p.panel_key === key);
 
 /* ============================================================
    API helpers
@@ -375,7 +410,8 @@ const ManagerView: React.FC<{
   workItems: WorkItem[];
   activity: ActivityItem[];
   customers: Map<number, string>;
-}> = ({ overview, demoWow, tickets, workItems, activity, customers }) => {
+  serverPanels?: ServerPanel[];
+}> = ({ overview, demoWow, tickets, workItems, activity, customers, serverPanels }) => {
   // SLA health: % of open tickets NOT breached
   const openTickets = tickets.filter(t => !['closed', 'resolved'].includes(t.status));
   const breachedWorkItems = workItems.filter(
@@ -603,6 +639,96 @@ const ManagerView: React.FC<{
         )}
       </div>
 
+      {/* === Server-composed panels (escalation, advisory, resilience) === */}
+      {(() => {
+        const escPanel = findPanel(serverPanels, 'escalation_summary');
+        if (!escPanel) return null;
+        const bySev = escPanel.count_breakdown?.by_severity as Record<string, number> | undefined;
+        return (
+          <div className="pd-attention-panel">
+            <h3 className="pd-section-title">
+              Open Escalations
+              {escPanel.metric_value != null && Number(escPanel.metric_value) > 0 && <span className="pd-badge">{escPanel.metric_value}</span>}
+            </h3>
+            {Number(escPanel.metric_value) === 0 ? (
+              <div className="pd-empty">No open escalations.</div>
+            ) : (
+              <div className="pd-kpi-strip">
+                <KpiCard value={escPanel.metric_value ?? 0} label="Total Open" color={escPanel.severity === 'critical' ? 'red' : escPanel.severity === 'warning' ? 'amber' : 'blue'} />
+                {bySev && Object.entries(bySev).map(([sev, count]) => (
+                  <KpiCard key={sev} value={count} label={sev} color={sev.toLowerCase() === 'critical' ? 'red' : sev.toLowerCase() === 'high' ? 'amber' : 'blue'} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {(() => {
+        const advPanel = findPanel(serverPanels, 'advisory_summary');
+        if (!advPanel) return null;
+        const bySev = advPanel.count_breakdown?.by_severity as Record<string, number> | undefined;
+        return (
+          <div className="pd-attention-panel">
+            <h3 className="pd-section-title">
+              Advisory Signals
+              {advPanel.metric_value != null && Number(advPanel.metric_value) > 0 && <span className="pd-badge">{advPanel.metric_value}</span>}
+            </h3>
+            {Number(advPanel.metric_value) === 0 ? (
+              <div className="pd-empty">No active advisory signals.</div>
+            ) : (
+              <div className="pd-kpi-strip">
+                <KpiCard value={advPanel.metric_value ?? 0} label="Active Signals" color={advPanel.severity === 'attention' ? 'amber' : 'blue'} />
+                {bySev && Object.entries(bySev).map(([sev, count]) => (
+                  <KpiCard key={sev} value={count} label={sev} color={sev.toLowerCase() === 'critical' ? 'red' : sev.toLowerCase() === 'warning' ? 'amber' : 'blue'} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {(() => {
+        const resPanel = findPanel(serverPanels, 'resilience_summary');
+        if (!resPanel) return null;
+        return (
+          <div className="pd-attention-panel">
+            <h3 className="pd-section-title">
+              Resilience
+              {resPanel.metric_value != null && Number(resPanel.metric_value) > 0 && <span className="pd-badge">{resPanel.metric_value}</span>}
+            </h3>
+            {resPanel.source_summary && <div className="pd-empty">{resPanel.source_summary}</div>}
+            {resPanel.items.length > 0 && (
+              <div className="pd-attention-grid">
+                {resPanel.items.slice(0, 8).map((sig: any) => (
+                  <AttentionCard
+                    key={sig.id}
+                    subject={sig.title || sig.signal_type}
+                    meta={sig.summary || ''}
+                    severity={sig.severity === 'critical' ? 'breached' : sig.severity === 'warning' ? 'warning' : 'info'}
+                    statusLabel={sig.severity?.toUpperCase()}
+                  />
+                ))}
+              </div>
+            )}
+            {resPanel.actions && resPanel.actions.length > 0 && (
+              <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                {resPanel.actions.map((a, i) => (
+                  <button
+                    key={i}
+                    className="pd-refresh-btn"
+                    type="button"
+                    onClick={async () => { await apiPost(a.path, a.body || {}); window.location.reload(); }}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       <div className="pd-activity-panel">
         <h3 className="pd-section-title">Strategic Activity</h3>
         <ActivityStream items={strategicActivity.length > 0 ? strategicActivity : activity} emptyMsg="No strategic events yet" />
@@ -621,7 +747,8 @@ const SupportView: React.FC<{
   customers: Map<number, string>;
   currentUserId: number;
   onTicketClick: (ticketId: number) => void;
-}> = ({ tickets, workItems, activity, customers, currentUserId, onTicketClick }) => {
+  serverPanels?: ServerPanel[];
+}> = ({ tickets, workItems, activity, customers, currentUserId, onTicketClick, serverPanels }) => {
   const uid = String(currentUserId);
   const myWorkItems = workItems.filter(wi => wi.assigned_user_id === uid && wi.source_type === 'ticket');
   const ticketMap = new Map(tickets.map(t => [String(t.id), t]));
@@ -703,6 +830,8 @@ const SupportView: React.FC<{
         <KpiCard value={dueWithinHour.length} label="Due Within 1hr" color={dueWithinHour.length > 0 ? 'amber' : 'green'} />
         <KpiCard value={unassignedTickets.length} label="Unassigned Queue" color={unassignedTickets.length > 0 ? 'amber' : 'teal'} />
         <KpiCard value={tickets.filter(t => t.intake_source === 'pulseway' && !['closed','resolved'].includes(t.status)).length} label={'\u{1F5A5}\uFE0F Pulseway Alerts'} color="purple" />
+        {(() => { const tq = findPanel(serverPanels, 'team_queue'); return tq ? <KpiCard value={tq.metric_value ?? 0} label="Team Queue" color="teal" /> : null; })()}
+        {(() => { const mq = findPanel(serverPanels, 'my_queue'); return mq ? <KpiCard value={mq.metric_value ?? 0} label="Server My Queue" color="blue" /> : null; })()}
       </div>
 
       <div className="pd-attention-panel">
@@ -734,6 +863,25 @@ const SupportView: React.FC<{
           </div>
         </div>
       )}
+
+      {(() => {
+        const advPanel = findPanel(serverPanels, 'advisory_signals');
+        if (!advPanel || Number(advPanel.metric_value) === 0) return null;
+        const bySev = advPanel.count_breakdown?.by_severity as Record<string, number> | undefined;
+        return (
+          <div className="pd-attention-panel">
+            <h3 className="pd-section-title">
+              Advisory Signals
+              <span className="pd-badge">{advPanel.metric_value}</span>
+            </h3>
+            <div className="pd-kpi-strip">
+              {bySev && Object.entries(bySev).map(([sev, count]) => (
+                <KpiCard key={sev} value={count} label={sev} color={sev.toLowerCase() === 'critical' ? 'red' : sev.toLowerCase() === 'warning' ? 'amber' : 'blue'} />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="pd-activity-panel">
         <h3 className="pd-section-title">Ticket Activity</h3>
@@ -1326,7 +1474,7 @@ const TicketDetailPanel: React.FC<{
       const freshEntries = await api(`time-entries?ticket_id=${ticket.id}`).catch(() => []);
       setDetail(prev => ({ ...prev, timeEntries: Array.isArray(freshEntries) ? freshEntries : [] }));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create correction');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to create correction');
     }
   };
 
@@ -2156,6 +2304,27 @@ const Dashboards: React.FC = () => {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<number | null>(null);
 
+  // Server-side dashboard composition (additive — gracefully degrades)
+  const [serverSummary, setServerSummary] = useState<ServerSummary | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+
+  const loadServerSummary = useCallback(async (teamId?: number | null) => {
+    try {
+      const query = teamId ? `?team_id=${encodeURIComponent(String(teamId))}` : '';
+      const data = await api(`dashboards/me/summary${query}`);
+      // Validate response shape — WP may return an error object if the route is unregistered
+      if (!data || !Array.isArray(data.allowed_personas) || !Array.isArray(data.scopes)) return;
+      setServerSummary(data as ServerSummary);
+      setSelectedTeamId(data.active_scope?.scope_id ?? null);
+      // If current persona is not allowed, switch to first allowed
+      if (data.allowed_personas.length > 0 && !data.allowed_personas.includes(persona)) {
+        setPersona(data.allowed_personas[0]);
+      }
+    } catch (_) {
+      // Server composition unavailable — degrade gracefully, all tabs remain visible
+    }
+  }, [persona]);
+
   // Data stores
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [salesData, setSalesData] = useState<SalesData | null>(null);
@@ -2212,10 +2381,31 @@ const Dashboards: React.FC = () => {
 
   useEffect(() => {
     loadAllData();
+    loadServerSummary(null);
     // Auto-refresh every 60 seconds
-    const interval = setInterval(loadAllData, 60000);
+    const interval = setInterval(() => { loadAllData(); loadServerSummary(selectedTeamId); }, 60000);
     return () => clearInterval(interval);
   }, [loadAllData]);
+
+  const ALL_TABS: { key: Persona; label: string; icon: string; subtitle: string }[] = [
+    { key: 'manager', label: 'Manager', icon: '\uD83C\uDFAF', subtitle: 'Am I in control?' },
+    { key: 'sales', label: 'Sales', icon: '\uD83D\uDCB0', subtitle: 'What do I need to focus on today?' },
+    { key: 'support', label: 'Support', icon: '\uD83C\uDFA7', subtitle: 'What should I do next?' },
+    { key: 'pm', label: 'Project Manager', icon: '\uD83D\uDCCA', subtitle: 'Are we on track?' },
+    { key: 'timesheets', label: 'Timesheets', icon: '\u23F1', subtitle: 'Where is the time going?' },
+  ];
+
+  // Gate tabs by server-side persona allowlist (fall back to all if unavailable)
+  const TABS = useMemo(() => {
+    const ap = serverSummary?.allowed_personas;
+    if (!ap || !Array.isArray(ap) || ap.length === 0) return ALL_TABS;
+    return ALL_TABS.filter(t => ap.includes(t.key));
+  }, [serverSummary]);
+
+  const activeTab = TABS.find(t => t.key === persona) ?? TABS[0];
+
+  // Extract server panels for the active persona
+  const activeServerPanels = serverSummary?.personas?.[persona]?.panels;
 
   if (loading && !overview) {
     return (
@@ -2242,16 +2432,6 @@ const Dashboards: React.FC = () => {
     );
   }
 
-  const TABS: { key: Persona; label: string; icon: string; subtitle: string }[] = [
-    { key: 'manager', label: 'Manager', icon: '\uD83C\uDFAF', subtitle: 'Am I in control?' },
-    { key: 'sales', label: 'Sales', icon: '\uD83D\uDCB0', subtitle: 'What do I need to focus on today?' },
-    { key: 'support', label: 'Support', icon: '\uD83C\uDFA7', subtitle: 'What should I do next?' },
-    { key: 'pm', label: 'Project Manager', icon: '\uD83D\uDCCA', subtitle: 'Are we on track?' },
-    { key: 'timesheets', label: 'Timesheets', icon: '\u23F1', subtitle: 'Where is the time going?' },
-  ];
-
-  const activeTab = TABS.find(t => t.key === persona)!;
-
   return (
     <div className="pet-dashboards-fullscreen">
       {/* Header */}
@@ -2261,12 +2441,38 @@ const Dashboards: React.FC = () => {
           <div className="pd-header-subtitle">{activeTab.subtitle}</div>
         </div>
         <div className="pd-header-right">
+          {serverSummary && serverSummary.scopes.length > 1 && (
+            <div style={{ display: 'flex', gap: 4, marginRight: 10 }}>
+              {serverSummary.scopes.map(s => (
+                <button
+                  key={`${s.scope_type}:${s.scope_id}`}
+                  type="button"
+                  className="pd-refresh-btn"
+                  style={{
+                    background: selectedTeamId === s.scope_id ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)',
+                    fontWeight: selectedTeamId === s.scope_id ? 700 : 400,
+                    borderColor: selectedTeamId === s.scope_id ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)',
+                    fontSize: '0.78rem',
+                    padding: '4px 12px',
+                  }}
+                  onClick={() => loadServerSummary(s.scope_id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {serverSummary?.active_scope && (
+            <span className="pd-last-updated" style={{ marginRight: 8, fontSize: 11, opacity: 0.7 }}>
+              {serverSummary.active_scope.visibility_scope}
+            </span>
+          )}
           {lastUpdated && (
             <span className="pd-last-updated">
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
-          <button className="pd-refresh-btn" onClick={loadAllData} disabled={loading}>
+          <button className="pd-refresh-btn" onClick={() => { loadAllData(); loadServerSummary(selectedTeamId); }} disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
@@ -2278,7 +2484,7 @@ const Dashboards: React.FC = () => {
           <button
             key={tab.key}
             className={`pd-tab ${persona === tab.key ? 'active' : ''}`}
-            onClick={() => { setPersona(tab.key); setSelectedTicketId(null); setSelectedStaffId(null); }}
+            onClick={() => { setPersona(tab.key as Persona); setSelectedTicketId(null); setSelectedStaffId(null); }}
           >
             <span className="pd-tab-icon">{tab.icon}</span>
             {tab.label}
@@ -2296,6 +2502,7 @@ const Dashboards: React.FC = () => {
             workItems={workItems}
             activity={activity}
             customers={customers}
+            serverPanels={activeServerPanels}
           />
         )}
 
@@ -2307,6 +2514,7 @@ const Dashboards: React.FC = () => {
             customers={customers}
             currentUserId={currentUserId}
             onTicketClick={(id) => setSelectedTicketId(id)}
+            serverPanels={activeServerPanels}
           />
         )}
 

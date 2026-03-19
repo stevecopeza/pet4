@@ -3,6 +3,7 @@ import { Site } from '../types';
 import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import SiteForm from './SiteForm';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const Sites = () => {
   const [sites, setSites] = useState<Site[]>([]);
@@ -79,7 +80,7 @@ const Sites = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this site?')) return;
+    if (!legacyConfirm('Are you sure you want to archive this site?')) return;
 
     try {
       // @ts-ignore
@@ -101,13 +102,13 @@ const Sites = () => {
       fetchSites();
       setSelectedIds(prev => prev.filter(sid => sid !== id));
     } catch (err) {
-      alert('Failed to archive site');
+      legacyAlert('Failed to archive site');
     }
   };
 
   const handleBulkArchive = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} sites?`)) return;
+    if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} sites?`)) return;
 
     try {
       // @ts-ignore
@@ -126,7 +127,7 @@ const Sites = () => {
       fetchSites();
       setSelectedIds([]);
     } catch (err) {
-      alert('Failed to archive some sites');
+      legacyAlert('Failed to archive some sites');
     }
   };
 

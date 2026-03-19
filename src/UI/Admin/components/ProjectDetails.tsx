@@ -4,6 +4,7 @@ import { DataTable, Column } from './DataTable';
 import LogTimeModal from './LogTimeModal';
 import useConversation from '../hooks/useConversation';
 import { computeProjectHealth } from '../healthCompute';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ProjectDetailsProps {
   projectId: number;
@@ -77,7 +78,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
       setEstimatedHours(1);
       fetchProject();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error adding task');
+      legacyAlert(err instanceof Error ? err.message : 'Error adding task');
     } finally {
       setAddingTask(false);
     }
@@ -137,6 +138,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <p><strong>Customer ID:</strong> {project.customerId}</p>
+            <p><strong>Source Quote:</strong> {project.sourceQuoteId ? `#${project.sourceQuoteId}` : '-'}</p>
             <p><strong>Total Sold Hours:</strong> {project.soldHours}</p>
           </div>
           <div>

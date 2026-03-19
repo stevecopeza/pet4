@@ -34,7 +34,10 @@ class AddTaskHandler
 
         $task = new Task(
             $command->name(),
-            $command->estimatedHours()
+            $command->estimatedHours(),
+            false,
+            null,
+            $command->roleId()
         );
 
         $project->addTask($task);

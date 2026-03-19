@@ -13,7 +13,6 @@ use Pet\Domain\Configuration\Repository\SchemaDefinitionRepository;
 use Pet\Domain\Configuration\Service\SchemaValidator;
 use Pet\Domain\Event\EventBus;
 use Pet\Domain\Support\Event\TicketCreated;
-use Pet\Domain\Work\Service\DepartmentResolver;
 use InvalidArgumentException;
 
 class CreateTicketHandler
@@ -24,15 +23,13 @@ class CreateTicketHandler
     private EventBus $eventBus;
     private SchemaDefinitionRepository $schemaRepository;
     private SchemaValidator $schemaValidator;
-    private DepartmentResolver $departmentResolver;
 
     public function __construct(TransactionManager $transactionManager, 
         TicketRepository $ticketRepository,
         CustomerRepository $customerRepository,
         EventBus $eventBus,
         SchemaDefinitionRepository $schemaRepository,
-        SchemaValidator $schemaValidator,
-        DepartmentResolver $departmentResolver
+        SchemaValidator $schemaValidator
     ) {
         $this->transactionManager = $transactionManager;
         $this->ticketRepository = $ticketRepository;
@@ -40,7 +37,6 @@ class CreateTicketHandler
         $this->eventBus = $eventBus;
         $this->schemaRepository = $schemaRepository;
         $this->schemaValidator = $schemaValidator;
-        $this->departmentResolver = $departmentResolver;
     }
 
     public function handle(CreateTicketCommand $command): void
@@ -73,12 +69,10 @@ class CreateTicketHandler
         $intakeSource = $malleableData['intake_source'] ?? ($malleableData['source'] ?? null);
         $contactId = isset($malleableData['contact_id']) ? (int)$malleableData['contact_id'] : null;
 
-        if ($queueId === null) {
-            if ($ticketMode === 'execution') {
-                $queueId = DepartmentResolver::DEPT_DELIVERY;
-            } else {
-                $queueId = DepartmentResolver::DEPT_SUPPORT;
-            }
+        $hasQueue = $queueId !== null && $queueId !== '';
+        $hasOwner = $ownerUserId !== null && $ownerUserId !== '';
+        if (!($hasQueue xor $hasOwner)) {
+            throw new \DomainException('Support tickets require exactly one operational owner (team or user).');
         }
 
         $ticket = new Ticket(

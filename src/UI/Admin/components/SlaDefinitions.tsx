@@ -4,6 +4,7 @@ import { DataTable, Column } from './DataTable';
 import SlaDefinitionForm from './SlaDefinitionForm';
 import KebabMenu from './KebabMenu';
 import useConversation from '../hooks/useConversation';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const SlaDefinitions = () => {
   const [slas, setSlas] = useState<Sla[]>([]);
@@ -49,7 +50,7 @@ const SlaDefinitions = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this SLA definition?')) return;
+    if (!legacyConfirm('Are you sure you want to delete this SLA definition?')) return;
 
     try {
       const response = await fetch(`${window.petSettings.apiUrl}/slas/${id}`, {
@@ -65,7 +66,7 @@ const SlaDefinitions = () => {
 
       setSlas(prev => prev.filter(s => s.id !== id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      legacyAlert(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -100,7 +101,7 @@ const SlaDefinitions = () => {
       
       setShowForm(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Save failed');
+      legacyAlert(err instanceof Error ? err.message : 'Save failed');
     }
   };
 

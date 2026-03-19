@@ -7,8 +7,6 @@ namespace Pet\Application\Work\Command;
 use Pet\Application\System\Service\TransactionManager;
 
 use Pet\Domain\Work\Repository\WorkItemRepository;
-use Pet\Domain\Activity\Repository\ActivityLogRepository;
-use Pet\Domain\Activity\Entity\ActivityLog;
 use InvalidArgumentException;
 
 class AssignWorkItemHandler
@@ -16,7 +14,6 @@ class AssignWorkItemHandler
     private TransactionManager $transactionManager;
     public function __construct(TransactionManager $transactionManager, 
         private WorkItemRepository $repository,
-        private ActivityLogRepository $activityLogRepository
     ) {
         $this->transactionManager = $transactionManager;}
 
@@ -29,6 +26,10 @@ class AssignWorkItemHandler
             throw new InvalidArgumentException("WorkItem not found: " . $command->workItemId());
         }
 
+        if ($workItem->getSourceType() === 'ticket') {
+            throw new InvalidArgumentException('Ticket-sourced work must be assigned via Ticket commands.');
+        }
+
         $previousAssignedUserId = $workItem->getAssignedUserId();
         $newAssignedUserId = $command->assignedUserId();
 
@@ -39,30 +40,6 @@ class AssignWorkItemHandler
         $workItem->assignUser($newAssignedUserId);
         $this->repository->save($workItem);
 
-        if ($workItem->getSourceType() === 'ticket') {
-            $ticketId = (int) $workItem->getSourceId();
-            $currentUserId = function_exists('get_current_user_id') ? get_current_user_id() : 0;
-            $actorId = $currentUserId > 0 ? (int) $currentUserId : null;
-
-            $description = sprintf(
-                'Ticket assignment changed to user %s%s',
-                $newAssignedUserId,
-                $previousAssignedUserId !== null && $previousAssignedUserId !== ''
-                    ? sprintf(' (previously %s)', $previousAssignedUserId)
-                    : ''
-            );
-
-            $log = new ActivityLog(
-                'ticket_assignment_changed',
-                $description,
-                $actorId,
-                'ticket',
-                $ticketId
-            );
-
-            $this->activityLogRepository->save($log);
-        }
-    
         });
     }
 }

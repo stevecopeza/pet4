@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import AssignRoleForm from './AssignRoleForm';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface Assignment {
   id: number;
@@ -116,11 +117,11 @@ const Assignments = () => {
             fetchAssignments();
         } else {
             const err = await response.json();
-            alert(`Error: ${err.error || 'Failed to end assignment'}`);
+            legacyAlert(`Error: ${err.error || 'Failed to end assignment'}`);
         }
     } catch (e) {
         console.error(e);
-        alert('Failed to end assignment');
+        legacyAlert('Failed to end assignment');
     }
   };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Ticket, Customer, WorkItem, ActivityLog, Employee } from '../types';
 import useConversation from '../hooks/useConversation';
 import { computeTicketHealth } from '../healthCompute';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface TicketDetailsProps {
   ticket: Ticket;
@@ -9,6 +10,7 @@ interface TicketDetailsProps {
 }
 
 const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
+  const lifecycleOwner = ticket.lifecycleOwner || 'support';
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -25,6 +27,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
+  const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   useEffect(() => {
     const fetchCustomer = async () => {
@@ -125,6 +128,44 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
   }, []);
 
   useEffect(() => {
+    const fetchStatusOptions = async () => {
+      try {
+        const apiUrl = (window as any).petSettings?.apiUrl;
+        const nonce = (window as any).petSettings?.nonce;
+        if (!apiUrl || !nonce) {
+          return;
+        }
+        const response = await fetch(
+          `${apiUrl}/tickets/status-options?lifecycle_owner=${encodeURIComponent(lifecycleOwner)}`,
+          {
+            headers: {
+              'X-WP-Nonce': nonce,
+            },
+          }
+        );
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setStatusOptions(
+            data
+              .filter((opt) => typeof opt?.value === 'string')
+              .map((opt) => ({
+                value: String(opt.value),
+                label: typeof opt.label === 'string' ? opt.label : String(opt.value),
+              }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to fetch ticket status options', err);
+      }
+    };
+
+    fetchStatusOptions();
+  }, [lifecycleOwner]);
+
+  useEffect(() => {
     const fetchActivity = async () => {
       try {
         setLoadingActivity(true);
@@ -192,7 +233,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
 
       setIsEditing(false);
     } catch (err) {
-      alert(
+      legacyAlert(
         err instanceof Error ? err.message : 'Failed to update ticket'
       );
     } finally {
@@ -239,32 +280,6 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
     return '#46b450';
   };
 
-  const getStatusOptionsForLifecycle = (lifecycleOwner: string) => {
-    const statusMaps: Record<string, { value: string; label: string }[]> = {
-      support: [
-        { value: 'new', label: 'New' },
-        { value: 'open', label: 'Open' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'resolved', label: 'Resolved' },
-        { value: 'closed', label: 'Closed' },
-      ],
-      project: [
-        { value: 'planned', label: 'Planned' },
-        { value: 'ready', label: 'Ready' },
-        { value: 'in_progress', label: 'In Progress' },
-        { value: 'blocked', label: 'Blocked' },
-        { value: 'done', label: 'Done' },
-        { value: 'closed', label: 'Closed' },
-      ],
-      internal: [
-        { value: 'planned', label: 'Planned' },
-        { value: 'in_progress', label: 'In Progress' },
-        { value: 'done', label: 'Done' },
-        { value: 'closed', label: 'Closed' },
-      ],
-    };
-    return statusMaps[lifecycleOwner] || statusMaps.support;
-  };
 
   const formatStatusLabel = (s: string) => {
     return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -303,7 +318,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
     if (!workItem) return;
     const currentUserId = (window as any).petSettings?.currentUserId;
     if (!currentUserId) return;
-    if (!confirm('Assign this ticket to yourself?')) return;
+    if (!legacyConfirm('Assign this ticket to yourself?')) return;
 
     try {
       setAssigning(true);
@@ -331,7 +346,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
       });
       setSelectedAssignee(String(currentUserId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to assign ticket');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to assign ticket');
     } finally {
       setAssigning(false);
     }
@@ -370,7 +385,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
         assigned_user_id: String(selectedAssignee),
       });
     } catch (err) {
-      alert(
+      legacyAlert(
         err instanceof Error ? err.message : 'Failed to update assignment'
       );
     } finally {
@@ -470,7 +485,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
             <strong>Status:</strong>{' '}
             {isEditing ? (
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                {getStatusOptionsForLifecycle(ticket.lifecycleOwner || 'support').map(opt => (
+                {(statusOptions.length > 0 ? statusOptions : [{ value: status, label: formatStatusLabel(status) }]).map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>

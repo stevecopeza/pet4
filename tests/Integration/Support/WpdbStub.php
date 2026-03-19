@@ -65,8 +65,16 @@ class WpdbStub
         $sql = $this->translateSql($sql);
 
         try {
+            $fetchMode = \PDO::FETCH_OBJ;
+            if ($output === 'ARRAY_A') {
+                $fetchMode = \PDO::FETCH_ASSOC;
+            } elseif ($output === 'ARRAY_N') {
+                $fetchMode = \PDO::FETCH_NUM;
+            }
+
             $stmt = $this->pdo->query($sql);
-            $row = $stmt->fetch(\PDO::FETCH_OBJ);
+            $rows = $stmt->fetchAll($fetchMode);
+            $row = $rows[$offset] ?? null;
             $this->num_rows = $row ? 1 : 0;
             return $row ?: null;
         } catch (\PDOException $e) {
@@ -82,6 +90,32 @@ class WpdbStub
 
         try {
             $stmt = $this->pdo->query($sql);
+
+            if ($output === 'ARRAY_A') {
+                $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $this->num_rows = count($rows);
+                return $rows;
+            }
+            if ($output === 'ARRAY_N') {
+                $rows = $stmt->fetchAll(\PDO::FETCH_NUM);
+                $this->num_rows = count($rows);
+                return $rows;
+            }
+            if ($output === 'OBJECT_K') {
+                $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
+                $this->num_rows = count($rows);
+                $keyed = [];
+                foreach ($rows as $row) {
+                    $props = get_object_vars($row);
+                    $key = array_key_first($props);
+                    if ($key === null) {
+                        continue;
+                    }
+                    $keyed[(string)$props[$key]] = $row;
+                }
+                return $keyed;
+            }
+
             $rows = $stmt->fetchAll(\PDO::FETCH_OBJ);
             $this->num_rows = count($rows);
             return $rows;

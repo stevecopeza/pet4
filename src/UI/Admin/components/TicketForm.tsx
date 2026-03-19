@@ -7,6 +7,12 @@ interface TicketFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
+interface StatusOption {
+  value: string;
+  label: string;
+}
+export const resolveTicketFormStatusOptions = (statusOptions: StatusOption[], currentStatus: string): StatusOption[] =>
+  statusOptions.length > 0 ? statusOptions : [{ value: currentStatus, label: currentStatus }];
 
 const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCancel }) => {
   const isEditMode = !!initialData;
@@ -43,6 +49,7 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingSites, setLoadingSites] = useState(false);
   const [loadingSlas, setLoadingSlas] = useState(false);
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const flattenTeams = (nodes: Team[]): Team[] => {
@@ -153,10 +160,43 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
       }
     };
 
+    const fetchStatusOptions = async () => {
+      try {
+        // @ts-ignore
+        const lifecycleOwner = initialData?.lifecycleOwner || 'support';
+        // @ts-ignore
+        const response = await fetch(`${window.petSettings.apiUrl}/tickets/status-options?lifecycle_owner=${encodeURIComponent(lifecycleOwner)}`, {
+          headers: {
+            // @ts-ignore
+            'X-WP-Nonce': window.petSettings.nonce,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setStatusOptions(
+            data
+              .filter((opt) => typeof opt?.value === 'string')
+              .map((opt) => ({
+                value: String(opt.value),
+                label: typeof opt.label === 'string' ? opt.label : String(opt.value),
+              }))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to fetch ticket status options', err);
+      }
+    };
+
     fetchCustomers();
     fetchSlas();
     fetchSchema();
     fetchContactsTeamsEmployees();
+    fetchStatusOptions();
   }, [isEditMode]);
 
   useEffect(() => {
@@ -484,11 +524,9 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
               onChange={(e) => setStatus(e.target.value)}
               style={{ width: '100%', maxWidth: '400px' }}
             >
-              <option value="new">New</option>
-              <option value="open">Open</option>
-              <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
+              {resolveTicketFormStatusOptions(statusOptions, status).map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
         )}

@@ -7,8 +7,22 @@ import { computeTicketHealth } from '../healthCompute';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import useConversation from '../hooks/useConversation';
 import useConversationStatus from '../hooks/useConversationStatus';
+import SupportOperational from './SupportOperational';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
+export interface StatusOption {
+  value: string;
+  label: string;
+}
+export const buildSupportStatusOptions = (optionsMap: Map<string, StatusOption>): StatusOption[] =>
+  Array.from(optionsMap.values());
 
 const Support = () => {
+  // @ts-ignore
+  const supportOperationalEnabled = Boolean(window.petSettings?.featureFlags?.support_operational_improvements_enabled);
+  if (supportOperationalEnabled) {
+    return <SupportOperational />;
+  }
+
   const { openConversation } = useConversation();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +35,7 @@ const Support = () => {
   const [lifecycleFilter, setLifecycleFilter] = useState<string>('');
   const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('');
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [pendingSelectId, setPendingSelectId] = useState<number | null>(null);
 
@@ -80,6 +95,59 @@ const Support = () => {
     fetchEmployees();
   }, []);
 
+  useEffect(() => {
+    const fetchStatusOptions = async () => {
+      try {
+        // @ts-ignore
+        const apiUrl = window.petSettings?.apiUrl;
+        // @ts-ignore
+        const nonce = window.petSettings?.nonce;
+        if (!apiUrl || !nonce) {
+          return;
+        }
+
+        const lifecycles = lifecycleFilter ? [lifecycleFilter] : ['support', 'project', 'internal'];
+        const responses = await Promise.all(
+          lifecycles.map((owner) =>
+            fetch(`${apiUrl}/tickets/status-options?lifecycle_owner=${encodeURIComponent(owner)}`, {
+              headers: { 'X-WP-Nonce': nonce },
+            })
+          )
+        );
+
+        const optionsMap = new Map<string, StatusOption>();
+        for (const res of responses) {
+          if (!res.ok) {
+            continue;
+          }
+          const data = await res.json();
+          if (!Array.isArray(data)) {
+            continue;
+          }
+          for (const option of data) {
+            if (typeof option?.value !== 'string') {
+              continue;
+            }
+            optionsMap.set(option.value, {
+              value: option.value,
+              label: typeof option?.label === 'string' ? option.label : option.value,
+            });
+          }
+        }
+
+        const options = buildSupportStatusOptions(optionsMap);
+        setStatusOptions(options);
+        if (statusFilter && !options.some((option) => option.value === statusFilter)) {
+          setStatusFilter('');
+        }
+      } catch (err) {
+        console.error('Failed to fetch support status options', err);
+      }
+    };
+
+    fetchStatusOptions();
+  }, [lifecycleFilter, statusFilter]);
+
   const fetchTickets = async () => {
     try {
       setLoading(true);
@@ -114,6 +182,9 @@ const Support = () => {
           params.append('assigned_user_id', String(currentUserId));
         }
       }
+      if (assignmentFilter === 'assigned') {
+        params.append('assigned', '1');
+      }
 
       const query = params.toString();
       const response = await fetch(`${apiUrl}/tickets${query ? `?${query}` : ''}`, {
@@ -132,11 +203,7 @@ const Support = () => {
         throw new Error('Failed to fetch tickets');
       }
 
-      let data: Ticket[] = await response.json();
-
-      if (assignmentFilter === 'assigned') {
-        data = data.filter((t) => t.assignedUserId);
-      }
+      const data: Ticket[] = await response.json();
 
       setTickets(data);
       // If we have a pending selection and it exists in the new data, select it
@@ -170,7 +237,7 @@ const Support = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this ticket?')) return;
+    if (!legacyConfirm('Are you sure you want to archive this ticket?')) return;
 
     try {
       // @ts-ignore
@@ -191,12 +258,12 @@ const Support = () => {
 
       fetchTickets();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to archive');
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} tickets?`)) return;
+    if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} tickets?`)) return;
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
@@ -332,12 +399,9 @@ const Support = () => {
           <label style={{ display: 'block', marginBottom: '4px' }}>Status</label>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All</option>
-            <option value="active">Active</option>
-            <option value="new">New</option>
-            <option value="open">Open</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-            <option value="closed">Closed</option>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
         </div>
         <div>

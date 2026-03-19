@@ -44,7 +44,9 @@ class AdminPageRegistry
             'pet-finance' => 'Finance',
             'pet-delivery' => 'Delivery',
             'pet-time' => 'Time',
+            'pet-time-capture' => 'Staff Time Capture',
             'pet-support' => 'Support',
+            'pet-advisory' => 'Advisory',
             'pet-conversations' => 'Conversations',
         ];
 
@@ -103,7 +105,7 @@ class AdminPageRegistry
             echo 'var txt=await res.text(); resultEl.textContent="HTTP "+res.status+"\\n\\n"+txt;';
             echo 'try{ var j=JSON.parse(txt); if(j && j.seed_run_id){ lastId=j.seed_run_id; localStorage.setItem(lastIdKey,lastId); showLast(); } }catch(e){}';
             echo '} finally { setBusy(false); } }';
-            echo 'async function purge(){ if(!lastId){ alert("No seed_run_id saved. Run Seed first."); return; } if(!confirm("Purge seed_run_id: "+lastId+" ?")){ return; } setBusy(true); resultEl.textContent=""; try {';
+            echo 'async function purge(){ if(!lastId){ window[\"alert\"](\"No seed_run_id saved. Run Seed first.\"); return; } if(!window[\"confirm\"](\"Purge seed_run_id: \"+lastId+\" ?\")){ return; } setBusy(true); resultEl.textContent=\"\"; try {';
             echo 'var res=await fetch("' . esc_url_raw(rest_url('pet/v1/system/demo/purge')) . '",{method:"POST",headers:{"X-WP-Nonce":window.petSettings.nonce,"Content-Type":"application/json"},body:JSON.stringify({seed_run_id:lastId})});';
             echo 'var txt=await res.text(); resultEl.textContent="HTTP "+res.status+"\\n\\n"+txt;';
             echo '} finally { setBusy(false); } }';
@@ -309,6 +311,12 @@ JS;
                 'nonce' => wp_create_nonce('wp_rest'),
                 'currentPage' => $currentPage,
                 'currentUserId' => get_current_user_id(),
+                'featureFlags' => [
+                    'resilience_indicators_enabled' => $this->featureFlags ? $this->featureFlags->isResilienceIndicatorsEnabled() : false,
+                    'dashboards_enabled' => $this->featureFlags ? $this->featureFlags->isDashboardsEnabled() : false,
+                    'helpdesk_enabled' => $this->featureFlags ? $this->featureFlags->isHelpdeskEnabled() : false,
+                    'support_operational_improvements_enabled' => $this->featureFlags ? $this->featureFlags->isSupportOperationalImprovementsEnabled() : false,
+                ],
             ]);
 
             foreach ($cssFiles as $cssFile) {

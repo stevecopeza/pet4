@@ -10,6 +10,12 @@ use Pet\Application\Support\Command\UpdateTicketCommand;
 use Pet\Application\Support\Command\UpdateTicketHandler;
 use Pet\Application\Support\Command\DeleteTicketCommand;
 use Pet\Application\Support\Command\DeleteTicketHandler;
+use Pet\Application\Support\Command\AssignTicketToTeamCommand;
+use Pet\Application\Support\Command\AssignTicketToTeamHandler;
+use Pet\Application\Support\Command\AssignTicketToUserCommand;
+use Pet\Application\Support\Command\AssignTicketToUserHandler;
+use Pet\Application\Support\Command\PullTicketCommand;
+use Pet\Application\Support\Command\PullTicketHandler;
 use Pet\Domain\Support\Repository\TicketRepository;
 use Pet\Domain\Support\ValueObject\TicketStatus;
 use Pet\Domain\Work\Repository\WorkItemRepository;
@@ -28,6 +34,9 @@ class TicketController implements RestController
     private CreateTicketHandler $createTicketHandler;
     private UpdateTicketHandler $updateTicketHandler;
     private DeleteTicketHandler $deleteTicketHandler;
+    private AssignTicketToTeamHandler $assignTicketToTeamHandler;
+    private AssignTicketToUserHandler $assignTicketToUserHandler;
+    private PullTicketHandler $pullTicketHandler;
     private WorkItemRepository $workItemRepository;
     private FeatureFlagService $featureFlags;
 
@@ -36,6 +45,9 @@ class TicketController implements RestController
         CreateTicketHandler $createTicketHandler,
         UpdateTicketHandler $updateTicketHandler,
         DeleteTicketHandler $deleteTicketHandler,
+        AssignTicketToTeamHandler $assignTicketToTeamHandler,
+        AssignTicketToUserHandler $assignTicketToUserHandler,
+        PullTicketHandler $pullTicketHandler,
         WorkItemRepository $workItemRepository,
         FeatureFlagService $featureFlags
     ) {
@@ -43,6 +55,9 @@ class TicketController implements RestController
         $this->createTicketHandler = $createTicketHandler;
         $this->updateTicketHandler = $updateTicketHandler;
         $this->deleteTicketHandler = $deleteTicketHandler;
+        $this->assignTicketToTeamHandler = $assignTicketToTeamHandler;
+        $this->assignTicketToUserHandler = $assignTicketToUserHandler;
+        $this->pullTicketHandler = $pullTicketHandler;
         $this->workItemRepository = $workItemRepository;
         $this->featureFlags = $featureFlags;
     }
@@ -65,6 +80,7 @@ class TicketController implements RestController
                     'ticket_mode' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'lifecycle_owner' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'assigned_user_id' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
+                    'assigned' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                 ],
             ],
             [
@@ -155,6 +171,28 @@ class TicketController implements RestController
             ],
         ]);
 
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/return-to-queue', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'returnToQueue'],
+                'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'queueId' => V::requiredStringArg(),
+                ],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/reassign', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'reassignTicket'],
+                'permission_callback' => [$this, 'checkPermission'],
+                'args' => [
+                    'employeeUserId' => V::requiredStringArg(),
+                ],
+            ],
+        ]);
+
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/pull', [
             [
                 'methods' => WP_REST_Server::CREATABLE,
@@ -176,6 +214,7 @@ class TicketController implements RestController
         $ticketMode = $request->get_param('ticket_mode');
         $lifecycleOwner = $request->get_param('lifecycle_owner');
         $assignedUserId = $request->get_param('assigned_user_id');
+        $assigned = $request->get_param('assigned');
         $unassigned = $request->get_param('unassigned');
 
         if ($customerId) {
@@ -220,8 +259,8 @@ class TicketController implements RestController
             $ticketAssignments[$ticketId] = $item->getAssignedUserId();
         }
 
-        if ($assignedUserId || $unassigned) {
-            $tickets = array_filter($tickets, function ($ticket) use ($assignedUserId, $unassigned, $ticketAssignments) {
+        if ($assignedUserId || $unassigned || $assigned) {
+            $tickets = array_filter($tickets, function ($ticket) use ($assignedUserId, $unassigned, $assigned, $ticketAssignments) {
                 $id = $ticket->id();
                 $assignment = $ticketAssignments[$id] ?? null;
 
@@ -231,6 +270,9 @@ class TicketController implements RestController
 
                 if ($assignedUserId === 'unassigned') {
                     return $assignment === null || $assignment === '';
+                }
+                if ($assigned && !$assignedUserId) {
+                    return $assignment !== null && $assignment !== '';
                 }
 
                 if ($assignedUserId) {
@@ -369,8 +411,10 @@ class TicketController implements RestController
             $this->createTicketHandler->handle($command);
 
             return new WP_REST_Response(['message' => 'Ticket created'], 201);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to create ticket', 'details' => []]], 500);
         }
     }
 
@@ -409,8 +453,10 @@ class TicketController implements RestController
             $this->updateTicketHandler->handle($command);
 
             return new WP_REST_Response(['message' => 'Ticket updated'], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to update ticket', 'details' => []]], 500);
         }
     }
 
@@ -448,8 +494,10 @@ class TicketController implements RestController
             $this->deleteTicketHandler->handle($command);
 
             return new WP_REST_Response(['message' => 'Ticket deleted'], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to delete ticket', 'details' => []]], 500);
         }
     }
 
@@ -463,29 +511,17 @@ class TicketController implements RestController
         }
 
         try {
-            $ticket = $this->ticketRepository->findById($id);
-            if (!$ticket) {
-                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
-            }
-
-            $ticket->assignToTeam($params['queueId']);
-            $this->ticketRepository->save($ticket);
-
-            // Sync work item projection
-            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
-            if ($workItem) {
-                $workItem->assignUser(null);
-                $workItem->updateDepartment($params['queueId']);
-                $this->workItemRepository->save($workItem);
-            }
+            $ticket = $this->assignTicketToTeamHandler->handle(new AssignTicketToTeamCommand($id, (string)$params['queueId']));
 
             return new WP_REST_Response([
                 'message' => 'Ticket assigned to team',
                 'queueId' => $ticket->queueId(),
                 'ownerUserId' => $ticket->ownerUserId(),
             ], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to assign ticket to team', 'details' => []]], 500);
         }
     }
 
@@ -499,29 +535,28 @@ class TicketController implements RestController
         }
 
         try {
-            $ticket = $this->ticketRepository->findById($id);
-            if (!$ticket) {
-                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
-            }
-
-            $ticket->assignToEmployee($params['employeeUserId']);
-            $this->ticketRepository->save($ticket);
-
-            // Sync work item projection
-            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
-            if ($workItem) {
-                $workItem->assignUser($params['employeeUserId']);
-                $this->workItemRepository->save($workItem);
-            }
+            $ticket = $this->assignTicketToUserHandler->handle(new AssignTicketToUserCommand($id, (string)$params['employeeUserId']));
 
             return new WP_REST_Response([
                 'message' => 'Ticket assigned to employee',
                 'queueId' => $ticket->queueId(),
                 'ownerUserId' => $ticket->ownerUserId(),
             ], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to assign ticket to employee', 'details' => []]], 500);
         }
+    }
+
+    public function returnToQueue(WP_REST_Request $request): WP_REST_Response
+    {
+        return $this->assignToTeam($request);
+    }
+
+    public function reassignTicket(WP_REST_Request $request): WP_REST_Response
+    {
+        return $this->assignToEmployee($request);
     }
 
     public function pullTicket(WP_REST_Request $request): WP_REST_Response
@@ -529,29 +564,18 @@ class TicketController implements RestController
         $id = (int) $request->get_param('id');
 
         try {
-            $ticket = $this->ticketRepository->findById($id);
-            if (!$ticket) {
-                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
-            }
-
             $currentUserId = (string) get_current_user_id();
-            $ticket->pull($currentUserId);
-            $this->ticketRepository->save($ticket);
-
-            // Sync work item projection
-            $workItem = $this->workItemRepository->findBySource('ticket', (string)$id);
-            if ($workItem) {
-                $workItem->assignUser($currentUserId);
-                $this->workItemRepository->save($workItem);
-            }
+            $ticket = $this->pullTicketHandler->handle(new PullTicketCommand($id, $currentUserId));
 
             return new WP_REST_Response([
                 'message' => 'Ticket pulled',
                 'queueId' => $ticket->queueId(),
                 'ownerUserId' => $ticket->ownerUserId(),
             ], 200);
-        } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to pull ticket', 'details' => []]], 500);
         }
     }
 }

@@ -32,6 +32,7 @@ class SqlEscalationRepository implements EscalationRepository
             'severity' => $escalation->severity(),
             'status' => $escalation->status(),
             'reason' => $escalation->reason(),
+            'summary' => $escalation->summary(),
             'metadata_json' => $escalation->metadataJson(),
             'open_dedupe_key' => $escalation->openDedupeKey(),
             'created_by' => $escalation->createdBy(),
@@ -39,6 +40,7 @@ class SqlEscalationRepository implements EscalationRepository
             'resolved_by' => $escalation->resolvedBy(),
             'acknowledged_at' => $escalation->acknowledgedAt()?->format('Y-m-d H:i:s'),
             'resolved_at' => $escalation->resolvedAt()?->format('Y-m-d H:i:s'),
+            'resolution_note' => $escalation->resolutionNote(),
         ];
 
         if ($escalation->id()) {
@@ -166,6 +168,9 @@ class SqlEscalationRepository implements EscalationRepository
 
     private function mapRowToEntity(object $row): Escalation
     {
+        $summary = isset($row->summary) ? (string)$row->summary : null;
+        $resolutionNote = isset($row->resolution_note) ? ($row->resolution_note !== null ? (string)$row->resolution_note : null) : null;
+
         return new Escalation(
             (string)$row->escalation_id,
             (string)$row->source_entity_type,
@@ -181,7 +186,9 @@ class SqlEscalationRepository implements EscalationRepository
             $row->resolved_at ? new \DateTimeImmutable($row->resolved_at) : null,
             $row->acknowledged_by !== null ? (int)$row->acknowledged_by : null,
             $row->resolved_by !== null ? (int)$row->resolved_by : null,
-            isset($row->open_dedupe_key) ? ($row->open_dedupe_key !== null ? (string)$row->open_dedupe_key : null) : null
+            isset($row->open_dedupe_key) ? ($row->open_dedupe_key !== null ? (string)$row->open_dedupe_key : null) : null,
+            $summary,
+            $resolutionNote
         );
     }
 }

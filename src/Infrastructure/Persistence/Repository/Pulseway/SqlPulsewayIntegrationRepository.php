@@ -6,9 +6,9 @@ namespace Pet\Infrastructure\Persistence\Repository\Pulseway;
 
 final class SqlPulsewayIntegrationRepository
 {
-    private \wpdb $wpdb;
+    private $wpdb;
 
-    public function __construct(\wpdb $wpdb)
+    public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
     }
@@ -201,33 +201,55 @@ final class SqlPulsewayIntegrationRepository
     {
         $table = $this->wpdb->prefix . 'pet_pulseway_org_mappings';
 
-        // Build WHERE clause handling NULLs properly
-        $conditions = ['integration_id = %d', 'is_active = 1', 'archived_at IS NULL'];
-        $params = [$integrationId];
+        $eligibleClauses = [];
+        $caseWhen = [];
+        $eligibilityParams = [];
+        $rankingParams = [];
+
+        if ($orgId !== null && $siteId !== null && $groupId !== null) {
+            $eligibleClauses[] = '(pulseway_org_id = %s AND pulseway_site_id = %s AND pulseway_group_id = %s)';
+            $caseWhen[] = 'WHEN pulseway_org_id = %s AND pulseway_site_id = %s AND pulseway_group_id = %s THEN 1';
+            array_push($eligibilityParams, $orgId, $siteId, $groupId);
+            array_push($rankingParams, $orgId, $siteId, $groupId);
+        }
+
+        if ($orgId !== null && $siteId !== null) {
+            $eligibleClauses[] = '(pulseway_org_id = %s AND pulseway_site_id = %s AND pulseway_group_id IS NULL)';
+            $caseWhen[] = 'WHEN pulseway_org_id = %s AND pulseway_site_id = %s AND pulseway_group_id IS NULL THEN 2';
+            array_push($eligibilityParams, $orgId, $siteId);
+            array_push($rankingParams, $orgId, $siteId);
+        }
 
         if ($orgId !== null) {
-            $conditions[] = 'pulseway_org_id = %s';
-            $params[] = $orgId;
-        } else {
-            $conditions[] = 'pulseway_org_id IS NULL';
+            $eligibleClauses[] = '(pulseway_org_id = %s AND pulseway_site_id IS NULL AND pulseway_group_id IS NULL)';
+            $caseWhen[] = 'WHEN pulseway_org_id = %s AND pulseway_site_id IS NULL AND pulseway_group_id IS NULL THEN 3';
+            array_push($eligibilityParams, $orgId);
+            array_push($rankingParams, $orgId);
         }
 
-        if ($siteId !== null) {
-            $conditions[] = 'pulseway_site_id = %s';
-            $params[] = $siteId;
-        } else {
-            $conditions[] = 'pulseway_site_id IS NULL';
+        $eligibleClauses[] = '(pulseway_org_id IS NULL AND pulseway_site_id IS NULL AND pulseway_group_id IS NULL)';
+        $caseWhen[] = 'WHEN pulseway_org_id IS NULL AND pulseway_site_id IS NULL AND pulseway_group_id IS NULL THEN 4';
+
+        if (!$eligibleClauses) {
+            return null;
         }
 
-        if ($groupId !== null) {
-            $conditions[] = 'pulseway_group_id = %s';
-            $params[] = $groupId;
-        } else {
-            $conditions[] = 'pulseway_group_id IS NULL';
-        }
+        $eligibility = implode(' OR ', $eligibleClauses);
+        $ranking = implode(' ', $caseWhen);
 
-        $where = implode(' AND ', $conditions);
-        $sql = "SELECT * FROM $table WHERE $where LIMIT 1";
+        $params = array_merge([$integrationId], $eligibilityParams, $rankingParams);
+
+        $sql = "
+            SELECT *
+            FROM $table
+            WHERE integration_id = %d
+              AND is_active = 1
+              AND archived_at IS NULL
+              AND ($eligibility)
+            ORDER BY (CASE $ranking ELSE 99 END) ASC, id ASC
+            LIMIT 1
+        ";
+
         $row = $this->wpdb->get_row($this->wpdb->prepare($sql, $params), ARRAY_A);
         return $row ?: null;
     }

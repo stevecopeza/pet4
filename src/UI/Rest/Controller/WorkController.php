@@ -25,14 +25,15 @@ class WorkController implements RestController
 
     public function registerRoutes(): void
     {
-        // My Work Items
-        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/my-items', [
-            [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => [$this, 'getMyWorkItems'],
-                'permission_callback' => [$this, 'checkPermission'],
-            ],
-        ]);
+        if ($this->featureFlags->isWorkProjectionEnabled() && $this->featureFlags->isQueueVisibilityEnabled()) {
+            register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/my-items', [
+                [
+                    'methods' => WP_REST_Server::READABLE,
+                    'callback' => [$this, 'getMyWorkItems'],
+                    'permission_callback' => [$this, 'checkPermission'],
+                ],
+            ]);
+        }
 
         // Department Queue - Gated by Feature Flag
         if ($this->featureFlags->isQueueVisibilityEnabled()) {

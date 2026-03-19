@@ -5,6 +5,7 @@ import Skills from './Skills';
 import Certifications from './Certifications';
 import KpiDefinitions from './KpiDefinitions';
 import Assignments from './Assignments';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface Role {
   id: number;
@@ -66,7 +67,7 @@ const Roles = () => {
   };
 
   const handlePublish = async (role: Role) => {
-    if (!confirm(`Are you sure you want to publish ${role.name}? This will make it immutable.`)) return;
+    if (!legacyConfirm(`Are you sure you want to publish ${role.name}? This will make it immutable.`)) return;
 
     try {
       // @ts-ignore
@@ -81,7 +82,7 @@ const Roles = () => {
       if (response.ok) {
         fetchRoles();
       } else {
-        alert('Failed to publish role');
+        legacyAlert('Failed to publish role');
       }
     } catch (err) {
       console.error('Error publishing role', err);

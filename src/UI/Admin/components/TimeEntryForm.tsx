@@ -24,6 +24,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+
   // Helper for malleable data
   const handleMalleableChange = (key: string, value: string) => {
     setMalleableData(prev => ({
@@ -120,7 +121,11 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || data.error || 'Failed to save time entry');
+        const backendMessage = data.message || data.error || '';
+        if (typeof backendMessage === 'string' && backendMessage.toLowerCase().includes('cannot accept time entries')) {
+          throw new Error('Selected ticket is not currently time-loggable. Choose an assigned support ticket or an in-progress project ticket.');
+        }
+        throw new Error(backendMessage || 'Failed to save time entry');
       }
 
       onSuccess();
@@ -168,7 +173,7 @@ const TimeEntryForm: React.FC<TimeEntryFormProps> = ({ initialData, onSuccess, o
             <option value="">Select a ticket</option>
             {tickets.map(t => (
               <option key={t.id} value={t.id}>
-                {t.id} - {t.subject}
+                #{t.id} - {t.subject} [{t.lifecycleOwner || 'support'} / {t.status}]
               </option>
             ))}
           </select>

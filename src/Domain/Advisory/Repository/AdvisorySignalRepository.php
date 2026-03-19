@@ -18,5 +18,5 @@ interface AdvisorySignalRepository
      */
     public function findRecent(int $limit): array;
 
-    public function clearForWorkItem(string $workItemId): void; // To clear old signals before regenerating?
+    public function clearForWorkItem(string $workItemId, ?string $generationRunId = null): void; // Deactivate old signals before regenerating
 }

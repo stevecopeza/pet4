@@ -39,10 +39,14 @@ class LogTimeHandler
             }
 
             $ticket = $this->ticketRepository->findById($command->ticketId());
-            if ($ticket && !$ticket->canAcceptTimeEntries()) {
+            if (!$ticket) {
+                throw new \DomainException("Ticket not found: {$command->ticketId()}");
+            }
+
+            if (!$ticket->canAcceptTimeEntries()) {
                 throw new \DomainException(
                     "Ticket {$command->ticketId()} cannot accept time entries. "
-                    . "Time may only be logged against leaf tickets in 'in_progress' status."
+                    . "Time may only be logged against assigned, active tickets."
                 );
             }
 

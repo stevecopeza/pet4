@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import useConversation from '../hooks/useConversation';
+import LoadingState from './foundation/states/LoadingState';
+import ErrorState from './foundation/states/ErrorState';
 
 interface ConversationSummary {
   id: string; // Mapped from uuid
@@ -17,44 +19,44 @@ const Conversations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { openConversation } = useConversation();
+  const fetchConversations = async () => {
+    try {
+      setLoading(true);
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      if (!apiUrl || !nonce) {
+        setError('API settings missing');
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/conversations/me?limit=50`, {
+        headers: {
+          'X-WP-Nonce': nonce,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch conversations');
+      }
+
+      const data = await response.json();
+      const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item.uuid
+      }));
+      setConversations(mappedData);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchConversations = async () => {
-      try {
-        setLoading(true);
-        // @ts-ignore
-        const apiUrl = window.petSettings?.apiUrl;
-        // @ts-ignore
-        const nonce = window.petSettings?.nonce;
-
-        if (!apiUrl || !nonce) {
-          setError('API settings missing');
-          return;
-        }
-
-        const response = await fetch(`${apiUrl}/conversations/me?limit=50`, {
-          headers: {
-            'X-WP-Nonce': nonce,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch conversations');
-        }
-
-        const data = await response.json();
-        const mappedData = data.map((item: any) => ({
-            ...item,
-            id: item.uuid
-        }));
-        setConversations(mappedData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchConversations();
   }, []);
 
@@ -84,8 +86,8 @@ const Conversations = () => {
     { key: 'created_at', header: 'Created', render: (val) => new Date(val).toLocaleString() },
   ];
 
-  if (loading) return <div>Loading conversations...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
+  if (loading && !conversations.length) return <LoadingState label="Loading conversations…" />;
+  if (error && !conversations.length) return <ErrorState message={error} onRetry={fetchConversations} />;
 
   return (
     <div className="pet-conversations">
@@ -95,7 +97,11 @@ const Conversations = () => {
       <DataTable 
         columns={columns} 
         data={conversations} 
+        loading={loading}
+        error={error}
+        onRetry={fetchConversations}
         emptyMessage="No conversations found." 
+        compatibilityMode="wp"
       />
     </div>
   );

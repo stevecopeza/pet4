@@ -5,6 +5,11 @@ import MarkdownTextarea from './MarkdownTextarea';
 import BlockRow, { BlockRowCallbacks } from './BlockRow';
 import ServiceBlockEditor from './ServiceBlockEditor';
 import ProjectBlockEditor, { computeProjectSummary } from './ProjectBlockEditor';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
+import LoadingState from './foundation/states/LoadingState';
+import ErrorState from './foundation/states/ErrorState';
+import EmptyState from './foundation/states/EmptyState';
 
 const flattenTeams = (nodes: Team[]): Team[] => {
   let flat: Team[] = [];
@@ -63,6 +68,7 @@ interface QuoteDetailsProps {
 }
 
 const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
+  const toast = useToast();
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +104,25 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const [editingHeaderField, setEditingHeaderField] = useState<'title' | 'description' | null>(null);
   const [headerDraftTitle, setHeaderDraftTitle] = useState('');
   const [headerDraftDescription, setHeaderDraftDescription] = useState('');
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
+
+  const requestConfirmation = (title: string, description: string, confirmLabel: string) => new Promise<boolean>((resolve) => {
+    setPendingConfirmation({ title, description, confirmLabel, resolve });
+  });
+
+  const closeConfirmation = (confirmed: boolean) => {
+    setPendingConfirmation((current) => {
+      if (current) {
+        current.resolve(confirmed);
+      }
+      return null;
+    });
+  };
 
   const blocksForRendering: QuoteBlock[] = (quote?.blocks || []).slice().sort((a, b) => a.orderIndex - b.orderIndex);
   const sectionsForRendering: QuoteSection[] = sortSections(quote?.sections || [], blocksForRendering);
@@ -129,6 +154,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   const fetchQuote = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}`, {
         headers: {
           'X-WP-Nonce': window.petSettings.nonce,
@@ -144,6 +170,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       setExpandedBlockId(null);
       setBlockDrafts({});
       setSavingBlockId(null);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -277,8 +304,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       const updated = await response.json();
       setQuote(updated);
+      toast.success('Quote updated.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to save');
+      toast.error(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setEditingHeaderField(null);
     }
@@ -425,8 +453,10 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       Array.isArray((quote as any).paymentSchedule) &&
       (quote as any).paymentSchedule.length > 0
     ) {
-      const replace = confirm(
-        'A payment schedule already exists for this quote.\n\nDo you want to replace it with a single full-payment schedule based on the current quote total?'
+      const replace = await requestConfirmation(
+        'Replace payment schedule?',
+        'A payment schedule already exists for this quote. Do you want to replace it with a single full-payment schedule based on the current quote total?',
+        'Replace'
       );
       if (!replace) {
         return;
@@ -478,8 +508,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       } else {
         await fetchQuote();
       }
+      toast.success('Payment schedule set.');
     } catch (err) {
-      alert(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Error setting payment schedule'
@@ -490,7 +521,12 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   };
 
   const handleSend = async () => {
-    if (!confirm('Are you sure you want to send this quote?')) return;
+    const confirmed = await requestConfirmation(
+      'Send quote?',
+      'Are you sure you want to send this quote?',
+      'Send'
+    );
+    if (!confirmed) return;
     try {
       setLoading(true);
       const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/send`, {
@@ -504,8 +540,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error((data && data.error) || 'Failed to send quote');
       }
       if (data) setQuote(data);
+      toast.success('Quote sent.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error sending quote');
+      toast.error(err instanceof Error ? err.message : 'Error sending quote');
     } finally {
       setLoading(false);
     }
@@ -632,7 +669,12 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   }, [quote?.paymentSchedule]);
 
   const handleAccept = async () => {
-    if (!confirm('Are you sure you want to mark this quote as ACCEPTED? This will create a project.')) return;
+    const confirmed = await requestConfirmation(
+      'Accept quote?',
+      'Are you sure you want to mark this quote as ACCEPTED? This will create a project.',
+      'Accept'
+    );
+    if (!confirmed) return;
     try {
       setLoading(true);
       const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/accept`, {
@@ -646,8 +688,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error((data && data.error) || 'Failed to accept quote');
       }
       if (data) setQuote(data);
+      toast.success('Quote accepted.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error accepting quote');
+      toast.error(err instanceof Error ? err.message : 'Error accepting quote');
     } finally {
       setLoading(false);
     }
@@ -661,7 +704,12 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
   };
 
   const handleRemoveAdjustment = async (adjustmentId: number) => {
-    if (!confirm('Are you sure you want to remove this adjustment?')) return;
+    const confirmed = await requestConfirmation(
+      'Remove adjustment?',
+      'Are you sure you want to remove this adjustment?',
+      'Remove'
+    );
+    if (!confirmed) return;
     try {
       setLoading(true);
       const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/adjustments/${adjustmentId}`, {
@@ -675,8 +723,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         throw new Error((data && data.error) || 'Failed to remove adjustment');
       }
       if (data) setQuote(data);
+      toast.success('Adjustment removed.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error removing adjustment');
+      toast.error(err instanceof Error ? err.message : 'Error removing adjustment');
     } finally {
       setLoading(false);
     }
@@ -764,13 +813,19 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       setShowTypeSelection(false);
       setBlockSectionIdForCreate(null);
+      toast.success('Block added.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error adding block');
+      toast.error(err instanceof Error ? err.message : 'Error adding block');
     }
   };
 
   const handleDeleteBlock = async (blockId: number) => {
-    if (!confirm('Are you sure you want to delete this block?')) {
+    const confirmed = await requestConfirmation(
+      'Delete block?',
+      'Are you sure you want to delete this block?',
+      'Delete'
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -796,8 +851,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       }
 
       if (payload && typeof payload === 'object') setQuote(payload);
+      toast.success('Block deleted.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error deleting block');
+      toast.error(err instanceof Error ? err.message : 'Error deleting block');
     }
   };
 
@@ -861,7 +917,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error renaming section');
+      toast.error(err instanceof Error ? err.message : 'Error renaming section');
     } finally {
       setEditingSectionId(null);
     }
@@ -910,7 +966,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error updating section settings');
+      toast.error(err instanceof Error ? err.message : 'Error updating section settings');
     }
   };
 
@@ -938,17 +994,21 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
       if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error cloning section');
+      toast.error(err instanceof Error ? err.message : 'Error cloning section');
     }
   };
 
   const handleDeleteSection = async (sectionId: number, hasNonTextBlocks: boolean) => {
     if (hasNonTextBlocks) {
-      alert('Cannot delete a section that contains non-text blocks.');
+      toast.error('Cannot delete a section that contains non-text blocks.');
       return;
     }
-
-    if (!confirm('Are you sure you want to delete this empty section?')) {
+    const confirmed = await requestConfirmation(
+      'Delete section?',
+      'Are you sure you want to delete this empty section?',
+      'Delete'
+    );
+    if (!confirmed) {
       return;
     }
 
@@ -974,8 +1034,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       }
 
       if (payload && typeof payload === 'object') setQuote(payload);
+      toast.success('Section deleted.');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error deleting section');
+      toast.error(err instanceof Error ? err.message : 'Error deleting section');
     }
   };
 
@@ -1577,7 +1638,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       }
       if (payload && typeof payload === 'object') setQuote(payload);
     } catch (err) {
-      alert(
+      toast.error(
         err instanceof Error ? err.message : 'Error adding section'
       );
     }
@@ -1643,7 +1704,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         await fetchQuote();
       }
     } catch (err) {
-      alert(
+      toast.error(
         err instanceof Error
           ? err.message
           : 'Error adding text section'
@@ -1651,9 +1712,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     }
   };
 
-  if (loading) return <div>Loading quote details...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
-  if (!quote) return <div>Quote not found</div>;
+  if (loading) return <LoadingState label="Loading quote details…" />;
+  if (error) return <ErrorState message={error} onRetry={fetchQuote} />;
+  if (!quote) return <EmptyState message="Quote not found." />;
 
   const { quoteTotal, sectionTotals } = computeQuoteTotals(quote);
 
@@ -2665,15 +2726,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                   </table>
                   )
                 ) : (
-                  <p
-                    style={{
-                      fontStyle: 'italic',
-                      color: '#666',
-                      margin: '10px 0',
-                    }}
-                  >
-                    No blocks in this section yet.
-                  </p>
+                  <EmptyState message="No blocks in this section yet." />
                 )}
                 <div style={{ marginTop: '8px' }}>
                   <button
@@ -2689,7 +2742,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         </div>
       )}
       {sectionsForRendering.length === 0 && (
-        <p style={{ fontStyle: 'italic', color: '#666' }}>No sections defined yet.</p>
+        <EmptyState message="No sections defined yet." />
       )}
 
       {blocksForRendering.some((block) => block.sectionId === null) && (
@@ -3492,8 +3545,9 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                           await fetchQuote();
                         }
                         setIsEditingSchedule(false);
+                        toast.success('Payment schedule saved.');
                       } catch (err) {
-                        alert(
+                        toast.error(
                           err instanceof Error
                             ? err.message
                             : 'Error saving payment schedule'
@@ -3899,6 +3953,14 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           </div>
         )}
       </div>
+      <ConfirmationDialog
+        open={pendingConfirmation !== null}
+        title={pendingConfirmation?.title || 'Confirm action'}
+        description={pendingConfirmation?.description || ''}
+        confirmLabel={pendingConfirmation?.confirmLabel || 'Confirm'}
+        onCancel={() => closeConfirmation(false)}
+        onConfirm={() => closeConfirmation(true)}
+      />
 
     </div>
   );

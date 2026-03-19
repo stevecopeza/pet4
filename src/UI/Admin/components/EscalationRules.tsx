@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface EscalationRule {
   id: number;
@@ -82,7 +83,7 @@ const EscalationRules: React.FC = () => {
       setIsModalOpen(false);
       fetchRules();
     } catch (err: any) {
-      alert(err.message);
+      legacyAlert(err.message);
     } finally {
       setSaving(false);
     }
@@ -96,7 +97,7 @@ const EscalationRules: React.FC = () => {
       });
       fetchRules();
     } catch (err: any) {
-      alert(err.message);
+      legacyAlert(err.message);
     }
   };
 

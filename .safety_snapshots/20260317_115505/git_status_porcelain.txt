@@ -1,0 +1,134 @@
+ M .phpunit.result.cache
+ M pet.php
+ M src/Application/Advisory/Cron/AdvisoryGenerationJob.php
+ M src/Application/Delivery/Command/AddTaskCommand.php
+ M src/Application/Delivery/Command/AddTaskHandler.php
+ M src/Application/Escalation/Command/TriggerEscalationCommand.php
+ M src/Application/Escalation/Command/TriggerEscalationHandler.php
+ M src/Application/Escalation/Listener/SlaEscalationBridgeListener.php
+ M src/Application/Projection/Listener/FeedProjectionListener.php
+ M src/Application/Support/Command/CreateTicketHandler.php
+ M src/Application/System/Service/DemoSeedService.php
+ M src/Application/System/Service/FeatureFlagService.php
+ M src/Application/Time/Command/LogTimeHandler.php
+ M src/Application/Work/Command/AssignWorkItemHandler.php
+ M src/Application/Work/Projection/WorkItemProjector.php
+ M src/Domain/Advisory/Entity/AdvisorySignal.php
+ M src/Domain/Advisory/Repository/AdvisorySignalRepository.php
+ M src/Domain/Advisory/Service/AdvisoryGenerator.php
+ M src/Domain/Escalation/Entity/Escalation.php
+ M src/Domain/Finance/Entity/BillingExport.php
+ M src/Domain/Support/Entity/Ticket.php
+ M src/Domain/Work/Entity/DepartmentQueue.php
+ M src/Domain/Work/Entity/WorkItem.php
+ M src/Domain/Work/Service/SlaClockCalculator.php
+ M src/Infrastructure/DependencyInjection/ContainerFactory.php
+ M src/Infrastructure/Persistence/Migration/Definition/CreateAdvisoryTables.php
+ M src/Infrastructure/Persistence/Migration/Definition/CreateEscalationTables.php
+ M src/Infrastructure/Persistence/Migration/MigrationRegistry.php
+ M src/Infrastructure/Persistence/Repository/Pulseway/SqlPulsewayIntegrationRepository.php
+ M src/Infrastructure/Persistence/Repository/SqlAdvisorySignalRepository.php
+ M src/Infrastructure/Persistence/Repository/SqlDepartmentQueueRepository.php
+ M src/Infrastructure/Persistence/Repository/SqlEscalationRepository.php
+ M src/Infrastructure/Persistence/Repository/SqlExternalMappingRepository.php
+ M src/Infrastructure/Persistence/Repository/SqlWorkItemRepository.php
+ M src/UI/Admin/AdminPageRegistry.php
+ M src/UI/Admin/App.tsx
+ M src/UI/Admin/components/Dashboards.tsx
+ M src/UI/Admin/components/Employees.tsx
+ M src/UI/Admin/components/Escalations.tsx
+ M src/UI/Admin/components/ProjectBlockEditor.tsx
+ M src/UI/Admin/components/Support.tsx
+ M src/UI/Admin/components/WorkItems.tsx
+ M src/UI/Admin/dashboard-styles.css
+ M src/UI/Rest/ApiRegistry.php
+ M src/UI/Rest/Controller/BillingController.php
+ M src/UI/Rest/Controller/EscalationController.php
+ M src/UI/Rest/Controller/TicketController.php
+ M src/UI/Rest/Controller/WorkController.php
+ M src/UI/Rest/Controller/WorkItemController.php
+ M src/UI/Shortcode/ShortcodeRegistrar.php
+ M src/UI/Standalone/StandaloneDashboardPage.php
+ M tests/Integration/Escalation/EscalationPersistenceTest.php
+ M tests/Integration/Support/WpdbStub.php
+ M tests/Unit/Domain/Support/Entity/TicketTimeLoggingTest.php
+ M tests/Unit/Domain/Work/Entity/WorkItemTest.php
+ M tests/bootstrap.php
+?? .safety_snapshots/20260317_115505/HEAD_SHA.txt
+?? .safety_snapshots/20260317_115505/git_status.txt
+?? .safety_snapshots/20260317_115505/git_status_porcelain.txt
+?? docs/ToBeMoved/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md
+?? docs/ToBeMoved/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md
+?? docs/ToBeMoved/PET_Escalation_Completion_Corrected_v2.md
+?? docs/ToBeMoved/PET_Escalation_Engine_Completion_v1.md
+?? docs/ToBeMoved/PET_GapClosure_Pulseway_Flags_BillingExport_v1.md
+?? docs/ToBeMoved/PET_Implementation_Status_2026_03_13.md
+?? docs/ToBeMoved/PET_People_Resilience_Outputs_v1.md
+?? docs/ToBeMoved/PET_Support_Helpdesk_Operational_Completion_v1.md
+?? docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md
+?? docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md
+?? src/Application/Advisory/Command/GenerateAdvisoryReportCommand.php
+?? src/Application/Advisory/Command/GenerateAdvisoryReportHandler.php
+?? src/Application/Advisory/Service/CustomerAdvisoryAccessService.php
+?? src/Application/Advisory/Service/CustomerAdvisorySnapshotQuery.php
+?? src/Application/Dashboard/Query/TeamAdvisorySummaryQuery.php
+?? src/Application/Dashboard/Query/TeamEscalationSummaryQuery.php
+?? src/Application/Dashboard/Query/TeamSupportSummaryQuery.php
+?? src/Application/Dashboard/Service/DashboardCompositionService.php
+?? src/Application/Finance/Command/ConfirmBillingExportCommand.php
+?? src/Application/Finance/Command/ConfirmBillingExportHandler.php
+?? src/Application/Resilience/Command/GenerateResilienceAnalysisCommand.php
+?? src/Application/Resilience/Command/GenerateResilienceAnalysisHandler.php
+?? src/Application/Resilience/Query/TeamWorkloadConcentrationQuery.php
+?? src/Application/Resilience/Service/ResilienceAnalysisGenerator.php
+?? src/Application/Support/Command/AssignTicketToTeamCommand.php
+?? src/Application/Support/Command/AssignTicketToTeamHandler.php
+?? src/Application/Support/Command/AssignTicketToUserCommand.php
+?? src/Application/Support/Command/AssignTicketToUserHandler.php
+?? src/Application/Support/Command/PullTicketCommand.php
+?? src/Application/Support/Command/PullTicketHandler.php
+?? src/Application/Support/Query/SupportTeamOperationalSummaryQuery.php
+?? src/Application/Work/Service/WorkQueueQueryService.php
+?? src/Application/Work/Service/WorkQueueVisibilityService.php
+?? src/Domain/Advisory/Entity/AdvisoryReport.php
+?? src/Domain/Advisory/Repository/AdvisoryReportRepository.php
+?? src/Domain/Dashboard/Service/DashboardAccessPolicy.php
+?? src/Domain/Resilience/Entity/ResilienceAnalysisRun.php
+?? src/Domain/Resilience/Entity/ResilienceSignal.php
+?? src/Domain/Resilience/Repository/ResilienceAnalysisRunRepository.php
+?? src/Domain/Resilience/Repository/ResilienceSignalRepository.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddAdvisorySignalLifecycleFields.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddDashboardsFeatureFlag.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddEscalationSummaryAndResolutionNote.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddMissingReferencedFeatureFlags.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddSupportOperationalImprovementsFeatureFlag.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddWorkItemsAllowProjectTask.php
+?? src/Infrastructure/Persistence/Migration/Definition/AddWorkOrchestrationAssignmentFields.php
+?? src/Infrastructure/Persistence/Migration/Definition/CreateAdvisoryReportTables.php
+?? src/Infrastructure/Persistence/Migration/Definition/CreateResilienceTables.php
+?? src/Infrastructure/Persistence/Repository/SqlAdvisoryReportRepository.php
+?? src/Infrastructure/Persistence/Repository/SqlResilienceAnalysisRunRepository.php
+?? src/Infrastructure/Persistence/Repository/SqlResilienceSignalRepository.php
+?? src/UI/Admin/components/Advisory.tsx
+?? src/UI/Admin/components/SupportOperational.tsx
+?? src/UI/Rest/Controller/AdvisoryReportController.php
+?? src/UI/Rest/Controller/AdvisorySignalController.php
+?? src/UI/Rest/Controller/DashboardsController.php
+?? src/UI/Rest/Controller/ResilienceController.php
+?? src/UI/Rest/Controller/SupportOperationalController.php
+?? src/UI/Rest/Controller/WorkQueueController.php
+?? tests/Integration/Advisory/AdvisoryReportsVersioningTest.php
+?? tests/Integration/Advisory/AdvisorySignalsAdditiveTest.php
+?? tests/Integration/Dashboard/DashboardAccessPolicyTest.php
+?? tests/Integration/Dashboard/DashboardQueriesReadSafetyTest.php
+?? tests/Integration/Finance/BillingExportConfirmationTest.php
+?? tests/Integration/Pulseway/PulsewayOrgMappingPrecedenceTest.php
+?? tests/Integration/Resilience/ResilienceAdditiveHistoryTest.php
+?? tests/Integration/Resilience/ResilienceReadSafetyTest.php
+?? tests/Integration/Support/SupportOperationalReadSafetyTest.php
+?? tests/Integration/Support/SupportTeamOperationalSummaryQueryTest.php
+?? tests/Integration/System/FeatureFlagSeedingTest.php
+?? tests/Integration/Work/WorkOrchestrationRoutingTest.php
+?? tests/Unit/Application/Work/Service/WorkQueueVisibilityServiceTest.php
+?? tests/Unit/Domain/Finance/Entity/BillingExportTest.php
+?? tests/Unit/Domain/Support/Entity/TicketOperationalOwnerTest.php

@@ -7,6 +7,7 @@ VERSION: v1.1
 ## Relationship to Enforcement Rules
 
 This document covers **rendering only**. Domain rules for time entry creation, submission, and lock are governed by `05_Time_Entry_Ticket_Enforcement_v1.md` (AUTHORITATIVE).
+Admin operational list behavior (filters, compact indicators, customer/site enrichment, and row discussion affordances) is governed by `08_Admin_Time_Entries_Operational_Surface_v1.md`.
 
 The Work Log section displays all time entries for a ticket and provides inline creation and draft editing capabilities.
 

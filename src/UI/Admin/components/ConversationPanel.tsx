@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Conversation, Decision } from '../types';
 import { NameMap } from '../hooks/useNameMap';
 import MentionInput, { parseMentionTokens, renderMentionPills } from './MentionInput';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ConversationPanelProps {
   uuid?: string;
@@ -388,7 +389,7 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
 
       await fetchConversation();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error responding');
+      legacyAlert(err instanceof Error ? err.message : 'Error responding');
     }
   };
 

@@ -3,6 +3,7 @@ import { Calendar } from '../types';
 import { DataTable, Column } from './DataTable';
 import CalendarForm from './CalendarForm';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const Calendars = () => {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
@@ -46,7 +47,7 @@ const Calendars = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this calendar?')) return;
+    if (!legacyConfirm('Are you sure you want to delete this calendar?')) return;
 
     try {
       // @ts-ignore
@@ -62,7 +63,7 @@ const Calendars = () => {
       if (!response.ok) throw new Error('Failed to delete calendar');
       fetchCalendars();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      legacyAlert(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 

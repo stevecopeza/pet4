@@ -6,6 +6,7 @@ use Pet\Domain\Work\Entity\WorkItem;
 use Pet\Domain\Work\Entity\DepartmentQueue;
 use Pet\Domain\Work\Repository\WorkItemRepository;
 use Pet\Domain\Work\Repository\DepartmentQueueRepository;
+use Pet\Domain\Work\Repository\RoleTeamRepository;
 use Pet\Domain\Work\Service\DepartmentResolver;
 use Pet\Domain\Work\Service\SlaClockCalculator;
 use Pet\Domain\Identity\Repository\CustomerRepository;
@@ -28,6 +29,7 @@ class WorkItemProjector
         private DepartmentResolver $departmentResolver,
         private SlaClockCalculator $slaClockCalculator,
         private CustomerRepository $customerRepository,
+        private RoleTeamRepository $roleTeamRepository,
         private FeatureFlagService $featureFlags
     ) {
     }
@@ -72,11 +74,11 @@ class WorkItemProjector
             $event->occurredAt()
         );
 
-        // If the ticket has an explicit owner, assign it immediately
-        $ownerUserId = $ticket->ownerUserId();
-        if ($ownerUserId !== null && $ownerUserId !== '') {
-            $workItem->assignUser($ownerUserId);
-        }
+        $workItem->updateAssignment(
+            $ticket->queueId(),
+            $ticket->ownerUserId(),
+            'ticket_created'
+        );
 
         // Populate details if available
         $due = $ticket->resolutionDueAt();
@@ -106,14 +108,16 @@ class WorkItemProjector
         // Save again with updated score and SLA state
         $this->workItemRepository->save($workItem);
 
-        // 3. Create DepartmentQueue entry
-        $queueItem = DepartmentQueue::enter(
-            wp_generate_uuid4(),
-            $departmentId,
-            $workItemId
-        );
+        if ($workItem->getAssignmentMode() === WorkItem::ASSIGNMENT_MODE_TEAM_QUEUE) {
+            $queueItem = DepartmentQueue::enter(
+                wp_generate_uuid4(),
+                $departmentId,
+                $workItemId,
+                $workItem->getAssignedTeamId()
+            );
 
-        $this->departmentQueueRepository->save($queueItem);
+            $this->departmentQueueRepository->save($queueItem);
+        }
     }
 
     public function onTicketAssigned(TicketAssigned $event): void
@@ -125,14 +129,121 @@ class WorkItemProjector
         $ticket = $event->ticket();
         $workItem = $this->workItemRepository->findBySource('ticket', (string)$ticket->id());
         
+        if (!$workItem) {
+            $departmentId = $this->departmentResolver->resolveForTicket($ticket);
+            $workItemId = wp_generate_uuid4();
+
+            $workItem = WorkItem::create(
+                $workItemId,
+                'ticket',
+                (string)$ticket->id(),
+                $departmentId,
+                0.0,
+                'active',
+                $event->occurredAt()
+            );
+        }
+
         if ($workItem) {
-            $workItem->assignUser($event->assignedAgentId());
+            $workItem->updateDepartment($this->departmentResolver->resolveForTicket($ticket));
+            $routingReason = null;
+            if ($event->assignedAgentId() === null) {
+                $routingReason = $event->previousOwnerUserId() !== null ? 'ticket_returned_to_queue' : 'ticket_assigned_to_team';
+            } else {
+                $routingReason = $event->previousOwnerUserId() !== null ? 'ticket_reassigned' : 'ticket_assigned_to_user';
+            }
+
+            $workItem->updateAssignment($ticket->queueId(), $event->assignedAgentId(), $routingReason);
             $this->workItemRepository->save($workItem);
+
+            if ($workItem->getAssignmentMode() === WorkItem::ASSIGNMENT_MODE_TEAM_QUEUE) {
+                $existingActive = $this->departmentQueueRepository->findByWorkItemId($workItem->getId());
+                if ($existingActive) {
+                    $existingActive->exitQueue();
+                    $this->departmentQueueRepository->save($existingActive);
+                }
+
+                $queueItem = DepartmentQueue::enter(
+                    wp_generate_uuid4(),
+                    $workItem->getDepartmentId(),
+                    $workItem->getId(),
+                    $workItem->getAssignedTeamId()
+                );
+                $this->departmentQueueRepository->save($queueItem);
+            } elseif ($workItem->getAssignmentMode() === WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED) {
+                $queueItem = $this->departmentQueueRepository->findByWorkItemId($workItem->getId());
+                if ($queueItem && $queueItem->isUnassigned()) {
+                    $queueItem->assignToUser((string)$event->assignedAgentId());
+                    $this->departmentQueueRepository->save($queueItem);
+                } else {
+                    $queueItem = DepartmentQueue::enter(
+                        wp_generate_uuid4(),
+                        $workItem->getDepartmentId(),
+                        $workItem->getId(),
+                        $workItem->getAssignedTeamId()
+                    );
+                    $queueItem->assignToUser((string)$event->assignedAgentId());
+                    $this->departmentQueueRepository->save($queueItem);
+                }
+            }
         }
     }
 
     public function onProjectTaskCreated(ProjectTaskCreated $event): void
     {
-        // Not implemented yet
+        if (!$this->featureFlags->isWorkProjectionEnabled()) {
+            return;
+        }
+
+        $project = $event->project();
+        $task = $event->task();
+
+        $existing = $this->workItemRepository->findBySource('project_task', (string)$task->id());
+        if ($existing) {
+            return;
+        }
+
+        $mappings = $task->roleId() ? $this->roleTeamRepository->findByRoleId((int)$task->roleId()) : [];
+        $primary = null;
+        foreach ($mappings as $m) {
+            if (!empty($m['is_primary'])) {
+                $primary = $m;
+                break;
+            }
+        }
+        if ($primary === null && !empty($mappings)) {
+            $primary = $mappings[0];
+        }
+
+        if ($primary === null) {
+            return;
+        }
+
+        $departmentId = $this->departmentResolver->resolveForProjectTask($project, $task);
+        $workItemId = wp_generate_uuid4();
+
+        $workItem = WorkItem::create(
+            $workItemId,
+            'project_task',
+            (string)$task->id(),
+            $departmentId,
+            0.0,
+            $task->isCompleted() ? 'completed' : 'active',
+            $event->occurredAt(),
+            $task->roleId() ? (int)$task->roleId() : null,
+            (string)$primary['team_id'],
+            null,
+            'delivery_role_primary_team'
+        );
+
+        $this->workItemRepository->save($workItem);
+
+        $queueItem = DepartmentQueue::enter(
+            wp_generate_uuid4(),
+            $departmentId,
+            $workItemId,
+            $workItem->getAssignedTeamId()
+        );
+        $this->departmentQueueRepository->save($queueItem);
     }
 }

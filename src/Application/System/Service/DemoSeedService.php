@@ -23,6 +23,7 @@ final class DemoSeedService
         $recentDate = $now->format('Y-m-d H:i:s');
 
         $summary['feature_flags'] = $this->seedFeatureFlags($seedRunId);
+        $summary['demo_feature_enablement'] = $this->enableDemoFeatureFlags($seedProfile, $recentDate);
         $summary['employees'] = $this->seedEmployees($seedRunId, $seedProfile, $recentDate);
         $summary['customers_sites_contacts'] = $this->seedCustomersSitesContacts($seedRunId, $seedProfile, $recentDate);
         $summary['teams'] = $this->seedTeams($seedRunId, $seedProfile, $recentDate);
@@ -43,6 +44,7 @@ final class DemoSeedService
         $summary['backbone_tickets'] = $this->seedBackboneTickets($seedRunId, $seedProfile, $recentDate);
         $summary['work'] = $this->seedWorkOrchestration($seedRunId, $seedProfile, $recentDate);
         $summary['time'] = $this->seedTimeEntries($seedRunId, $seedProfile, $recentDate);
+        $summary['staff_time_capture_experience'] = $this->seedStaffTimeCaptureExperience($seedRunId, $seedProfile, $recentDate);
         $summary['knowledge'] = $this->seedKnowledge($seedRunId, $seedProfile, $recentDate);
         $summary['feed'] = $this->seedFeed($seedRunId, $seedProfile, $recentDate);
         $summary['conversations'] = $this->seedConversations($seedRunId, $seedProfile, $recentDate);
@@ -52,11 +54,278 @@ final class DemoSeedService
         $summary['event_backbone'] = $this->seedEventBackboneExpectations($seedRunId, $seedProfile, $recentDate);
         $summary['pulseway'] = $this->seedPulseway($seedRunId, $seedProfile, $recentDate);
         $summary['health_history'] = $this->seedHealthHistory($seedRunId, $seedProfile, $recentDate);
+        $summary['advisory'] = $this->seedAdvisory($seedRunId, $seedProfile, $recentDate);
+        $summary['resilience'] = $this->seedResilience($seedRunId, $seedProfile, $recentDate);
 
         // Registry entries for tables without JSON metadata
         $this->registerSeedRunEntities($seedRunId, $recentDate);
 
         return $summary;
+    }
+
+    private function seedAdvisory(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        if ($seedProfile !== 'demo_full') {
+            return ['generated' => 0, 'skipped' => true];
+        }
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $flags = $c->get(\Pet\Application\System\Service\FeatureFlagService::class);
+        if (!$flags->isAdvisoryEnabled() || !$flags->isAdvisoryReportsEnabled()) {
+            return ['generated' => 0, 'skipped' => 'flags_disabled'];
+        }
+
+        $generator = $c->get(\Pet\Domain\Advisory\Service\AdvisoryGenerator::class);
+        $generateReport = $c->get(\Pet\Application\Advisory\Command\GenerateAdvisoryReportHandler::class);
+        $wpdb = $this->wpdb;
+
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $userIds = $wpdb->get_col("SELECT wp_user_id FROM $empTable WHERE first_name IN ('Noah','Ava') AND wp_user_id IS NOT NULL");
+        foreach ($userIds as $uid) {
+            try {
+                $generator->generateForUser((string)$uid);
+            } catch (\Throwable $e) {
+            }
+        }
+
+        $customersTable = $wpdb->prefix . 'pet_customers';
+        $customerId = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $customersTable WHERE name = %s LIMIT 1",
+            'Acme Manufacturing SA (Pty) Ltd'
+        ));
+        if ($customerId <= 0) {
+            return ['generated' => 0, 'skipped' => 'customer_missing'];
+        }
+
+        $generatedBy = (int)get_current_user_id();
+        $reportType = 'customer_advisory_summary';
+        try {
+            $generateReport->handle(new \Pet\Application\Advisory\Command\GenerateAdvisoryReportCommand($customerId, $reportType, $generatedBy));
+            $generateReport->handle(new \Pet\Application\Advisory\Command\GenerateAdvisoryReportCommand($customerId, $reportType, $generatedBy));
+        } catch (\Throwable $e) {
+        }
+
+        $cutoff = (new \DateTimeImmutable($seededAt))->modify('-1 minute')->format('Y-m-d H:i:s');
+        $signalsTable = $wpdb->prefix . 'pet_advisory_signals';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$signalsTable'") === $signalsTable) {
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM $signalsTable WHERE created_at >= %s",
+                $cutoff
+            ));
+            foreach ($ids as $id) {
+                $this->registryAdd($seedRunId, $signalsTable, (string)$id);
+            }
+        }
+
+        $reportsTable = $wpdb->prefix . 'pet_advisory_reports';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$reportsTable'") === $reportsTable) {
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM $reportsTable WHERE scope_type = %s AND scope_id = %d AND report_type = %s AND generated_at >= %s",
+                'customer',
+                $customerId,
+                $reportType,
+                $cutoff
+            ));
+            foreach ($ids as $id) {
+                $this->registryAdd($seedRunId, $reportsTable, (string)$id);
+            }
+        }
+
+        return ['generated' => 1, 'customer_id' => $customerId];
+    }
+
+    private function seedResilience(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        if ($seedProfile !== 'demo_full') {
+            return ['generated' => 0, 'skipped' => true];
+        }
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $flags = $c->get(\Pet\Application\System\Service\FeatureFlagService::class);
+        if (!$flags->isResilienceIndicatorsEnabled()) {
+            return ['generated' => 0, 'skipped' => 'flags_disabled'];
+        }
+
+        $wpdb = $this->wpdb;
+        $runsTable = $wpdb->prefix . 'pet_resilience_analysis_runs';
+        $signalsTable = $wpdb->prefix . 'pet_resilience_signals';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$runsTable'") !== $runsTable || $wpdb->get_var("SHOW TABLES LIKE '$signalsTable'") !== $signalsTable) {
+            return ['generated' => 0, 'skipped' => 'tables_missing'];
+        }
+
+        $teamsTable = $wpdb->prefix . 'pet_teams';
+        $teamMembersTable = $wpdb->prefix . 'pet_team_members';
+        $empTable = $wpdb->prefix . 'pet_employees';
+        $workItemsTable = $wpdb->prefix . 'pet_work_items';
+
+        $uuid = function (): string {
+            if (function_exists('wp_generate_uuid4')) {
+                return wp_generate_uuid4();
+            }
+            $bytes = random_bytes(16);
+            $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+            $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+            $hex = bin2hex($bytes);
+            return sprintf('%s-%s-%s-%s-%s', substr($hex, 0, 8), substr($hex, 8, 4), substr($hex, 12, 4), substr($hex, 16, 4), substr($hex, 20, 12));
+        };
+
+        $onCallTeamId = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'On-Call'));
+        if ($onCallTeamId <= 0) {
+            $wpdb->insert($teamsTable, ['name' => 'On-Call', 'created_at' => $seededAt]);
+            $onCallTeamId = (int)$wpdb->insert_id;
+            $this->registryAdd($seedRunId, $teamsTable, (string)$onCallTeamId);
+        }
+
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, wp_user_id FROM $empTable WHERE first_name = %s LIMIT 1", 'Liam'), ARRAY_A);
+        if (!$row) {
+            return ['generated' => 0, 'skipped' => 'employee_missing'];
+        }
+        $liamEmployeeId = (int)$row['id'];
+        $liamWpUserId = (string)$row['wp_user_id'];
+        if ($liamEmployeeId <= 0 || $liamWpUserId === '' || $liamWpUserId === '0') {
+            return ['generated' => 0, 'skipped' => 'employee_missing'];
+        }
+
+        $existingMember = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $teamMembersTable WHERE team_id = %d AND employee_id = %d AND removed_at IS NULL LIMIT 1",
+            $onCallTeamId,
+            $liamEmployeeId
+        ));
+        if ($existingMember <= 0) {
+            $wpdb->insert($teamMembersTable, [
+                'team_id' => $onCallTeamId,
+                'employee_id' => $liamEmployeeId,
+                'role' => 'lead',
+                'assigned_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $teamMembersTable, (string)$wpdb->insert_id);
+        }
+
+        $start = (new \DateTimeImmutable($seededAt))->modify('-3 days')->format('Y-m-d 00:00:00');
+        $end = (new \DateTimeImmutable($seededAt))->modify('+3 days')->format('Y-m-d 23:59:59');
+
+        // Helper: look up wp_user_id for a named employee
+        $empWpUserId = function (string $firstName) use ($wpdb, $empTable): ?string {
+            $val = $wpdb->get_var($wpdb->prepare("SELECT wp_user_id FROM $empTable WHERE first_name = %s LIMIT 1", $firstName));
+            return ($val !== null && $val !== '' && $val !== '0') ? (string)$val : null;
+        };
+
+        // Helper: seed work items for a team/employee and generate resilience
+        $seedTeamResilience = function (
+            int $teamId,
+            array $employeeUserIds,
+            int $scheduledCount,
+            int $unscheduledCount
+        ) use ($uuid, $wpdb, $workItemsTable, $start, $end, $seededAt, $seedRunId) {
+            // Distribute work items across employees (concentration creates signals)
+            foreach ($employeeUserIds as $idx => $uid) {
+                if ($uid === null) continue;
+                // Scheduled items (with dates → capacity allocation)
+                $myScheduled = ($idx === 0) ? $scheduledCount : max(1, intdiv($scheduledCount, 3));
+                for ($i = 0; $i < $myScheduled; $i++) {
+                    $workId = $uuid();
+                    $wpdb->insert($workItemsTable, [
+                        'id' => $workId,
+                        'source_type' => 'admin',
+                        'source_id' => $uuid(),
+                        'assigned_user_id' => $uid,
+                        'department_id' => (string)$teamId,
+                        'priority_score' => 0,
+                        'scheduled_start_utc' => $start,
+                        'scheduled_due_utc' => $end,
+                        'capacity_allocation_percent' => 100,
+                        'status' => 'active',
+                        'escalation_level' => 0,
+                        'created_at' => $seededAt,
+                        'updated_at' => $seededAt,
+                    ]);
+                    $this->registryAdd($seedRunId, $workItemsTable, (string)$workId);
+                }
+                // Unscheduled items (no dates → workload concentration signals)
+                $myUnscheduled = ($idx === 0) ? $unscheduledCount : max(2, intdiv($unscheduledCount, 3));
+                for ($i = 0; $i < $myUnscheduled; $i++) {
+                    $workId = $uuid();
+                    $wpdb->insert($workItemsTable, [
+                        'id' => $workId,
+                        'source_type' => 'admin',
+                        'source_id' => $uuid(),
+                        'assigned_user_id' => $uid,
+                        'department_id' => (string)$teamId,
+                        'priority_score' => 0,
+                        'status' => 'active',
+                        'escalation_level' => 0,
+                        'created_at' => $seededAt,
+                        'updated_at' => $seededAt,
+                    ]);
+                    $this->registryAdd($seedRunId, $workItemsTable, (string)$workId);
+                }
+            }
+        };
+
+        // --- On-Call team (original): Liam with heavy single-person load ---
+        $seedTeamResilience($onCallTeamId, [$liamWpUserId], 2, 12);
+
+        // --- Support team: Liam (lead), Noah, Ethan ---
+        $supportTeamId = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'Support'));
+        if ($supportTeamId > 0) {
+            $seedTeamResilience($supportTeamId, [
+                $liamWpUserId,
+                $empWpUserId('Noah'),
+                $empWpUserId('Ethan'),
+            ], 2, 6);
+        }
+
+        // --- Delivery team: Mia (lead), Ava, Ethan, Isabella ---
+        $deliveryTeamId = (int)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'Delivery'));
+        if ($deliveryTeamId > 0) {
+            $seedTeamResilience($deliveryTeamId, [
+                $empWpUserId('Mia'),
+                $empWpUserId('Ava'),
+                $empWpUserId('Ethan'),
+                $empWpUserId('Isabella'),
+            ], 2, 5);
+        }
+
+        // Generate resilience analysis for all teams
+        $generate = $c->get(\Pet\Application\Resilience\Command\GenerateResilienceAnalysisHandler::class);
+        $generatedTeamIds = [$onCallTeamId];
+        if ($supportTeamId > 0) $generatedTeamIds[] = $supportTeamId;
+        if ($deliveryTeamId > 0) $generatedTeamIds[] = $deliveryTeamId;
+
+        foreach ($generatedTeamIds as $tid) {
+            try {
+                $generate->handle(new \Pet\Application\Resilience\Command\GenerateResilienceAnalysisCommand($tid, null));
+                // Second run creates additive version history
+                $generate->handle(new \Pet\Application\Resilience\Command\GenerateResilienceAnalysisCommand($tid, null));
+            } catch (\Throwable $e) {
+            }
+        }
+
+        // Register seed entries
+        $cutoff = (new \DateTimeImmutable($seededAt))->modify('-1 minute')->format('Y-m-d H:i:s');
+        $totalRuns = 0;
+        $totalSignals = 0;
+        foreach ($generatedTeamIds as $tid) {
+            $runIds = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM $runsTable WHERE started_at >= %s AND scope_type = %s AND scope_id = %d",
+                $cutoff, 'team', $tid
+            ));
+            foreach ($runIds as $id) {
+                $this->registryAdd($seedRunId, $runsTable, (string)$id);
+            }
+            $totalRuns += count($runIds);
+
+            $signalIds = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM $signalsTable WHERE created_at >= %s AND scope_type = %s AND scope_id = %d",
+                $cutoff, 'team', $tid
+            ));
+            foreach ($signalIds as $id) {
+                $this->registryAdd($seedRunId, $signalsTable, (string)$id);
+            }
+            $totalSignals += count($signalIds);
+        }
+
+        return ['generated' => count($generatedTeamIds), 'teams' => $generatedTeamIds, 'runs' => $totalRuns, 'signals' => $totalSignals];
     }
 
     private function jsonMeta(string $seedRunId, string $seedProfile, string $seededAt): string
@@ -245,6 +514,10 @@ final class DemoSeedService
             'pet_advisory_enabled' => 'Enable advisory signals on work items',
             'pet_advisory_reports_enabled' => 'Enable advisory report generation',
             'pet_resilience_indicators_enabled' => 'Enable resilience / utilization indicators',
+            'pet_support_operational_improvements_enabled' => 'Enable support/helpdesk operational UX improvements',
+            'pet_staff_time_capture_enabled' => 'Enable staff time capture standalone route and self-scoped APIs',
+            'pet_pulseway_enabled' => 'Master switch for Pulseway RMM integration (polling, ingestion, ticket creation)',
+            'pet_pulseway_ticket_creation_enabled' => 'Enable automatic ticket creation from Pulseway notifications (requires pet_pulseway_enabled)',
         ];
         $count = 0;
         foreach ($flags as $key => $desc) {
@@ -254,7 +527,7 @@ final class DemoSeedService
             if (!$existing) {
                 $this->wpdb->insert($table, [
                     'setting_key' => $key,
-                    'setting_value' => '1',
+                    'setting_value' => '0',
                     'setting_type' => 'boolean',
                     'description' => $desc,
                     'updated_at' => $now,
@@ -263,6 +536,53 @@ final class DemoSeedService
             }
         }
         return ['enabled' => $count, 'total_flags' => count($flags)];
+    }
+
+    private function enableDemoFeatureFlags(string $seedProfile, string $seededAt): array
+    {
+        if ($seedProfile !== 'demo_full') {
+            return ['enabled' => 0, 'skipped' => true];
+        }
+
+        $table = $this->wpdb->prefix . 'pet_settings';
+        $flags = [
+            'pet_helpdesk_enabled',
+            'pet_helpdesk_shortcode_enabled',
+            'pet_sla_scheduler_enabled',
+            'pet_work_projection_enabled',
+            'pet_queue_visibility_enabled',
+            'pet_priority_engine_enabled',
+            'pet_escalation_engine_enabled',
+            'pet_advisory_enabled',
+            'pet_advisory_reports_enabled',
+            'pet_dashboards_enabled',
+            'pet_resilience_indicators_enabled',
+            'pet_support_operational_improvements_enabled',
+            'pet_staff_time_capture_enabled',
+            'pet_pulseway_enabled',
+            'pet_pulseway_ticket_creation_enabled',
+        ];
+
+        $enabled = 0;
+        foreach ($flags as $flag) {
+            $existing = $this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT setting_key FROM $table WHERE setting_key = %s", $flag
+            ));
+            if (!$existing) {
+                continue;
+            }
+            $updated = $this->wpdb->update($table, [
+                'setting_value' => '1',
+                'updated_at' => $seededAt,
+            ], [
+                'setting_key' => $flag,
+            ]);
+            if ($updated !== false) {
+                $enabled++;
+            }
+        }
+
+        return ['enabled' => $enabled, 'total' => count($flags), 'skipped' => false];
     }
 
     private function seedEmployees(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -2268,6 +2588,8 @@ final class DemoSeedService
             $nexusCustId
         )) : null;
 
+        $supportTeamId = (string)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_teams WHERE name = 'Support' ORDER BY id ASC LIMIT 1");
+
         $calendar = $calRepo->findDefault();
         if (!$calendar) {
             $calendar = new \Pet\Domain\Calendar\Entity\Calendar('Default', 'UTC', [], [], true);
@@ -2383,7 +2705,13 @@ final class DemoSeedService
         ];
         foreach ($rpmSubjects as [$s, $pri]) {
             $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
-                $rpmCustId, null, null, $s, 'Auto-generated demo ticket for RPM Resources', $pri, []
+                $rpmCustId,
+                null,
+                null,
+                $s,
+                'Auto-generated demo ticket for RPM Resources',
+                $pri,
+                $supportTeamId !== '' ? ['queue_id' => $supportTeamId] : []
             ));
         }
 
@@ -2396,7 +2724,13 @@ final class DemoSeedService
             ];
             foreach ($acmeSubjects as [$s, $pri]) {
                 $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
-                    $acmeCustId, null, null, $s, 'Auto-generated demo ticket for Acme Manufacturing', $pri, []
+                    $acmeCustId,
+                    null,
+                    null,
+                    $s,
+                    'Auto-generated demo ticket for Acme Manufacturing',
+                    $pri,
+                    $supportTeamId !== '' ? ['queue_id' => $supportTeamId] : []
                 ));
             }
         }
@@ -2410,7 +2744,13 @@ final class DemoSeedService
             ];
             foreach ($nexusSubjects as [$s, $pri]) {
                 $createTicket->handle(new \Pet\Application\Support\Command\CreateTicketCommand(
-                    $nexusCustId, null, null, $s, 'Auto-generated demo ticket for Nexus Labs', $pri, []
+                    $nexusCustId,
+                    null,
+                    null,
+                    $s,
+                    'Auto-generated demo ticket for Nexus Labs',
+                    $pri,
+                    $supportTeamId !== '' ? ['queue_id' => $supportTeamId] : []
                 ));
             }
         }
@@ -2517,38 +2857,116 @@ final class DemoSeedService
             }
             // Essential (generous 480/2880 SLA): all healthy — no clock tweaks
 
-            // --- Ticket assignments: realistic mix of assigned / queued / unassigned ---
-            // Queue IDs use canonical string names matching frontend QUEUES constant
             $empTable = $wpdb->prefix . 'pet_employees';
-            $liamId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Liam' LIMIT 1");
-            $noahId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Noah' LIMIT 1");
-            $ethanId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ethan' LIMIT 1");
-            $avaId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ava' LIMIT 1");
+            $liamWpUserId = (string)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Liam' LIMIT 1");
+            $noahWpUserId = (string)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Noah' LIMIT 1");
+            $ethanWpUserId = (string)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ethan' LIMIT 1");
+            $avaWpUserId = (string)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ava' LIMIT 1");
 
-            // Assign to employee + queue (most common: agent owns it within a queue)
-            foreach (array_slice($ticketIds, 0, 3) as $i => $tid) {
-                $owner = [$liamId, $noahId, $ethanId][$i % 3];
-                $wpdb->update($ticketsTable, [
-                    'owner_user_id' => $owner,
-                    'queue_id' => 'support',
-                ], ['id' => $tid]);
+            if ($supportTeamId !== '') {
+                $assignTeam = $c->get(\Pet\Application\Support\Command\AssignTicketToTeamHandler::class);
+                $assignUser = $c->get(\Pet\Application\Support\Command\AssignTicketToUserHandler::class);
+
+                $owners = [$liamWpUserId, $noahWpUserId, $ethanWpUserId];
+                foreach (array_slice($ticketIds, 0, 3) as $i => $tid) {
+                    $assignTeam->handle(new \Pet\Application\Support\Command\AssignTicketToTeamCommand((int)$tid, $supportTeamId));
+                    $owner = (string)($owners[$i % 3] ?? '');
+                    if ($owner !== '') {
+                        $assignUser->handle(new \Pet\Application\Support\Command\AssignTicketToUserCommand((int)$tid, $owner));
+                    }
+                    $this->registryAdd($seedRunId, $ticketsTable, (string)$tid);
+                }
+
+                foreach (array_slice($ticketIds, 3, 3) as $tid) {
+                    $assignTeam->handle(new \Pet\Application\Support\Command\AssignTicketToTeamCommand((int)$tid, $supportTeamId));
+                    $this->registryAdd($seedRunId, $ticketsTable, (string)$tid);
+                }
+
+                if (isset($ticketIds[6]) && $avaWpUserId !== '') {
+                    $assignTeam->handle(new \Pet\Application\Support\Command\AssignTicketToTeamCommand((int)$ticketIds[6], $supportTeamId));
+                    $assignUser->handle(new \Pet\Application\Support\Command\AssignTicketToUserCommand((int)$ticketIds[6], $avaWpUserId));
+                    $this->registryAdd($seedRunId, $ticketsTable, (string)$ticketIds[6]);
+                }
+
+                if (isset($ticketIds[7]) && $noahWpUserId !== '' && $ethanWpUserId !== '') {
+                    $assignTeam->handle(new \Pet\Application\Support\Command\AssignTicketToTeamCommand((int)$ticketIds[7], $supportTeamId));
+                    $assignUser->handle(new \Pet\Application\Support\Command\AssignTicketToUserCommand((int)$ticketIds[7], $noahWpUserId));
+                    $assignUser->handle(new \Pet\Application\Support\Command\AssignTicketToUserCommand((int)$ticketIds[7], $ethanWpUserId));
+                    $assignTeam->handle(new \Pet\Application\Support\Command\AssignTicketToTeamCommand((int)$ticketIds[7], $supportTeamId));
+                    $this->registryAdd($seedRunId, $ticketsTable, (string)$ticketIds[7]);
+                }
             }
-            // Queue-only (in queue, unowned — waiting to be pulled)
-            foreach (array_slice($ticketIds, 3, 3) as $tid) {
-                $wpdb->update($ticketsTable, [
-                    'owner_user_id' => null,
-                    'queue_id' => 'support',
-                ], ['id' => $tid]);
-            }
-            // Assigned to Ava (consultant doing specialist investigation)
-            if (isset($ticketIds[6])) {
-                $wpdb->update($ticketsTable, [
-                    'owner_user_id' => $avaId,
-                    'queue_id' => 'support',
-                ], ['id' => $ticketIds[6]]);
-            }
-            // Remaining tickets (~6) left fully unassigned — demo shows "no assignment" state
         }
+
+        $escalationsTable = $wpdb->prefix . 'pet_escalations';
+        $transitionsTable = $wpdb->prefix . 'pet_escalation_transitions';
+        if ($seedProfile === 'demo_full' && $wpdb->get_var("SHOW TABLES LIKE '$escalationsTable'") === $escalationsTable) {
+            $trigger = $c->get(\Pet\Application\Escalation\Command\TriggerEscalationHandler::class);
+            $ack = $c->get(\Pet\Application\Escalation\Command\AcknowledgeEscalationHandler::class);
+            $resolve = $c->get(\Pet\Application\Escalation\Command\ResolveEscalationHandler::class);
+
+            $actorId = function_exists('get_current_user_id') ? get_current_user_id() : 1;
+
+            $openProjectId = (int)($rpmProject->id ?? 0);
+            if ($openProjectId > 0) {
+                $openId = $trigger->handle(new \Pet\Application\Escalation\Command\TriggerEscalationCommand(
+                    'project',
+                    $openProjectId,
+                    \Pet\Domain\Escalation\Entity\Escalation::SEVERITY_HIGH,
+                    'Project risk identified during delivery review',
+                    $actorId,
+                    ['seed_run_id' => $seedRunId, 'seed_profile' => $seedProfile],
+                    'Project Risk'
+                ));
+                if ($openId > 0) {
+                    $this->registryAdd($seedRunId, $escalationsTable, (string)$openId);
+                    foreach ($wpdb->get_col($wpdb->prepare("SELECT id FROM $transitionsTable WHERE escalation_id = %d", [$openId])) as $tid) {
+                        $this->registryAdd($seedRunId, $transitionsTable, (string)$tid);
+                    }
+                }
+            }
+
+            $ackedTicketId = (int)($rpmTicketIds[0] ?? 0);
+            if ($ackedTicketId > 0) {
+                $ackedId = $trigger->handle(new \Pet\Application\Escalation\Command\TriggerEscalationCommand(
+                    'ticket',
+                    $ackedTicketId,
+                    \Pet\Domain\Escalation\Entity\Escalation::SEVERITY_CRITICAL,
+                    'SLA breach – escalation stage 1',
+                    $actorId,
+                    ['seed_run_id' => $seedRunId, 'seed_profile' => $seedProfile, 'origin' => 'sla_breach', 'stage' => 1],
+                    'VPN Access'
+                ));
+                if ($ackedId > 0) {
+                    $ack->handle(new \Pet\Application\Escalation\Command\AcknowledgeEscalationCommand($ackedId, $actorId));
+                    $this->registryAdd($seedRunId, $escalationsTable, (string)$ackedId);
+                    foreach ($wpdb->get_col($wpdb->prepare("SELECT id FROM $transitionsTable WHERE escalation_id = %d", [$ackedId])) as $tid) {
+                        $this->registryAdd($seedRunId, $transitionsTable, (string)$tid);
+                    }
+                }
+            }
+
+            $resolvedTicketId = (int)($rpmTicketIds[3] ?? ($rpmTicketIds[1] ?? 0));
+            if ($resolvedTicketId > 0) {
+                $resolvedId = $trigger->handle(new \Pet\Application\Escalation\Command\TriggerEscalationCommand(
+                    'ticket',
+                    $resolvedTicketId,
+                    \Pet\Domain\Escalation\Entity\Escalation::SEVERITY_MEDIUM,
+                    'Customer confirmed issue is resolved',
+                    $actorId,
+                    ['seed_run_id' => $seedRunId, 'seed_profile' => $seedProfile],
+                    'Customer Follow-up'
+                ));
+                if ($resolvedId > 0) {
+                    $resolve->handle(new \Pet\Application\Escalation\Command\ResolveEscalationCommand($resolvedId, $actorId, 'Resolved after customer follow-up call.'));
+                    $this->registryAdd($seedRunId, $escalationsTable, (string)$resolvedId);
+                    foreach ($wpdb->get_col($wpdb->prepare("SELECT id FROM $transitionsTable WHERE escalation_id = %d", [$resolvedId])) as $tid) {
+                        $this->registryAdd($seedRunId, $transitionsTable, (string)$tid);
+                    }
+                }
+            }
+        }
+
         $ticketsCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM $ticketsTable");
         $slaDefCount = (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}pet_sla_definitions");
         return ['tickets' => $ticketsCount, 'sla_definitions' => $slaDefCount, 'sla_snapshots' => 3, 'sla' => 'ok'];
@@ -2793,12 +3211,17 @@ final class DemoSeedService
         $slaScenarios = [-45, -12, 15, 30, 55, 120, 180, 240, 360, null];
         $idx = 0;
 
-        // Map primary_container to department for work items
-        // Uses canonical queue names matching frontend QUEUES constant
+        // Map primary_container to department (numeric team ID) for work items.
+        // Dashboard summary queries join on work_items.department_id = team.id,
+        // so these MUST be numeric team IDs, not string names.
+        $teamsTable = $wpdb->prefix . 'pet_teams';
+        $supportTeamId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'Support'));
+        $deliveryTeamId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'Delivery'));
+        $executiveTeamId = (string)$wpdb->get_var($wpdb->prepare("SELECT id FROM $teamsTable WHERE name = %s LIMIT 1", 'Executive'));
         $containerToDept = [
-            'support' => 'support',
-            'project' => 'projects',
-            'internal' => 'internal',
+            'support' => $supportTeamId ?: 'support',
+            'project' => $deliveryTeamId ?: 'projects',
+            'internal' => $executiveTeamId ?: 'internal',
         ];
 
         foreach ($tickets as $t) {
@@ -3081,6 +3504,221 @@ final class DemoSeedService
 
         $count = (int)$wpdb->get_var("SELECT COUNT(*) FROM $entriesTable");
         return ['time_entries' => $count, 'corrections' => $correctionCount];
+    }
+
+    private function seedStaffTimeCaptureExperience(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        if ($seedProfile !== 'demo_full') {
+            return ['seeded' => false, 'skipped' => true];
+        }
+
+        $wpdb = $this->wpdb;
+        $settingsTable = $wpdb->prefix . 'pet_settings';
+        $employeesTable = $wpdb->prefix . 'pet_employees';
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $workItemsTable = $wpdb->prefix . 'pet_work_items';
+        $entriesTable = $wpdb->prefix . 'pet_time_entries';
+        $teamsTable = $wpdb->prefix . 'pet_teams';
+
+        // Ensure Staff Time Capture routes are registered on subsequent requests.
+        $existingFlag = $wpdb->get_var($wpdb->prepare(
+            "SELECT setting_key FROM $settingsTable WHERE setting_key = %s",
+            'pet_staff_time_capture_enabled'
+        ));
+        if (!$existingFlag) {
+            $wpdb->insert($settingsTable, [
+                'setting_key' => 'pet_staff_time_capture_enabled',
+                'setting_value' => '1',
+                'setting_type' => 'boolean',
+                'description' => 'Enable staff-facing standalone time capture surface and self-scoped APIs',
+                'updated_at' => $seededAt,
+            ]);
+        } else {
+            $wpdb->update($settingsTable, [
+                'setting_value' => '1',
+                'updated_at' => $seededAt,
+            ], [
+                'setting_key' => 'pet_staff_time_capture_enabled',
+            ]);
+        }
+
+        $currentWpUserId = function_exists('get_current_user_id') ? (int)get_current_user_id() : 0;
+        if ($currentWpUserId <= 0) {
+            $currentWpUserId = 1;
+        }
+
+        // Keep exactly one mapping for the active WP user in demo mode to avoid ambiguous denies.
+        $mappedEmployees = $wpdb->get_results($wpdb->prepare(
+            "SELECT id FROM $employeesTable WHERE wp_user_id = %d ORDER BY id ASC",
+            $currentWpUserId
+        ));
+        if (count($mappedEmployees) === 0) {
+            $steveId = (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $employeesTable WHERE first_name = %s ORDER BY id ASC LIMIT 1",
+                'Steve'
+            ));
+            if ($steveId > 0) {
+                $wpdb->update($employeesTable, [
+                    'wp_user_id' => $currentWpUserId,
+                    'status' => 'active',
+                    'archived_at' => null,
+                ], [
+                    'id' => $steveId,
+                ]);
+                $employeeId = $steveId;
+            } else {
+                $wpdb->insert($employeesTable, [
+                    'wp_user_id' => $currentWpUserId,
+                    'first_name' => 'Demo',
+                    'last_name' => 'Staff',
+                    'email' => 'demo.staff@example.com',
+                    'status' => 'active',
+                    'created_at' => $seededAt,
+                    'archived_at' => null,
+                ]);
+                $employeeId = (int)$wpdb->insert_id;
+                $this->registryAdd($seedRunId, $employeesTable, (string)$employeeId);
+            }
+        } else {
+            $employeeId = (int)$mappedEmployees[0]->id;
+            if (count($mappedEmployees) > 1) {
+                for ($i = 1; $i < count($mappedEmployees); $i++) {
+                    $wpdb->update($employeesTable, ['wp_user_id' => 0], ['id' => (int)$mappedEmployees[$i]->id]);
+                }
+            }
+            $wpdb->update($employeesTable, [
+                'status' => 'active',
+                'archived_at' => null,
+            ], [
+                'id' => $employeeId,
+            ]);
+        }
+
+        $supportTeamId = (string)$wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $teamsTable WHERE name = %s LIMIT 1",
+            'Support'
+        ));
+        $departmentId = $supportTeamId !== '' ? $supportTeamId : 'support';
+
+        $ticketIds = $wpdb->get_col(
+            "SELECT id
+            FROM $ticketsTable
+            WHERE status NOT IN ('closed','resolved')
+              AND (is_rollup = 0 OR is_rollup IS NULL)
+            ORDER BY
+              CASE priority
+                WHEN 'critical' THEN 4
+                WHEN 'high' THEN 3
+                WHEN 'medium' THEN 2
+                ELSE 1
+              END DESC,
+              id DESC
+            LIMIT 4"
+        );
+        if (empty($ticketIds)) {
+            $ticketIds = $wpdb->get_col("SELECT id FROM $ticketsTable ORDER BY id DESC LIMIT 4");
+        }
+
+        $assignedWorkItems = 0;
+        foreach ($ticketIds as $ticketId) {
+            $ticketId = (int)$ticketId;
+            if ($ticketId <= 0) {
+                continue;
+            }
+            $existingWorkItemId = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $workItemsTable WHERE source_type = 'ticket' AND source_id = %s LIMIT 1",
+                (string)$ticketId
+            ));
+            if ($existingWorkItemId) {
+                $wpdb->update($workItemsTable, [
+                    'assigned_user_id' => (string)$currentWpUserId,
+                    'assigned_team_id' => null,
+                    'assignment_mode' => 'user_assigned',
+                    'queue_key' => 'support:user:' . (string)$currentWpUserId,
+                    'routing_reason' => 'seed_staff_time_capture',
+                    'department_id' => $departmentId,
+                    'status' => 'active',
+                    'updated_at' => $seededAt,
+                ], [
+                    'id' => $existingWorkItemId,
+                ]);
+            } else {
+                $workItemId = $this->uuid();
+                $wpdb->insert($workItemsTable, [
+                    'id' => $workItemId,
+                    'source_type' => 'ticket',
+                    'source_id' => (string)$ticketId,
+                    'assigned_user_id' => (string)$currentWpUserId,
+                    'department_id' => $departmentId,
+                    'priority_score' => 70,
+                    'status' => 'active',
+                    'escalation_level' => 0,
+                    'created_at' => $seededAt,
+                    'updated_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $workItemsTable, (string)$workItemId);
+            }
+            $assignedWorkItems++;
+        }
+
+        $today = new \DateTimeImmutable('today');
+        $tomorrow = $today->modify('+1 day')->format('Y-m-d H:i:s');
+        $existingSeededEntries = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*)
+            FROM $entriesTable
+            WHERE employee_id = %d
+              AND start_time >= %s
+              AND start_time < %s
+              AND description LIKE %s",
+            $employeeId,
+            $today->format('Y-m-d H:i:s'),
+            $tomorrow,
+            '[DEMO_STAFF_CAPTURE]%'
+        ));
+
+        $seededEntries = 0;
+        if ($existingSeededEntries === 0 && !empty($ticketIds)) {
+            $entrySpecs = [
+                ['offset' => '08:30', 'minutes' => 45, 'billable' => 1, 'status' => 'submitted', 'description' => '[DEMO_STAFF_CAPTURE] Morning triage and prioritization'],
+                ['offset' => '09:30', 'minutes' => 75, 'billable' => 1, 'status' => 'submitted', 'description' => '[DEMO_STAFF_CAPTURE] Active troubleshooting and remediation'],
+                ['offset' => '11:15', 'minutes' => 60, 'billable' => 0, 'status' => 'draft', 'description' => '[DEMO_STAFF_CAPTURE] Internal coordination and follow-ups'],
+                ['offset' => '13:30', 'minutes' => 90, 'billable' => 1, 'status' => 'draft', 'description' => '[DEMO_STAFF_CAPTURE] Customer session and validation'],
+            ];
+
+            foreach ($entrySpecs as $index => $spec) {
+                $start = new \DateTimeImmutable($today->format('Y-m-d') . ' ' . $spec['offset'] . ':00');
+                $end = $start->modify('+' . (int)$spec['minutes'] . ' minutes');
+                $ticketId = (int)$ticketIds[$index % count($ticketIds)];
+                $wpdb->insert($entriesTable, [
+                    'employee_id' => $employeeId,
+                    'ticket_id' => $ticketId,
+                    'start_time' => $start->format('Y-m-d H:i:s'),
+                    'end_time' => $end->format('Y-m-d H:i:s'),
+                    'duration_minutes' => (int)$spec['minutes'],
+                    'is_billable' => (int)$spec['billable'],
+                    'description' => $spec['description'],
+                    'status' => $spec['status'],
+                    'malleable_data' => json_encode([
+                        'seed_run_id' => $seedRunId,
+                        'staff_time_capture_seed' => true,
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    'created_at' => $seededAt,
+                ]);
+                $entryId = (int)$wpdb->insert_id;
+                if ($entryId > 0) {
+                    $this->registryAdd($seedRunId, $entriesTable, (string)$entryId);
+                    $seededEntries++;
+                }
+            }
+        }
+
+        return [
+            'seeded' => true,
+            'employee_id' => $employeeId,
+            'wp_user_id' => $currentWpUserId,
+            'assigned_work_items' => $assignedWorkItems,
+            'seeded_entries_today' => $seededEntries,
+        ];
     }
 
     /**
@@ -4207,6 +4845,17 @@ final class DemoSeedService
             return ['tasks' => 0];
         }
 
+        $defaultRoleId = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}pet_roles WHERE name = %s LIMIT 1",
+            'Developer'
+        ));
+        if ($defaultRoleId <= 0) {
+            $defaultRoleId = (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}pet_roles WHERE name = %s LIMIT 1",
+                'Consultant'
+            ));
+        }
+
         // Task definitions per project (completion is handled in seedProjectEnrichment)
         $projectTasks = [
             // Project 1: RPM Website (Discovery complete, Build in progress)
@@ -4258,7 +4907,12 @@ final class DemoSeedService
             $tasks = $projectTasks[$pi] ?? [];
             foreach ($tasks as [$name, $hours]) {
                 try {
-                    $addTask->handle(new \Pet\Application\Delivery\Command\AddTaskCommand($projectId, $name, $hours));
+                    $addTask->handle(new \Pet\Application\Delivery\Command\AddTaskCommand(
+                        $projectId,
+                        $name,
+                        $hours,
+                        $defaultRoleId > 0 ? $defaultRoleId : null
+                    ));
                     $totalCount++;
                 } catch (\Throwable $e) {
                     // Skip on error
@@ -4544,27 +5198,10 @@ final class DemoSeedService
         $devTable = $wpdb->prefix . 'pet_external_assets';
         $orgTable = $wpdb->prefix . 'pet_pulseway_org_mappings';
         $rulesTable = $wpdb->prefix . 'pet_pulseway_ticket_rules';
-        $settingsTable = $wpdb->prefix . 'pet_settings';
 
         // Skip if Pulseway tables don't exist yet
         if ($wpdb->get_var("SHOW TABLES LIKE '$intTable'") !== $intTable) {
             return ['skipped' => true, 'reason' => 'pulseway tables not yet migrated'];
-        }
-
-        // Enable Pulseway feature flags
-        foreach (['pet_pulseway_enabled', 'pet_pulseway_ticket_creation_enabled'] as $flag) {
-            $existing = $wpdb->get_var($wpdb->prepare("SELECT setting_key FROM $settingsTable WHERE setting_key = %s", $flag));
-            if (!$existing) {
-                $wpdb->insert($settingsTable, [
-                    'setting_key' => $flag,
-                    'setting_value' => '1',
-                    'setting_type' => 'boolean',
-                    'description' => 'Pulseway RMM integration flag (demo seed)',
-                    'updated_at' => $seededAt,
-                ]);
-            } else {
-                $wpdb->update($settingsTable, ['setting_value' => '1', 'updated_at' => $seededAt], ['setting_key' => $flag]);
-            }
         }
 
         // --- Integration record (schema: uuid, label, api_base_url, token_id_encrypted, token_secret_encrypted) ---
@@ -4619,6 +5256,7 @@ final class DemoSeedService
         $rpmCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%RPM%' LIMIT 1");
         $acmeCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%Acme%' LIMIT 1");
         $nexusCustId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers WHERE name LIKE '%Nexus%' LIMIT 1");
+        $rpmCapeTownSiteId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_sites WHERE name LIKE '%RPM Cape Town%' LIMIT 1");
 
         $orgMaps = [
             ['pulseway_org' => 'RPM Resources',    'customer_id' => $rpmCustId],
@@ -4639,7 +5277,60 @@ final class DemoSeedService
             }
         }
 
+        if ($rpmCustId > 0) {
+            $rpmOrgId = 'rpm_resources';
+            $rpmSiteId = 'RPM Cape Town';
+            $rpmGroupId = 'Servers';
+
+            $wpdb->insert($orgTable, [
+                'integration_id' => $integrationId,
+                'pulseway_org_id' => $rpmOrgId,
+                'pulseway_site_id' => $rpmSiteId,
+                'pulseway_group_id' => $rpmGroupId,
+                'pet_customer_id' => $rpmCustId,
+                'pet_site_id' => $rpmCapeTownSiteId > 0 ? $rpmCapeTownSiteId : null,
+                'is_active' => 1,
+                'created_at' => $seededAt,
+                'updated_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $orgTable, (string)$wpdb->insert_id);
+
+            $wpdb->insert($orgTable, [
+                'integration_id' => $integrationId,
+                'pulseway_org_id' => $rpmOrgId,
+                'pulseway_site_id' => $rpmSiteId,
+                'pulseway_group_id' => null,
+                'pet_customer_id' => $rpmCustId,
+                'pet_site_id' => $rpmCapeTownSiteId > 0 ? $rpmCapeTownSiteId : null,
+                'is_active' => 1,
+                'created_at' => $seededAt,
+                'updated_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $orgTable, (string)$wpdb->insert_id);
+
+            $existingCatchAll = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $orgTable WHERE integration_id = %d AND pulseway_org_id IS NULL AND pulseway_site_id IS NULL AND pulseway_group_id IS NULL LIMIT 1",
+                [$integrationId]
+            ));
+            if (!$existingCatchAll) {
+                $wpdb->insert($orgTable, [
+                    'integration_id' => $integrationId,
+                    'pulseway_org_id' => null,
+                    'pulseway_site_id' => null,
+                    'pulseway_group_id' => null,
+                    'pet_customer_id' => $rpmCustId,
+                    'pet_site_id' => null,
+                    'is_active' => 1,
+                    'created_at' => $seededAt,
+                    'updated_at' => $seededAt,
+                ]);
+                $this->registryAdd($seedRunId, $orgTable, (string)$wpdb->insert_id);
+            }
+        }
+
         // --- Ticket Rules (schema: rule_name, not name) ---
+        $supportTeamId = (string)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_teams WHERE name = 'Support' ORDER BY id ASC LIMIT 1");
+        $supportQueueId = $supportTeamId !== '' ? $supportTeamId : 'support';
         $wpdb->insert($rulesTable, [
             'integration_id' => $integrationId,
             'rule_name' => 'Critical Server Alerts',
@@ -4647,7 +5338,7 @@ final class DemoSeedService
             'match_category' => null,
             'output_ticket_kind' => 'incident',
             'output_priority' => 'critical',
-            'output_queue_id' => 'support',
+            'output_queue_id' => $supportQueueId,
             'sort_order' => 1,
             'is_active' => 1,
             'created_at' => $seededAt,
@@ -4661,7 +5352,7 @@ final class DemoSeedService
             'match_category' => 'network',
             'output_ticket_kind' => 'alert',
             'output_priority' => 'high',
-            'output_queue_id' => 'support',
+            'output_queue_id' => $supportQueueId,
             'sort_order' => 2,
             'is_active' => 1,
             'created_at' => $seededAt,
@@ -4725,7 +5416,7 @@ final class DemoSeedService
                 $pt['pri'],
                 [
                     'intake_source' => 'pulseway',
-                    'queue_id' => 'support',
+                    'queue_id' => $supportQueueId,
                     'category' => 'monitoring',
                 ]
             ));

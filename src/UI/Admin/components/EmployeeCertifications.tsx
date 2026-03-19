@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
 import { Employee, PersonCertification, Certification } from '../types';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface EmployeeCertificationsProps {
   employee: Employee;
@@ -88,11 +89,11 @@ const EmployeeCertifications: React.FC<EmployeeCertificationsProps> = ({ employe
         setEvidenceUrl('');
         fetchCertifications(); // Refresh list
       } else {
-        alert('Failed to assign certification');
+        legacyAlert('Failed to assign certification');
       }
     } catch (err) {
       console.error(err);
-      alert('Error assigning certification');
+      legacyAlert('Error assigning certification');
     }
   };
 

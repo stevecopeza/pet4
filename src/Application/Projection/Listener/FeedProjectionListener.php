@@ -314,7 +314,7 @@ class FeedProjectionListener
         ));
     }
 
-    public function onMilestoneCompleted
+    public function onMilestoneCompleted(MilestoneCompletedEvent $event): void
     {
         $projectId = (string)$event->projectId();
         $this->log('milestone_completed', "Milestone '{$event->milestoneTitle()}' completed for Project {$projectId}", null, 'project', (int)$projectId);

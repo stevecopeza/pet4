@@ -55,7 +55,8 @@ class TriggerEscalationHandler
                 $command->severity(),
                 $command->reason(),
                 $command->createdBy(),
-                json_encode($command->metadata()) ?: '{}'
+                json_encode($command->metadata()) ?: '{}',
+                summary: $command->summary()
             );
 
             try {

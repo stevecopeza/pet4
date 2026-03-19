@@ -12,7 +12,9 @@ class WorkItemTest extends TestCase
     private function makeItem(
         string $sourceType = 'ticket',
         string $status = 'active',
-        float $priority = 50.0
+        float $priority = 50.0,
+        ?string $assignedTeamId = null,
+        ?string $assignedUserId = null
     ): WorkItem {
         return WorkItem::create(
             'wi-001',
@@ -21,7 +23,10 @@ class WorkItemTest extends TestCase
             'support',
             $priority,
             $status,
-            new \DateTimeImmutable('2026-01-15 09:00')
+            new \DateTimeImmutable('2026-01-15 09:00'),
+            null,
+            $assignedTeamId,
+            $assignedUserId
         );
     }
 
@@ -46,7 +51,9 @@ class WorkItemTest extends TestCase
     /** @dataProvider validSourceTypesProvider */
     public function testValidSourceTypes(string $type): void
     {
-        $item = $this->makeItem(sourceType: $type);
+        $item = $type === 'project_task'
+            ? $this->makeItem(sourceType: $type, assignedTeamId: 'team-1')
+            : $this->makeItem(sourceType: $type);
         $this->assertSame($type, $item->getSourceType());
     }
 
@@ -104,6 +111,7 @@ class WorkItemTest extends TestCase
         $item = $this->makeItem();
         $item->assignUser('user-5');
         $this->assertSame('user-5', $item->getAssignedUserId());
+        $this->assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $item->getAssignmentMode());
     }
 
     public function testAssignUserNull(): void
@@ -112,6 +120,47 @@ class WorkItemTest extends TestCase
         $item->assignUser('user-5');
         $item->assignUser(null);
         $this->assertNull($item->getAssignedUserId());
+        $this->assertSame(WorkItem::ASSIGNMENT_MODE_UNROUTED, $item->getAssignmentMode());
+    }
+
+    public function testUnroutedNotAllowedForProjectTask(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->makeItem(sourceType: 'project_task');
+    }
+
+    public function testCreateRejectsDualAssignment(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('both team-queued and user-assigned');
+        $this->makeItem(assignedTeamId: 'team-1', assignedUserId: 'user-1');
+    }
+
+    public function testUpdateAssignmentRejectsDualAssignment(): void
+    {
+        $item = $this->makeItem(assignedTeamId: 'team-1');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('both team-queued and user-assigned');
+        $item->updateAssignment('team-1', 'user-1');
+    }
+
+    public function testCreateRejectsDualAssignmentBeforeAssignmentModeDerivation(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('both team-queued and user-assigned');
+
+        WorkItem::create(
+            'wi-early-reject',
+            'invalid_source_type',
+            'src-99',
+            'support',
+            50.0,
+            'active',
+            new \DateTimeImmutable('2026-01-15 09:00'),
+            null,
+            'team-1',
+            'user-1'
+        );
     }
 
     public function testUpdateDepartment(): void

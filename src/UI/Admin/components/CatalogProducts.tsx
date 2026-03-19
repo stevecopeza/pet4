@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface CatalogProduct {
   id: number;
@@ -83,11 +84,11 @@ const CatalogProducts = () => {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       resetForm();
       fetchItems();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Archive this product?')) return;
+    if (!legacyConfirm('Archive this product?')) return;
     try {
       const res = await fetch(`${api}/catalog-products/${id}/archive`, {
         method: 'POST',
@@ -95,7 +96,7 @@ const CatalogProducts = () => {
       });
       if (!res.ok) throw new Error('Failed');
       fetchItems();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const columns: Column<CatalogProduct>[] = [

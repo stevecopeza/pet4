@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SchemaDefinition } from '../types';
 import SchemaEditor from './SchemaEditor';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const ENTITY_TYPES = [
   'customer',
@@ -140,7 +141,7 @@ const SchemaManagement = () => {
       const published: SchemaDefinition = await response.json();
       setSchema(published);
       setMode('view'); // Exit edit mode
-      alert('Schema published successfully!');
+      legacyAlert('Schema published successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed');
     } finally {

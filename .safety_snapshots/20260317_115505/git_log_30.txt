@@ -1,0 +1,16 @@
+e3ead91 feat: sync all uncommitted work — escalation domain, leads, tickets, docs, tests
+a86681c Merge pull request #1 from stevecopeza/escalation/hardening-duplicate-key-recovery
+20b2355 feat(escalation): harden duplicate-key recovery and add integration tests
+739c3c1 docs: align Lead→Delivery pipeline documentation with codebase
+19003a4 docs: content review and correction across all 42 documentation sections
+f57d9c2 docs: structural alignment — renumber, merge, deduplicate, standardise naming
+f6bb667 feat: UX overhaul — Quote Builder, Catalog, Journey Timeline, Card Enhancements
+9d58ea0 Add Playwright E2E test suite and fix all test failures
+0ab24da feat: Implement tiered SLA model across full stack
+2d3ddfb Calendar CRUD fixes, public holidays support, KebabMenu rollout
+a0cee04 Redesign all frontend shortcodes with modern UI/UX, add missing shortcodes to admin page, update docs
+3282f6d feat: Pulseway RMM integration + Universal Health Border system
+ec7b89c Harden permission checks on admin-only endpoints and fix i18n text domain
+19b55ad feat: Timesheets dashboard tab, expanded ticket conversations, customer billing drill-down
+2fb321d Sales Dashboard, Lead→Quote flow, seed resilience, documentation audit
+fcb6696 Initial commit: PET plugin v1.0.2

@@ -66,6 +66,10 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddCalendarIdToEmployees::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddRequiredRoleIdToWorkItems::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\UpdateWorkItemsRemoveProjectTask::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddWorkOrchestrationAssignmentFields::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddWorkItemsAllowProjectTask::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddAdvisorySignalLifecycleFields::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateAdvisoryReportTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateEventBackboneTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateExternalIntegrationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateBillingExportTables::class,
@@ -100,6 +104,12 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketSoldArchitectureColumns::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateEscalationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationDedupeKey::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddMissingReferencedFeatureFlags::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddDashboardsFeatureFlag::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationSummaryAndResolutionNote::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateResilienceTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddSupportOperationalImprovementsFeatureFlag::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddStaffTimeCaptureFeatureFlag::class,
         ];
     }
 }

@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Project } from '../types';
 import { DataTable, Column } from './DataTable';
-import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import KebabMenu from './KebabMenu';
 import ProjectForm from './ProjectForm';
 import ProjectDetails from './ProjectDetails';
 import { computeProjectHealth } from '../healthCompute';
 import useConversationStatus from '../hooks/useConversationStatus';
 import useConversation from '../hooks/useConversation';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -17,6 +19,10 @@ const Projects = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
+  const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
+  const toast = useToast();
   const { openConversation } = useConversation();
 
   const projectIds = useMemo(() => projects.map(p => String(p.id)), [projects]);
@@ -87,7 +93,7 @@ const Projects = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this project?')) return;
+    setArchiveBusy(true);
 
     try {
       // @ts-ignore
@@ -107,35 +113,55 @@ const Projects = () => {
       }
 
       fetchProjects();
+      setSelectedIds(prev => prev.filter(sid => sid !== id));
+      toast.success('Project archived');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      toast.error(err instanceof Error ? err.message : 'Failed to archive');
+    } finally {
+      setArchiveBusy(false);
+      setPendingArchiveId(null);
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} projects?`)) return;
+    setArchiveBusy(true);
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
     // @ts-ignore
     const nonce = window.petSettings?.nonce;
-
-    // Process sequentially
-    for (const id of selectedIds) {
-      try {
-        await fetch(`${apiUrl}/projects/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'X-WP-Nonce': nonce,
-          },
-        });
-      } catch (e) {
-        console.error(`Failed to archive ${id}`, e);
+    let failedCount = 0;
+    try {
+      // Process sequentially
+      for (const id of selectedIds) {
+        try {
+          const response = await fetch(`${apiUrl}/projects/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'X-WP-Nonce': nonce,
+            },
+          });
+          if (!response.ok) {
+            failedCount += 1;
+          }
+        } catch (e) {
+          console.error(`Failed to archive ${id}`, e);
+          failedCount += 1;
+        }
       }
+
+      const successCount = selectedIds.length - failedCount;
+      setSelectedIds([]);
+      fetchProjects();
+      if (failedCount > 0) {
+        toast.error(`Archived ${successCount} projects; ${failedCount} failed.`);
+      } else {
+        toast.success(`Archived ${successCount} projects.`);
+      }
+    } finally {
+      setArchiveBusy(false);
+      setConfirmBulkArchive(false);
     }
-    
-    setSelectedIds([]);
-    fetchProjects();
   };
 
   const statusColors: Record<string, string> = { red: '#dc3545', amber: '#f0ad4e', green: '#28a745', blue: '#007bff' };
@@ -173,6 +199,11 @@ const Projects = () => {
       }
     },
     { key: 'customerId', header: 'Customer ID' },
+    {
+      key: 'sourceQuoteId',
+      header: 'Source Quote',
+      render: (_, item) => item.sourceQuoteId ? `#${item.sourceQuoteId}` : '-',
+    },
     { key: 'soldHours', header: 'Sold Hours' },
     { key: 'state', header: 'Status', render: (val: any) => <span className={`pet-status-badge status-${String(val)}`}>{String(val)}</span> },
     // Add malleable fields if they exist in schema
@@ -200,8 +231,6 @@ const Projects = () => {
     );
   }
 
-  if (loading && !projects.length) return <div>Loading projects...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
 
   return (
     <div className="pet-projects">
@@ -225,14 +254,18 @@ const Projects = () => {
       {selectedIds.length > 0 && (
         <div style={{ padding: '10px', background: '#e5f5fa', border: '1px solid #b5e1ef', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
           <strong>{selectedIds.length} items selected</strong>
-          <button className="button button-link-delete" style={{ color: '#a00', borderColor: '#a00' }} onClick={handleBulkArchive}>Archive Selected</button>
+          <button className="button button-link-delete" style={{ color: '#a00', borderColor: '#a00' }} onClick={() => setConfirmBulkArchive(true)}>Archive Selected</button>
         </div>
       )}
 
       <DataTable 
         columns={columns} 
         data={projects} 
+        loading={loading}
+        error={error}
+        onRetry={fetchProjects}
         emptyMessage="No projects found." 
+        compatibilityMode="wp"
         selection={{
           selectedIds,
           onSelectionChange: setSelectedIds
@@ -242,9 +275,33 @@ const Projects = () => {
           <KebabMenu items={[
             { type: 'action', label: 'Tasks', onClick: () => setSelectedProjectId(item.id) },
             { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-            { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+            { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
           ]} />
         )}
+      />
+
+      <ConfirmationDialog
+        open={pendingArchiveId !== null}
+        title="Archive project?"
+        description="This action will archive the selected project."
+        confirmLabel="Archive"
+        busy={archiveBusy}
+        onCancel={() => setPendingArchiveId(null)}
+        onConfirm={() => {
+          if (pendingArchiveId !== null) {
+            handleArchive(pendingArchiveId);
+          }
+        }}
+      />
+
+      <ConfirmationDialog
+        open={confirmBulkArchive}
+        title="Archive selected projects?"
+        description={`This action will archive ${selectedIds.length} selected projects.`}
+        confirmLabel="Archive selected"
+        busy={archiveBusy}
+        onCancel={() => setConfirmBulkArchive(false)}
+        onConfirm={handleBulkArchive}
       />
     </div>
   );

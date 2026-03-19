@@ -3,6 +3,7 @@ import { Contact, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import ContactForm from './ContactForm';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const Contacts = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -53,7 +54,7 @@ const Contacts = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this contact?')) return;
+    if (!legacyConfirm('Are you sure you want to archive this contact?')) return;
     try {
       // @ts-ignore
       const apiUrl = window.petSettings?.apiUrl;
@@ -68,12 +69,12 @@ const Contacts = () => {
       if (!response.ok) throw new Error('Failed to archive contact');
       fetchData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to archive');
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} contacts?`)) return;
+    if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} contacts?`)) return;
     
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;

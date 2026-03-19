@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import { FeedEvent, Announcement } from '../types';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 const Feed = () => {
   const [events, setEvents] = useState<FeedEvent[]>([]);
@@ -53,7 +54,7 @@ const Feed = () => {
       if (!res.ok) throw new Error('Failed to react to event');
       fetchFeed();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to react');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to react');
     }
   };
 
@@ -72,7 +73,7 @@ const Feed = () => {
       if (!res.ok) throw new Error('Failed to acknowledge announcement');
       fetchFeed();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to acknowledge');
+      legacyAlert(err instanceof Error ? err.message : 'Failed to acknowledge');
     }
   };
 

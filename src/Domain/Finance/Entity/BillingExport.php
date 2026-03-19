@@ -125,6 +125,9 @@ final class BillingExport
 
     public function confirm(): void
     {
+        if ($this->status === 'confirmed') {
+            return;
+        }
         if ($this->status !== 'sent') {
             throw new \DomainException('Only sent exports can be confirmed');
         }

@@ -1,0 +1,61 @@
+# PET Documentation Location Index — 17 March 2026
+Status: AUTHORITATIVE INDEX
+Purpose: Single navigation map for active canonical specification locations and historical/superseded source files.
+Scope: Documentation placement and supersession mapping only. No business rules are defined in this file.
+
+## Usage Rule
+- Use the `docs/` canonical paths listed under "Active Canonical Locations" for implementation decisions.
+- Use `docs/ToBeMoved/` files only for historical traceability unless explicitly marked active.
+- Do not delete historical files referenced here.
+
+## Active Canonical Locations
+- Escalation completion spec:
+  - Active: `docs/22_escalation_and_risk/PET_Escalation_Completion_Corrected_v2.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Escalation_Completion_Corrected_v2.md`
+- Work orchestration completion spec:
+  - Active: `docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
+- Advisory outputs and report generation completion spec:
+  - Active: `docs/25_advisory_layer/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
+- Dashboard composition and manager summary completion spec:
+  - Active: `docs/10_dashboards/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md`
+- People resilience outputs completion spec:
+  - Active: `docs/23_people_resilience/PET_People_Resilience_Outputs_v1.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_People_Resilience_Outputs_v1.md`
+- Support/helpdesk operational completion spec:
+  - Active: `docs/31_support_helpdesk/PET_Support_Helpdesk_Operational_Completion_v1.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Support_Helpdesk_Operational_Completion_v1.md`
+- Pulseway flags and billing export gap-closure spec:
+  - Active: `docs/17_integrations/PET_GapClosure_Pulseway_Flags_BillingExport_v1.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_GapClosure_Pulseway_Flags_BillingExport_v1.md`
+- Implementation status (13 March 2026 session record):
+  - Active record location: `docs/15_implementation_blueprint/PET_Implementation_Status_2026_03_13.md`
+  - Historical source copy retained at: `docs/ToBeMoved/PET_Implementation_Status_2026_03_13.md`
+
+## Status Addenda
+- Latest additive status addendum:
+  - `docs/15_implementation_blueprint/PET_Implementation_Status_2026_03_19_TimeEntries_Admin_Surface_Addendum.md`
+- Latest additive status addendum:
+  - `docs/15_implementation_blueprint/PET_Implementation_Status_2026_03_17_Remediation_Addendum.md`
+- Prior additive status addendum (same date, baseline stabilization):
+  - `docs/15_implementation_blueprint/PET_Implementation_Status_2026_03_17_Addendum.md`
+- Rule:
+  - Add new dated addenda for status changes.
+  - Do not rewrite or delete prior dated status records.
+
+## Explicitly Superseded Historical Files
+- `docs/ToBeMoved/PET_Escalation_Engine_Completion_v1.md`
+  - Status: SUPERSEDED
+  - Superseded by: `docs/22_escalation_and_risk/PET_Escalation_Completion_Corrected_v2.md`
+- `docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md`
+  - Status: SUPERSEDED
+  - Superseded by: `docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
+
+## Maintenance Rule
+When promoting additional files from `docs/ToBeMoved/`:
+- add canonical destination entry to this index
+- keep historical source file
+- apply explicit supersession marker if replaced
+- append a dated implementation status addendum if operationally relevant

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ServiceType {
   id: number;
@@ -59,11 +60,11 @@ const ServiceTypes = () => {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       resetForm();
       fetchItems();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Archive this service type?')) return;
+    if (!legacyConfirm('Archive this service type?')) return;
     try {
       const res = await fetch(`${window.petSettings.apiUrl}/service-types/${id}`, {
         method: 'POST',
@@ -71,7 +72,7 @@ const ServiceTypes = () => {
       });
       if (!res.ok) throw new Error('Failed');
       fetchItems();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const columns: Column<ServiceType>[] = [

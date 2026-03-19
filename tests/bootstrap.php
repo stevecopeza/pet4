@@ -11,9 +11,123 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
+if (!class_exists('wpdb')) {
+    class wpdb
+    {
+    }
+}
+
+if (!class_exists('WP_REST_Request')) {
+    class WP_REST_Request
+    {
+        private array $params = [];
+        private array $jsonParams = [];
+
+        public function __construct(string $method = 'GET', string $route = '')
+        {
+        }
+
+        public function get_param(string $key)
+        {
+            return $this->params[$key] ?? null;
+        }
+
+        public function set_param(string $key, $value): void
+        {
+            $this->params[$key] = $value;
+        }
+
+        public function get_json_params(): array
+        {
+            return $this->jsonParams;
+        }
+
+        public function set_json_params(array $params): void
+        {
+            $this->jsonParams = $params;
+        }
+    }
+}
+
+if (!class_exists('WP_REST_Response')) {
+    class WP_REST_Response
+    {
+        public function __construct(private $data = null, private int $status = 200)
+        {
+        }
+
+        public function get_data()
+        {
+            return $this->data;
+        }
+
+        public function get_status(): int
+        {
+            return $this->status;
+        }
+    }
+}
+
+if (!class_exists('WP_REST_Server')) {
+    class WP_REST_Server
+    {
+        public const READABLE = 'GET';
+        public const CREATABLE = 'POST';
+        public const EDITABLE = 'PUT,PATCH';
+        public const DELETABLE = 'DELETE';
+    }
+}
+
+if (!function_exists('register_rest_route')) {
+    function register_rest_route(string $namespace, string $route, array $args): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('is_user_logged_in')) {
+    function is_user_logged_in(): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('current_user_can')) {
+    function current_user_can(string $capability): bool
+    {
+        return true;
+    }
+}
+
+if (!function_exists('sanitize_text_field')) {
+    function sanitize_text_field(string $value): string
+    {
+        return trim($value);
+    }
+}
+
+if (!function_exists('sanitize_url')) {
+    function sanitize_url(string $value): string
+    {
+        return trim($value);
+    }
+}
+
 // ── WordPress constant stubs (only define if not already defined) ──
 if (!defined('ABSPATH')) {
     define('ABSPATH', '/tmp/wp-stub/');
+}
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+if (!defined('ARRAY_N')) {
+    define('ARRAY_N', 'ARRAY_N');
+}
+if (!defined('OBJECT')) {
+    define('OBJECT', 'OBJECT');
+}
+if (!defined('OBJECT_K')) {
+    define('OBJECT_K', 'OBJECT_K');
 }
 
 // ── WordPress function stubs used by domain/application code ──

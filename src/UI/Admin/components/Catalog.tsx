@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
 import KebabMenu from './KebabMenu';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface CatalogItem {
   id: number;
@@ -159,12 +160,12 @@ const Catalog = () => {
       resetForm();
       fetchItems();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error saving item');
+      legacyAlert(err instanceof Error ? err.message : 'Error saving item');
     }
   };
 
   const handleDeleteItem = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this catalog item?')) return;
+    if (!legacyConfirm('Are you sure you want to delete this catalog item?')) return;
     try {
       const response = await fetch(
         `${window.petSettings.apiUrl}/catalog-items/${id}`,
@@ -179,7 +180,7 @@ const Catalog = () => {
       }
       fetchItems();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error deleting item');
+      legacyAlert(err instanceof Error ? err.message : 'Error deleting item');
     }
   };
 

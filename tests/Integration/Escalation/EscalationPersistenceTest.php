@@ -6,9 +6,14 @@ namespace Pet\Tests\Integration\Escalation;
 
 use Pet\Application\Escalation\Command\TriggerEscalationCommand;
 use Pet\Application\Escalation\Command\TriggerEscalationHandler;
+use Pet\Application\Escalation\Listener\SlaEscalationBridgeListener;
+use Pet\Application\System\Service\FeatureFlagService;
+use Pet\Domain\Configuration\Entity\Setting;
+use Pet\Domain\Configuration\Repository\SettingRepository;
 use Pet\Domain\Escalation\Entity\Escalation;
 use Pet\Domain\Escalation\Entity\EscalationTransition;
 use Pet\Domain\Escalation\Event\EscalationTriggeredEvent;
+use Pet\Domain\Support\Event\EscalationTriggeredEvent as SupportEscalationTriggeredEvent;
 use Pet\Infrastructure\Persistence\Exception\DuplicateKeyException;
 use Pet\Infrastructure\Persistence\Repository\SqlEscalationRepository;
 use Pet\Tests\Integration\Support\WpdbStub;
@@ -147,6 +152,7 @@ class EscalationPersistenceTest extends TestCase
         $this->assertSame('HIGH', $loaded->severity());
         $this->assertSame('OPEN', $loaded->status());
         $this->assertSame('SLA breach – stage 1', $loaded->reason());
+        $this->assertSame('SLA breach – stage 1', $loaded->summary());
         $this->assertSame(7, $loaded->createdBy());
         $this->assertSame('{"origin":"sla"}', $loaded->metadataJson());
     }
@@ -182,16 +188,51 @@ class EscalationPersistenceTest extends TestCase
         $id = $escalation->id();
 
         // Resolve
-        $escalation->resolve(5);
+        $escalation->resolve(5, 'Resolved in test');
         $this->repo->save($escalation);
 
         $loaded = $this->repo->findById($id);
         $this->assertSame('RESOLVED', $loaded->status());
         $this->assertNull($loaded->openDedupeKey());
+        $this->assertSame('Resolved in test', $loaded->resolutionNote());
 
         // Dedupe key slot is now free; findOpenByDedupeKey should return null
         $dedupeKey = Escalation::computeDedupeKey('ticket', 30, 'HIGH', 'breach');
         $this->assertNull($this->repo->findOpenByDedupeKey($dedupeKey));
+    }
+
+    public function testResolvedEscalationCannotBeAcknowledged(): void
+    {
+        $escalation = new Escalation('uuid-term-1', 'ticket', 31, Escalation::SEVERITY_LOW, 'done');
+        $escalation->resolve(5);
+
+        $this->expectException(\DomainException::class);
+        $escalation->acknowledge(5);
+    }
+
+    public function testSlaBridgeNoopsWhenFeatureFlagOff(): void
+    {
+        $settingsRepo = new class implements SettingRepository {
+            public function save(Setting $setting): void {}
+            public function findByKey(string $key): ?Setting
+            {
+                if ($key === 'pet_escalation_engine_enabled') {
+                    return new Setting($key, 'false', 'boolean');
+                }
+                return null;
+            }
+            public function findAll(): array { return []; }
+        };
+
+        $featureFlags = new FeatureFlagService($settingsRepo);
+        $eventBus = new SpyEventBus();
+        $handler = $this->createHandler($eventBus);
+        $listener = new SlaEscalationBridgeListener($handler, $featureFlags);
+
+        $listener(new SupportEscalationTriggeredEvent(42, 1, null));
+
+        $this->assertCount(0, $this->repo->findAll());
+        $this->assertCount(0, $eventBus->dispatchedOfType(EscalationTriggeredEvent::class));
     }
 
     public function testTransitionSaveAndLoadPreservesNullFromStatus(): void
@@ -223,6 +264,7 @@ class EscalationPersistenceTest extends TestCase
 
     public function testFirstTriggerCreatesEscalationAndTransition(): void
     {
+        $eventBus = new SpyEventBus();
         $handler = $this->createHandler($eventBus);
 
         $cmd = $this->makeCommand();
@@ -248,6 +290,7 @@ class EscalationPersistenceTest extends TestCase
 
     public function testSecondIdenticalTriggerReturnsSameId(): void
     {
+        $eventBus = new SpyEventBus();
         $handler = $this->createHandler($eventBus);
         $cmd = $this->makeCommand();
 
@@ -259,6 +302,7 @@ class EscalationPersistenceTest extends TestCase
 
     public function testSecondIdenticalTriggerDoesNotDuplicate(): void
     {
+        $eventBus = new SpyEventBus();
         $handler = $this->createHandler($eventBus);
         $cmd = $this->makeCommand();
 
@@ -320,6 +364,7 @@ class EscalationPersistenceTest extends TestCase
 
         // Now trigger via the handler — should hit the pre-check path (findOpenByDedupeKey)
         // and return the existing ID without creating a second row or event
+        $eventBus = new SpyEventBus();
         $handler = $this->createHandler($eventBus);
         $cmd = $this->makeCommand();
 
@@ -339,6 +384,7 @@ class EscalationPersistenceTest extends TestCase
     {
         // This test forces the duplicate-key exception path by using a repository
         // wrapper that fails on the first save() then succeeds on re-read.
+        $eventBus = new SpyEventBus();
         $handler = $this->createHandler($eventBus);
         $cmd = $this->makeCommand();
 
@@ -448,6 +494,7 @@ class EscalationPersistenceTest extends TestCase
             severity TEXT NOT NULL DEFAULT 'MEDIUM',
             status TEXT NOT NULL DEFAULT 'OPEN',
             reason TEXT NOT NULL,
+            summary TEXT NULL,
             metadata_json TEXT NOT NULL DEFAULT '{}',
             open_dedupe_key TEXT NULL,
             created_by INTEGER NULL,
@@ -456,6 +503,7 @@ class EscalationPersistenceTest extends TestCase
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             acknowledged_at TEXT NULL,
             resolved_at TEXT NULL,
+            resolution_note TEXT NULL,
             UNIQUE (escalation_id),
             UNIQUE (open_dedupe_key)
         )");
@@ -482,7 +530,7 @@ class EscalationPersistenceTest extends TestCase
         return $columns;
     }
 
-    private function createHandler(?SpyEventBus &$eventBus = null): TriggerEscalationHandler
+    private function createHandler(SpyEventBus &$eventBus): TriggerEscalationHandler
     {
         $eventBus = new SpyEventBus();
         return new TriggerEscalationHandler(

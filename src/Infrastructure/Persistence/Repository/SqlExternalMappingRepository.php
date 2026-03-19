@@ -6,9 +6,9 @@ namespace Pet\Infrastructure\Persistence\Repository;
 
 final class SqlExternalMappingRepository
 {
-    private \wpdb $wpdb;
+    private $wpdb;
 
-    public function __construct(\wpdb $wpdb)
+    public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
     }
@@ -41,5 +41,18 @@ final class SqlExternalMappingRepository
         ";
         $prepared = $this->wpdb->prepare($sql, [$system, $entityType, $petEntityId, $externalId, $externalVersion, $now, $now]);
         $this->wpdb->query($prepared);
+    }
+
+    public function exists(string $system, string $entityType, int $petEntityId): bool
+    {
+        $table = $this->wpdb->prefix . 'pet_external_mappings';
+        if ($this->wpdb->get_var("SHOW TABLES LIKE '$table'") !== $table) {
+            return false;
+        }
+        $row = $this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT 1 FROM $table WHERE `system` = %s AND entity_type = %s AND pet_entity_id = %d LIMIT 1",
+            [$system, $entityType, $petEntityId]
+        ));
+        return $row !== null;
     }
 }

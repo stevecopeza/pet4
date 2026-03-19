@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, Skill } from '../types';
 import { DataTable, Column } from './DataTable';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface EmployeeSkillsProps {
   employee: Employee;
@@ -100,11 +101,11 @@ const EmployeeSkills: React.FC<EmployeeSkillsProps> = ({ employee, reviewCycleId
         setManagerRating(0);
         fetchData();
       } else {
-        alert('Failed to add skill rating');
+        legacyAlert('Failed to add skill rating');
       }
     } catch (err) {
       console.error(err);
-      alert('Error adding skill rating');
+      legacyAlert('Error adding skill rating');
     }
   };
 

@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Customer } from '../types';
 import { DataTable, Column } from './DataTable';
-import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import KebabMenu from './KebabMenu';
 import CustomerForm from './CustomerForm';
 import Sites from './Sites';
 import Contacts from './Contacts';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
 
 const Customers = () => {
   const [activeTab, setActiveTab] = useState<'customers' | 'sites' | 'contacts'>('customers');
+  const toast = useToast();
   
   // Customer State
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -17,6 +20,9 @@ const Customers = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
+  const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
 
   const fetchSchema = async () => {
     try {
@@ -86,7 +92,7 @@ const Customers = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this customer?')) return;
+    setArchiveBusy(true);
 
     try {
       // @ts-ignore
@@ -107,33 +113,53 @@ const Customers = () => {
 
       fetchCustomers();
       setSelectedIds(prev => prev.filter(sid => sid !== id));
+      toast.success('Customer archived');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      toast.error(err instanceof Error ? err.message : 'Failed to archive');
+    } finally {
+      setArchiveBusy(false);
+      setPendingArchiveId(null);
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} customers?`)) return;
+    setArchiveBusy(true);
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
     // @ts-ignore
     const nonce = window.petSettings?.nonce;
 
-    // Process in parallel
     try {
-      await Promise.all(selectedIds.map(id => 
+      const results = await Promise.allSettled(selectedIds.map(id =>
         fetch(`${apiUrl}/customers/${id}`, {
           method: 'DELETE',
           headers: { 'X-WP-Nonce': nonce },
+        }).then((response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to archive customer ${id}`);
+          }
         })
       ));
-      
-      setSelectedIds([]);
+
+      const failedCount = results.filter((result) => result.status === 'rejected').length;
+      const successCount = selectedIds.length - failedCount;
+
+      if (successCount > 0) {
+        setSelectedIds([]);
+      }
       fetchCustomers();
+      if (failedCount > 0) {
+        toast.error(`Archived ${successCount} customers; ${failedCount} failed.`);
+      } else {
+        toast.success(`Archived ${successCount} customers.`);
+      }
     } catch (e) {
       console.error('Bulk archive failed', e);
-      alert('Failed to archive some items');
+      toast.error('Failed to archive selected customers.');
+    } finally {
+      setArchiveBusy(false);
+      setConfirmBulkArchive(false);
     }
   };
 
@@ -241,13 +267,12 @@ const Customers = () => {
             />
           )}
 
-          {error && <div style={{ color: 'red' }}>Error: {error}</div>}
 
           <div className="pet-actions-bar" style={{ marginBottom: '15px' }}>
              {selectedIds.length > 0 && (
               <button 
                 className="button" 
-                onClick={handleBulkArchive}
+                onClick={() => setConfirmBulkArchive(true)}
                 style={{ color: '#b32d2e', borderColor: '#b32d2e' }}
               >
                 Archive Selected ({selectedIds.length})
@@ -258,8 +283,11 @@ const Customers = () => {
           <DataTable 
             columns={columns} 
             data={customers} 
-            loading={loading && !customers.length}
+            loading={loading}
+            error={error}
+            onRetry={fetchCustomers}
             emptyMessage="No customers found."
+            compatibilityMode="wp"
             selection={{
               selectedIds,
               onSelectionChange: setSelectedIds
@@ -267,9 +295,33 @@ const Customers = () => {
             actions={(item) => (
               <KebabMenu items={[
                 { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-                { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+                { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
               ]} />
             )}
+          />
+
+          <ConfirmationDialog
+            open={pendingArchiveId !== null}
+            title="Archive customer?"
+            description="This action will archive the selected customer."
+            confirmLabel="Archive"
+            busy={archiveBusy}
+            onCancel={() => setPendingArchiveId(null)}
+            onConfirm={() => {
+              if (pendingArchiveId !== null) {
+                handleArchive(pendingArchiveId);
+              }
+            }}
+          />
+
+          <ConfirmationDialog
+            open={confirmBulkArchive}
+            title="Archive selected customers?"
+            description={`This action will archive ${selectedIds.length} selected customers.`}
+            confirmLabel="Archive selected"
+            busy={archiveBusy}
+            onCancel={() => setConfirmBulkArchive(false)}
+            onConfirm={handleBulkArchive}
           />
         </div>
       )}

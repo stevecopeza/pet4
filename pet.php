@@ -40,9 +40,19 @@ add_action('plugins_loaded', function () {
 
         $standaloneDashboard = new \Pet\UI\Standalone\StandaloneDashboardPage(
             __DIR__,
-            plugin_dir_url(__FILE__)
+            plugin_dir_url(__FILE__),
+            $featureFlagService,
+            $container->get(\Pet\Domain\Dashboard\Service\DashboardAccessPolicy::class)
         );
         $standaloneDashboard->register();
+
+        $standaloneStaffTimeCapture = new \Pet\UI\Standalone\StandaloneStaffTimeCapturePage(
+            __DIR__,
+            plugin_dir_url(__FILE__),
+            $featureFlagService,
+            $container->get(\Pet\Application\Identity\Service\StaffEmployeeResolver::class)
+        );
+        $standaloneStaffTimeCapture->register();
 
         // Register REST API
         $apiRegistry = new \Pet\UI\Rest\ApiRegistry($container);

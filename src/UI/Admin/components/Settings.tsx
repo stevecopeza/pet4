@@ -4,6 +4,11 @@ import Calendars from './Calendars';
 import { DataTable, Column } from './DataTable';
 import SchemaManagement from './SchemaManagement';
 import SlaDefinitions from './SlaDefinitions';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
+import LoadingState from './foundation/states/LoadingState';
+import ErrorState from './foundation/states/ErrorState';
+import EmptyState from './foundation/states/EmptyState';
 
 interface PetSettingsWindow extends Window {
   petSettings: {
@@ -30,9 +35,14 @@ const Settings = () => {
   const [logType, setLogType] = useState<'pet' | 'wp'>('pet');
   const [logs, setLogs] = useState<string[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [confirmRunDemo, setConfirmRunDemo] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const toast = useToast();
 
   const fetchSettings = async () => {
     try {
+      setLoading(true);
       const response = await fetch(`${window.petSettings.apiUrl}/settings`, {
         headers: {
           'X-WP-Nonce': window.petSettings.nonce,
@@ -46,6 +56,7 @@ const Settings = () => {
       const data: Setting[] = await response.json();
       // Add id property required by DataTable
       setSettings(data.map(s => ({ ...s, id: s.key })));
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -53,8 +64,31 @@ const Settings = () => {
     }
   };
 
+  const handleRunDemoInstaller = async () => {
+    setDemoBusy(true);
+    try {
+      const res = await fetch(`${window.petSettings.apiUrl}/system/run-demo`, {
+        method: 'POST',
+        headers: {
+          'X-WP-Nonce': window.petSettings.nonce,
+        },
+      });
+      if (!res.ok) {
+        throw new Error('Failed to run demo installer');
+      }
+      const json = await res.json();
+      toast.success(`Demo data created: ${json.announcements} announcements, ${json.events} events`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to run demo installer');
+    } finally {
+      setDemoBusy(false);
+      setConfirmRunDemo(false);
+    }
+  };
+
   const fetchLogs = async () => {
     setLogsLoading(true);
+    setLogsError(null);
     try {
       const response = await fetch(`${window.petSettings.apiUrl}/logs?type=${logType}`, {
         headers: {
@@ -70,7 +104,8 @@ const Settings = () => {
       setLogs(data.logs || []);
     } catch (err) {
       console.error('Error fetching logs:', err);
-      setLogs(['Error fetching logs.']);
+      setLogs([]);
+      setLogsError(err instanceof Error ? err.message : 'Error fetching logs.');
     } finally {
       setLogsLoading(false);
     }
@@ -105,7 +140,7 @@ const Settings = () => {
       setSettings(prev => prev.map(s => s.key === key ? { ...s, value: newValue } : s));
 
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Update failed');
+      toast.error(err instanceof Error ? err.message : 'Update failed');
     }
   };
 
@@ -134,8 +169,9 @@ const Settings = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      toast.success('Diagnostic report downloaded');
     } catch (err) {
-      alert('Failed to download logs');
+      toast.error('Failed to download logs');
     }
   };
 
@@ -274,17 +310,16 @@ const Settings = () => {
         <>
           <h2>System Settings</h2>
           <p>Configure global plugin settings.</p>
-          
-          {loading && <div>Loading settings...</div>}
-          {error && <div style={{ color: 'red' }}>Error: {error}</div>}
-          
-          {!loading && !error && (
-            <DataTable 
-              columns={columns} 
-              data={settings} 
-              emptyMessage="No settings defined." 
-            />
-          )}
+
+          <DataTable 
+            columns={columns} 
+            data={settings}
+            loading={loading}
+            error={error}
+            onRetry={fetchSettings}
+            emptyMessage="No settings defined."
+            compatibilityMode="wp"
+          />
           
           <div style={{ marginTop: '20px', padding: '15px', background: '#f0f0f1', border: '1px solid #ccd0d4' }}>
             <h3>Note</h3>
@@ -296,23 +331,7 @@ const Settings = () => {
             <p>Seed announcements and feed events for demo purposes.</p>
             <button
               className="button button-primary"
-              onClick={async () => {
-                try {
-                  const res = await fetch(`${window.petSettings.apiUrl}/system/run-demo`, {
-                    method: 'POST',
-                    headers: {
-                      'X-WP-Nonce': window.petSettings.nonce,
-                    },
-                  });
-                  if (!res.ok) {
-                    throw new Error('Failed to run demo installer');
-                  }
-                  const json = await res.json();
-                  alert(`Demo data created: ${json.announcements} announcements, ${json.events} events`);
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : 'Failed to run demo installer');
-                }
-              }}
+              onClick={() => setConfirmRunDemo(true)}
             >
               Run Demo Installer
             </button>
@@ -358,8 +377,12 @@ const Settings = () => {
             fontSize: '12px',
             whiteSpace: 'pre-wrap'
           }}>
-            {logs.length === 0 ? (
-              <div style={{ color: '#888', fontStyle: 'italic' }}>No logs found.</div>
+            {logsLoading ? (
+              <LoadingState label="Loading logs…" />
+            ) : logsError ? (
+              <ErrorState message={logsError} onRetry={fetchLogs} />
+            ) : logs.length === 0 ? (
+              <EmptyState message="No logs found." />
             ) : (
               logs.map((line, i) => (
                 <div key={i} style={{ borderBottom: '1px solid #333', padding: '2px 0' }}>{line}</div>
@@ -369,6 +392,16 @@ const Settings = () => {
           <p className="description">Showing last 200 entries.</p>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={confirmRunDemo}
+        title="Run demo installer?"
+        description="This action seeds announcements and feed events for demo purposes."
+        confirmLabel="Run installer"
+        busy={demoBusy}
+        onCancel={() => setConfirmRunDemo(false)}
+        onConfirm={handleRunDemoInstaller}
+      />
     </div>
   );
 };
@@ -390,6 +423,7 @@ const HealthBordersSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const load = async () => {
@@ -428,13 +462,14 @@ const HealthBordersSettings: React.FC = () => {
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      toast.success('Thresholds saved');
     } catch (err) {
-      alert('Failed to save thresholds');
+      toast.error('Failed to save thresholds');
     }
     setSaving(false);
   };
 
-  if (loading) return <div>Loading thresholds...</div>;
+  if (loading) return <LoadingState label="Loading thresholds…" />;
 
   return (
     <div>

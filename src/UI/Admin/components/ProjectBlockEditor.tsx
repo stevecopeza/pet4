@@ -194,6 +194,32 @@ const ProjectBlockEditor: React.FC<ProjectBlockEditorProps> = ({
               <span style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap' }}>
                 {phase.units.length} unit{phase.units.length !== 1 ? 's' : ''}
               </span>
+              <button
+                type="button"
+                title="Move up"
+                className="button button-small"
+                onClick={() => movePhase(phaseIndex, -1)}
+                disabled={phaseIndex === 0}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                title="Move down"
+                className="button button-small"
+                onClick={() => movePhase(phaseIndex, 1)}
+                disabled={phaseIndex === draft.phases.length - 1}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                title="Delete phase"
+                className="button button-small"
+                onClick={() => deletePhase(phaseIndex)}
+              >
+                ✕
+              </button>
               <KebabMenu
                 items={[
                   ...(onDiscussPhase

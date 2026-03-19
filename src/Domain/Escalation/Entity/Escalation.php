@@ -46,6 +46,8 @@ class Escalation
     private ?int $acknowledgedBy;
     private ?int $resolvedBy;
     private string $reason;
+    private string $summary;
+    private ?string $resolutionNote;
     private string $metadataJson;
     private ?string $openDedupeKey;
 
@@ -67,7 +69,9 @@ class Escalation
         ?\DateTimeImmutable $resolvedAt = null,
         ?int $acknowledgedBy = null,
         ?int $resolvedBy = null,
-        ?string $openDedupeKey = null
+        ?string $openDedupeKey = null,
+        ?string $summary = null,
+        ?string $resolutionNote = null
     ) {
         if (!in_array($sourceEntityType, self::VALID_SOURCE_TYPES, true)) {
             throw new \DomainException("Invalid source entity type: $sourceEntityType");
@@ -86,6 +90,7 @@ class Escalation
         $this->severity = $severity;
         $this->status = $status;
         $this->reason = $reason;
+        $this->summary = $summary ?? self::defaultSummary($reason);
         $this->createdBy = $createdBy;
         $this->metadataJson = $metadataJson;
         $this->createdAt = $createdAt ?? new \DateTimeImmutable();
@@ -93,6 +98,7 @@ class Escalation
         $this->resolvedAt = $resolvedAt;
         $this->acknowledgedBy = $acknowledgedBy;
         $this->resolvedBy = $resolvedBy;
+        $this->resolutionNote = $resolutionNote;
 
         // Compute dedupe key for non-terminal states; accept explicit value for hydration
         if ($openDedupeKey !== null) {
@@ -127,6 +133,7 @@ class Escalation
         $this->resolvedBy = $actorId;
         $this->resolvedAt = new \DateTimeImmutable();
         $this->openDedupeKey = null; // Release dedupe slot so future triggers can create new escalations
+        $this->resolutionNote = $resolutionNote;
 
         $this->recordEvent(new EscalationResolvedEvent(
             $this->escalationId,
@@ -159,12 +166,15 @@ class Escalation
     public function severity(): string { return $this->severity; }
     public function status(): string { return $this->status; }
     public function createdAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function openedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function acknowledgedAt(): ?\DateTimeImmutable { return $this->acknowledgedAt; }
     public function resolvedAt(): ?\DateTimeImmutable { return $this->resolvedAt; }
     public function createdBy(): ?int { return $this->createdBy; }
     public function acknowledgedBy(): ?int { return $this->acknowledgedBy; }
     public function resolvedBy(): ?int { return $this->resolvedBy; }
     public function reason(): string { return $this->reason; }
+    public function summary(): string { return $this->summary; }
+    public function resolutionNote(): ?string { return $this->resolutionNote; }
     public function metadataJson(): string { return $this->metadataJson; }
     public function openDedupeKey(): ?string { return $this->openDedupeKey; }
     public function isTerminal(): bool { return $this->status === self::STATUS_RESOLVED; }
@@ -172,6 +182,19 @@ class Escalation
     public static function computeDedupeKey(string $sourceEntityType, int $sourceEntityId, string $severity, string $reason): string
     {
         return hash('sha256', "{$sourceEntityType}|{$sourceEntityId}|{$severity}|{$reason}");
+    }
+
+    private static function defaultSummary(string $reason): string
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            return 'Escalation';
+        }
+        $max = 140;
+        if (strlen($reason) <= $max) {
+            return $reason;
+        }
+        return rtrim(substr($reason, 0, $max));
     }
 
     // --- Events ---

@@ -124,6 +124,7 @@ class ProjectController implements RestController
             'id' => $project->id(),
             'name' => $project->name(),
             'customerId' => $project->customerId(),
+            'sourceQuoteId' => $project->sourceQuoteId(),
             'soldHours' => $project->soldHours(),
             'state' => $project->state()->toString(),
             'soldValue' => $project->soldValue(),

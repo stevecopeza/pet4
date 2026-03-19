@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Employee, Team } from '../types';
 import { DataTable, Column } from './DataTable';
-import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import KebabMenu from './KebabMenu';
 import EmployeeForm from './EmployeeForm';
 import Teams from './Teams';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
+import LoadingState from './foundation/states/LoadingState';
+import ErrorState from './foundation/states/ErrorState';
+import EmptyState from './foundation/states/EmptyState';
 
 const Employees = () => {
   const [activeTab, setActiveTab] = useState<'org' | 'teams' | 'people' | 'kpis'>('people');
@@ -28,6 +33,10 @@ const Employees = () => {
   const [orgTeams, setOrgTeams] = useState<Team[]>([]);
   const [orgLoading, setOrgLoading] = useState(false);
   const [orgError, setOrgError] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
+  const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
+  const toast = useToast();
 
   const fetchSchema = async () => {
     try {
@@ -183,7 +192,13 @@ const Employees = () => {
   useEffect(() => {
     const eid = editingEmployee?.id || (typeof selectedIds[0] === 'number' ? Number(selectedIds[0]) : null);
     if (activeTab === 'people' && eid) {
-      fetchUtilization(eid);
+      // @ts-ignore
+      const flags = window.petSettings?.featureFlags;
+      if (flags?.resilience_indicators_enabled) {
+        fetchUtilization(eid);
+      } else {
+        setUtilization([]);
+      }
       fetchLeaveRequests(eid);
     } else {
       setUtilization([]);
@@ -203,7 +218,7 @@ const Employees = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this employee?')) return;
+    setArchiveBusy(true);
 
     try {
       // @ts-ignore
@@ -223,35 +238,56 @@ const Employees = () => {
       }
 
       fetchEmployees();
+      setSelectedIds(prev => prev.filter(sid => sid !== id));
+      toast.success('Employee archived');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      toast.error(err instanceof Error ? err.message : 'Failed to archive');
+    } finally {
+      setArchiveBusy(false);
+      setPendingArchiveId(null);
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} employees?`)) return;
+    setArchiveBusy(true);
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
     // @ts-ignore
     const nonce = window.petSettings?.nonce;
 
-    // Process sequentially
-    for (const id of selectedIds) {
-      try {
-        await fetch(`${apiUrl}/employees/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'X-WP-Nonce': nonce,
-          },
-        });
-      } catch (e) {
-        console.error(`Failed to archive ${id}`, e);
+    let failedCount = 0;
+    try {
+      // Process sequentially
+      for (const id of selectedIds) {
+        try {
+          const response = await fetch(`${apiUrl}/employees/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'X-WP-Nonce': nonce,
+            },
+          });
+          if (!response.ok) {
+            failedCount += 1;
+          }
+        } catch (e) {
+          console.error(`Failed to archive ${id}`, e);
+          failedCount += 1;
+        }
       }
+
+      const successCount = selectedIds.length - failedCount;
+      setSelectedIds([]);
+      fetchEmployees();
+      if (failedCount > 0) {
+        toast.error(`Archived ${successCount} employees; ${failedCount} failed.`);
+      } else {
+        toast.success(`Archived ${successCount} employees.`);
+      }
+    } finally {
+      setArchiveBusy(false);
+      setConfirmBulkArchive(false);
     }
-    
-    setSelectedIds([]);
-    fetchEmployees();
   };
 
   const findEmployeeById = (id: number): Employee | undefined => {
@@ -455,12 +491,12 @@ const Employees = () => {
       {activeTab === 'org' && (
         <div className="pet-org">
           <h2>Organization Structure</h2>
-          {orgLoading && <p>Loading organization...</p>}
+          {orgLoading && <LoadingState label="Loading organization…" />}
           {orgError && !orgLoading && (
-            <div style={{ color: 'red', marginBottom: '10px' }}>Error: {orgError}</div>
+            <ErrorState message={orgError} onRetry={fetchOrgTeams} />
           )}
           {!orgLoading && !orgError && orgTeams.length === 0 && (
-            <p>No teams defined yet.</p>
+            <EmptyState message="No teams defined yet." />
           )}
           {!orgLoading && !orgError && orgTeams.length > 0 && (
             <div>
@@ -483,8 +519,6 @@ const Employees = () => {
 
       {activeTab === 'people' && (
         <div className="pet-employees">
-          {loading && !employees.length ? <div>Loading employees...</div> :
-          error ? <div style={{ color: 'red' }}>Error: {error}</div> :
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2>People (Employees)</h2>
@@ -506,14 +540,18 @@ const Employees = () => {
             {selectedIds.length > 0 && (
               <div style={{ padding: '10px', background: '#e5f5fa', border: '1px solid #b5e1ef', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <strong>{selectedIds.length} items selected</strong>
-                <button className="button" onClick={handleBulkArchive}>Archive Selected</button>
+                <button className="button" onClick={() => setConfirmBulkArchive(true)}>Archive Selected</button>
               </div>
             )}
 
             <DataTable 
               columns={columns} 
               data={employees} 
+              loading={loading}
+              error={error}
+              onRetry={fetchEmployees}
               emptyMessage="No employees found."
+              compatibilityMode="wp"
               selection={{
                 selectedIds,
                 onSelectionChange: setSelectedIds
@@ -521,7 +559,7 @@ const Employees = () => {
               actions={(item) => (
                 <KebabMenu items={[
                   { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-                  { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+                  { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
                 ]} />
               )}
             />
@@ -562,9 +600,9 @@ const Employees = () => {
                           });
                           if (res.ok) {
                             fetchUtilization(employeeId);
-                            alert('Capacity override saved');
+                            toast.success('Capacity override saved');
                           } else {
-                            alert('Failed to save override');
+                            toast.error('Failed to save override');
                           }
                         }}
                       >
@@ -574,9 +612,12 @@ const Employees = () => {
                   </div>
                   <div style={{ flex: '2 1 480px', minWidth: '320px' }}>
                     <h4 style={{ marginTop: 0 }}>Last 7 Days Utilization</h4>
-                    {utilLoading ? <div>Loading utilization...</div> :
-                     utilError ? <div style={{ color: 'red' }}>Error: {utilError}</div> :
-                     utilization.length === 0 ? <div>No data</div> :
+                    {utilLoading ? <LoadingState label="Loading utilization…" /> :
+                     utilError ? <ErrorState message={utilError} onRetry={() => {
+                       const employeeId = editingEmployee?.id || Number(selectedIds[0]);
+                       fetchUtilization(employeeId);
+                     }} /> :
+                     utilization.length === 0 ? <EmptyState message="No utilization data." /> :
                      <table className="widefat striped">
                        <thead>
                          <tr>
@@ -641,9 +682,9 @@ const Employees = () => {
                       if (res.ok) {
                         fetchLeaveRequests(employeeId);
                         setLvNotes('');
-                        alert('Leave request submitted');
+                        toast.success('Leave request submitted');
                       } else {
-                        alert('Failed to submit leave request');
+                        toast.error('Failed to submit leave request');
                       }
                     }}
                   >
@@ -651,33 +692,74 @@ const Employees = () => {
                   </button>
                 </div>
                 <div style={{ marginTop: '15px' }}>
-                  <table className="widefat striped">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Type</th>
-                        <th>Start</th>
-                        <th>End</th>
-                        <th>Status</th>
-                        <th>Decided At</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {requests.length === 0 ? (
-                        <tr><td colSpan={7}>No leave requests</td></tr>
-                      ) : requests.map((r) => (
-                        <tr key={r.id}>
-                          <td>{r.id}</td>
-                          <td>{leaveTypes.find(t => t.id === r.leaveTypeId)?.name || r.leaveTypeId}</td>
-                          <td>{r.startDate}</td>
-                          <td>{r.endDate}</td>
-                          <td>{r.status}</td>
-                          <td>{r.decidedAt || '-'}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                              {r.status === 'submitted' && (
-                                <>
+                  {requests.length === 0 ? (
+                    <EmptyState message="No leave requests." />
+                  ) : (
+                    <table className="widefat striped">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Type</th>
+                          <th>Start</th>
+                          <th>End</th>
+                          <th>Status</th>
+                          <th>Decided At</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {requests.map((r) => (
+                          <tr key={r.id}>
+                            <td>{r.id}</td>
+                            <td>{leaveTypes.find(t => t.id === r.leaveTypeId)?.name || r.leaveTypeId}</td>
+                            <td>{r.startDate}</td>
+                            <td>{r.endDate}</td>
+                            <td>{r.status}</td>
+                            <td>{r.decidedAt || '-'}</td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                {r.status === 'submitted' && (
+                                  <>
+                                    <button
+                                      className="button button-small"
+                                      onClick={async () => {
+                                        // @ts-ignore
+                                        const apiUrl = window.petSettings?.apiUrl;
+                                        // @ts-ignore
+                                        const nonce = window.petSettings?.nonce;
+                                        await fetch(`${apiUrl}/leave/requests/${r.id}/decide`, {
+                                          method: 'POST',
+                                          headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'approved' })
+                                        });
+                                        const employeeId = editingEmployee?.id || Number(selectedIds[0]);
+                                        fetchLeaveRequests(employeeId);
+                                        fetchUtilization(employeeId);
+                                      }}
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      className="button button-small"
+                                      onClick={async () => {
+                                        // @ts-ignore
+                                        const apiUrl = window.petSettings?.apiUrl;
+                                        // @ts-ignore
+                                        const nonce = window.petSettings?.nonce;
+                                        await fetch(`${apiUrl}/leave/requests/${r.id}/decide`, {
+                                          method: 'POST',
+                                          headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'rejected', reason: 'Not approved' })
+                                        });
+                                        const employeeId = editingEmployee?.id || Number(selectedIds[0]);
+                                        fetchLeaveRequests(employeeId);
+                                      }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                {(r.status === 'approved' || r.status === 'rejected') && (
                                   <button
                                     className="button button-small"
                                     onClick={async () => {
@@ -688,69 +770,53 @@ const Employees = () => {
                                       await fetch(`${apiUrl}/leave/requests/${r.id}/decide`, {
                                         method: 'POST',
                                         headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'approved' })
+                                        body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'cancelled' })
                                       });
                                       const employeeId = editingEmployee?.id || Number(selectedIds[0]);
                                       fetchLeaveRequests(employeeId);
                                       fetchUtilization(employeeId);
                                     }}
                                   >
-                                    Approve
+                                    Cancel
                                   </button>
-                                  <button
-                                    className="button button-small"
-                                    onClick={async () => {
-                                      // @ts-ignore
-                                      const apiUrl = window.petSettings?.apiUrl;
-                                      // @ts-ignore
-                                      const nonce = window.petSettings?.nonce;
-                                      await fetch(`${apiUrl}/leave/requests/${r.id}/decide`, {
-                                        method: 'POST',
-                                        headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'rejected', reason: 'Not approved' })
-                                      });
-                                      const employeeId = editingEmployee?.id || Number(selectedIds[0]);
-                                      fetchLeaveRequests(employeeId);
-                                    }}
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              )}
-                              {(r.status === 'approved' || r.status === 'rejected') && (
-                                <button
-                                  className="button button-small"
-                                  onClick={async () => {
-                                    // @ts-ignore
-                                    const apiUrl = window.petSettings?.apiUrl;
-                                    // @ts-ignore
-                                    const nonce = window.petSettings?.nonce;
-                                    await fetch(`${apiUrl}/leave/requests/${r.id}/decide`, {
-                                      method: 'POST',
-                                      headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ decidedByEmployeeId: 0, decision: 'cancelled' })
-                                    });
-                                    const employeeId = editingEmployee?.id || Number(selectedIds[0]);
-                                    fetchLeaveRequests(employeeId);
-                                    fetchUtilization(employeeId);
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             )}
           </>
-          }
         </div>
       )}
+
+      <ConfirmationDialog
+        open={pendingArchiveId !== null}
+        title="Archive employee?"
+        description="This action will archive the selected employee."
+        confirmLabel="Archive"
+        busy={archiveBusy}
+        onCancel={() => setPendingArchiveId(null)}
+        onConfirm={() => {
+          if (pendingArchiveId !== null) {
+            handleArchive(pendingArchiveId);
+          }
+        }}
+      />
+
+      <ConfirmationDialog
+        open={confirmBulkArchive}
+        title="Archive selected employees?"
+        description={`This action will archive ${selectedIds.length} selected employees.`}
+        confirmLabel="Archive selected"
+        busy={archiveBusy}
+        onCancel={() => setConfirmBulkArchive(false)}
+        onConfirm={handleBulkArchive}
+      />
     </div>
   );
 };

@@ -325,34 +325,52 @@ class PulsewayController implements RestController
 
     public function triggerPoll(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (int) $request->get_param('id');
-        $result = $this->ingestionService->pollIntegrationById($id);
-        return new WP_REST_Response($result, 200);
+        try {
+            $id = (int) $request->get_param('id');
+            $result = $this->ingestionService->pollIntegrationById($id);
+            return new WP_REST_Response($result, 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to trigger poll'], 500);
+        }
     }
 
     public function triggerDeviceSync(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (int) $request->get_param('id');
-        $result = $this->deviceService->syncIntegrationById($id);
-        return new WP_REST_Response($result, 200);
+        try {
+            $id = (int) $request->get_param('id');
+            $result = $this->deviceService->syncIntegrationById($id);
+            return new WP_REST_Response($result, 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to trigger device sync'], 500);
+        }
     }
 
     public function resetCircuitBreaker(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (int) $request->get_param('id');
-        $integration = $this->repo->findIntegrationById($id);
+        try {
+            $id = (int) $request->get_param('id');
+            $integration = $this->repo->findIntegrationById($id);
 
-        if (!$integration) {
-            return new WP_REST_Response(['error' => 'Integration not found'], 404);
+            if (!$integration) {
+                return new WP_REST_Response(['error' => 'Integration not found'], 404);
+            }
+
+            $this->repo->updateIntegration($id, [
+                'consecutive_failures' => 0,
+                'last_error_at' => null,
+                'last_error_message' => null,
+            ]);
+
+            return new WP_REST_Response(['message' => 'Circuit breaker reset'], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to reset circuit breaker'], 500);
         }
-
-        $this->repo->updateIntegration($id, [
-            'consecutive_failures' => 0,
-            'last_error_at' => null,
-            'last_error_message' => null,
-        ]);
-
-        return new WP_REST_Response(['message' => 'Circuit breaker reset'], 200);
     }
 
     // ── Org Mappings ──
@@ -366,44 +384,55 @@ class PulsewayController implements RestController
 
     public function createMapping(WP_REST_Request $request): WP_REST_Response
     {
-        $integrationId = (int) $request->get_param('id');
-        $params = $request->get_json_params();
+        try {
+            $integrationId = (int) $request->get_param('id');
+            $params = $request->get_json_params();
 
-        $data = [
-            'integration_id' => $integrationId,
-            'pulseway_org_id' => $params['pulseway_org_id'] ?? null,
-            'pulseway_site_id' => $params['pulseway_site_id'] ?? null,
-            'pulseway_group_id' => $params['pulseway_group_id'] ?? null,
-            'pet_customer_id' => isset($params['pet_customer_id']) ? (int) $params['pet_customer_id'] : null,
-            'pet_site_id' => isset($params['pet_site_id']) ? (int) $params['pet_site_id'] : null,
-            'pet_team_id' => isset($params['pet_team_id']) ? (int) $params['pet_team_id'] : null,
-            'is_active' => 1,
-        ];
+            $data = [
+                'integration_id' => $integrationId,
+                'pulseway_org_id' => $params['pulseway_org_id'] ?? null,
+                'pulseway_site_id' => $params['pulseway_site_id'] ?? null,
+                'pulseway_group_id' => $params['pulseway_group_id'] ?? null,
+                'pet_customer_id' => isset($params['pet_customer_id']) ? (int) $params['pet_customer_id'] : null,
+                'pet_site_id' => isset($params['pet_site_id']) ? (int) $params['pet_site_id'] : null,
+                'pet_team_id' => isset($params['pet_team_id']) ? (int) $params['pet_team_id'] : null,
+                'is_active' => 1,
+            ];
 
-        $mappingId = $this->repo->insertOrgMapping($data);
-        return new WP_REST_Response(['id' => $mappingId, 'message' => 'Mapping created'], 201);
+            $mappingId = $this->repo->insertOrgMapping($data);
+            return new WP_REST_Response(['id' => $mappingId, 'message' => 'Mapping created'], 201);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to create mapping'], 500);
+        }
     }
 
     public function updateMapping(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (int) $request->get_param('id');
-        $params = $request->get_json_params();
+        try {
+            $id = (int) $request->get_param('id');
+            $params = $request->get_json_params();
 
-        $data = [];
-        foreach (['pulseway_org_id', 'pulseway_site_id', 'pulseway_group_id', 'pet_customer_id', 'pet_site_id', 'pet_team_id', 'is_active'] as $field) {
-            if (array_key_exists($field, $params)) {
-                $data[$field] = $params[$field];
+            $data = [];
+            foreach (['pulseway_org_id', 'pulseway_site_id', 'pulseway_group_id', 'pet_customer_id', 'pet_site_id', 'pet_team_id', 'is_active'] as $field) {
+                if (array_key_exists($field, $params)) {
+                    $data[$field] = $params[$field];
+                }
             }
-        }
-        if (isset($params['archived']) && $params['archived']) {
-            $data['archived_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        }
+            if (isset($params['archived']) && $params['archived']) {
+                $data['archived_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            }
+            if (!empty($data)) {
+                $this->repo->updateOrgMapping($id, $data);
+            }
 
-        if (!empty($data)) {
-            $this->repo->updateOrgMapping($id, $data);
+            return new WP_REST_Response(['message' => 'Mapping updated'], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to update mapping'], 500);
         }
-
-        return new WP_REST_Response(['message' => 'Mapping updated'], 200);
     }
 
     // ── Read-only views ──
@@ -461,54 +490,65 @@ class PulsewayController implements RestController
 
     public function createRule(WP_REST_Request $request): WP_REST_Response
     {
-        $integrationId = (int) $request->get_param('id');
-        $params = $request->get_json_params();
+        try {
+            $integrationId = (int) $request->get_param('id');
+            $params = $request->get_json_params();
 
-        $data = [
-            'integration_id' => $integrationId,
-            'rule_name' => sanitize_text_field($params['rule_name'] ?? 'Unnamed Rule'),
-            'match_severity' => $params['match_severity'] ?? null,
-            'match_category' => $params['match_category'] ?? null,
-            'match_pulseway_org_id' => $params['match_pulseway_org_id'] ?? null,
-            'match_pulseway_site_id' => $params['match_pulseway_site_id'] ?? null,
-            'match_pulseway_group_id' => $params['match_pulseway_group_id'] ?? null,
-            'output_ticket_kind' => sanitize_text_field($params['output_ticket_kind'] ?? 'incident'),
-            'output_priority' => sanitize_text_field($params['output_priority'] ?? 'medium'),
-            'output_queue_id' => $params['output_queue_id'] ?? null,
-            'output_owner_user_id' => $params['output_owner_user_id'] ?? null,
-            'sort_order' => (int) ($params['sort_order'] ?? 0),
-            'is_active' => 1,
-        ];
+            $data = [
+                'integration_id' => $integrationId,
+                'rule_name' => sanitize_text_field($params['rule_name'] ?? 'Unnamed Rule'),
+                'match_severity' => $params['match_severity'] ?? null,
+                'match_category' => $params['match_category'] ?? null,
+                'match_pulseway_org_id' => $params['match_pulseway_org_id'] ?? null,
+                'match_pulseway_site_id' => $params['match_pulseway_site_id'] ?? null,
+                'match_pulseway_group_id' => $params['match_pulseway_group_id'] ?? null,
+                'output_ticket_kind' => sanitize_text_field($params['output_ticket_kind'] ?? 'incident'),
+                'output_priority' => sanitize_text_field($params['output_priority'] ?? 'medium'),
+                'output_queue_id' => $params['output_queue_id'] ?? null,
+                'output_owner_user_id' => $params['output_owner_user_id'] ?? null,
+                'sort_order' => (int) ($params['sort_order'] ?? 0),
+                'is_active' => 1,
+            ];
 
-        $ruleId = $this->repo->insertRule($data);
-        return new WP_REST_Response(['id' => $ruleId, 'message' => 'Rule created'], 201);
+            $ruleId = $this->repo->insertRule($data);
+            return new WP_REST_Response(['id' => $ruleId, 'message' => 'Rule created'], 201);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to create rule'], 500);
+        }
     }
 
     public function updateRule(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (int) $request->get_param('id');
-        $params = $request->get_json_params();
+        try {
+            $id = (int) $request->get_param('id');
+            $params = $request->get_json_params();
 
-        $allowed = [
-            'rule_name', 'match_severity', 'match_category', 'match_pulseway_org_id',
-            'match_pulseway_site_id', 'match_pulseway_group_id', 'output_ticket_kind',
-            'output_priority', 'output_queue_id', 'output_owner_user_id', 'sort_order', 'is_active',
-        ];
+            $allowed = [
+                'rule_name', 'match_severity', 'match_category', 'match_pulseway_org_id',
+                'match_pulseway_site_id', 'match_pulseway_group_id', 'output_ticket_kind',
+                'output_priority', 'output_queue_id', 'output_owner_user_id', 'sort_order', 'is_active',
+            ];
 
-        $data = [];
-        foreach ($allowed as $field) {
-            if (array_key_exists($field, $params)) {
-                $data[$field] = $params[$field];
+            $data = [];
+            foreach ($allowed as $field) {
+                if (array_key_exists($field, $params)) {
+                    $data[$field] = $params[$field];
+                }
             }
-        }
-        if (isset($params['archived']) && $params['archived']) {
-            $data['archived_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
-        }
+            if (isset($params['archived']) && $params['archived']) {
+                $data['archived_at'] = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+            }
+            if (!empty($data)) {
+                $this->repo->updateRule($id, $data);
+            }
 
-        if (!empty($data)) {
-            $this->repo->updateRule($id, $data);
+            return new WP_REST_Response(['message' => 'Rule updated'], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to update rule'], 500);
         }
-
-        return new WP_REST_Response(['message' => 'Rule updated'], 200);
     }
 }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Pet\UI\Standalone;
 
+use Pet\Application\System\Service\FeatureFlagService;
+use Pet\Domain\Dashboard\Service\DashboardAccessPolicy;
+
 /**
  * Serves the Dashboards React app at /pet-dashboards/ — completely outside WP admin.
  *
@@ -14,15 +17,23 @@ class StandaloneDashboardPage
 {
     private string $pluginPath;
     private string $pluginUrl;
+    private FeatureFlagService $featureFlags;
+    private DashboardAccessPolicy $accessPolicy;
 
-    public function __construct(string $pluginPath, string $pluginUrl)
+    public function __construct(string $pluginPath, string $pluginUrl, FeatureFlagService $featureFlags, DashboardAccessPolicy $accessPolicy)
     {
         $this->pluginPath = rtrim($pluginPath, '/');
         $this->pluginUrl = rtrim($pluginUrl, '/');
+        $this->featureFlags = $featureFlags;
+        $this->accessPolicy = $accessPolicy;
     }
 
     public function register(): void
     {
+        if (!$this->featureFlags->isDashboardsEnabled()) {
+            return;
+        }
+
         add_action('init', [$this, 'addRewriteRule']);
         add_filter('query_vars', [$this, 'addQueryVar']);
         add_action('template_redirect', [$this, 'render'], 1);
@@ -64,10 +75,21 @@ class StandaloneDashboardPage
             return;
         }
 
-        // Must be logged in with appropriate capability
-        if (!is_user_logged_in() || !current_user_can('manage_options')) {
+        if (!$this->featureFlags->isDashboardsEnabled()) {
+            status_header(404);
+            exit;
+        }
+
+        if (!is_user_logged_in()) {
             wp_redirect(wp_login_url(home_url('/pet-dashboards/')));
             exit;
+        }
+
+        $wpUserId = (int)get_current_user_id();
+        $isAdmin = current_user_can('manage_options');
+        $scopes = $this->accessPolicy->listVisibleTeamScopes($wpUserId, $isAdmin);
+        if (empty($scopes)) {
+            wp_die('Forbidden', 'Forbidden', ['response' => 403]);
         }
 
         $manifestPath = $this->pluginPath . '/dist/.vite/manifest.json';
@@ -91,7 +113,7 @@ class StandaloneDashboardPage
         $cacheBust = '1.0.2.' . time();
         $nonce = wp_create_nonce('wp_rest');
         $apiUrl = rest_url('pet/v1');
-        $currentUserId = get_current_user_id();
+        $currentUserId = $wpUserId;
 
         // Output a minimal, standalone HTML page
         header('Content-Type: text/html; charset=utf-8');

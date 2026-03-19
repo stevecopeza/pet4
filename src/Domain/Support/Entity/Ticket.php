@@ -314,8 +314,10 @@ class Ticket
     public function assignToEmployee(string $employeeUserId): void
     {
         $previousOwner = $this->ownerUserId;
+        $previousQueue = $this->queueId;
+        $this->queueId = null;
         $this->ownerUserId = $employeeUserId;
-        $this->recordEvent(new TicketAssigned($this, $employeeUserId, $previousOwner, $this->queueId, $this->queueId));
+        $this->recordEvent(new TicketAssigned($this, $employeeUserId, $previousOwner, $previousQueue, null));
     }
 
     /**
@@ -371,7 +373,25 @@ class Ticket
      */
     public function canAcceptTimeEntries(): bool
     {
-        return !$this->isRollup && $this->status === 'in_progress';
+        if ($this->isRollup) {
+            return false;
+        }
+
+        if ($this->lifecycleOwner === 'support') {
+            if ($this->status === 'closed') {
+                return false;
+            }
+            return $this->hasOperationalOwner();
+        }
+
+        return $this->status === 'in_progress';
+    }
+
+    public function hasOperationalOwner(): bool
+    {
+        $hasQueue = $this->queueId !== null && $this->queueId !== '';
+        $hasOwner = $this->ownerUserId !== null && $this->ownerUserId !== '';
+        return ($hasQueue xor $hasOwner);
     }
 
     /**

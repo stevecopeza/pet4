@@ -23,6 +23,7 @@ class SlaClockCalculator
         $items = $this->repository->findActive();
         $updatedCount = 0;
         $now = new DateTimeImmutable();
+        $generationRunId = wp_generate_uuid4();
 
         // Pass 1: Calculate Load per Department
         $deptCounts = [];
@@ -32,7 +33,7 @@ class SlaClockCalculator
         }
 
         foreach ($items as $item) {
-            $this->updateItemSlaState($item, $now, $deptCounts);
+            $this->updateItemSlaState($item, $now, $deptCounts, $generationRunId);
             $this->repository->save($item);
             $updatedCount++;
         }
@@ -40,14 +41,10 @@ class SlaClockCalculator
         return $updatedCount;
     }
 
-    public function updateItemSlaState(WorkItem $item, DateTimeImmutable $now, array $deptCounts = []): void
+    public function updateItemSlaState(WorkItem $item, DateTimeImmutable $now, array $deptCounts = [], ?string $generationRunId = null): void
     {
-        // Clear existing signals for this cycle (if this is run periodically)
-        // Note: If called from Projector, we might not want to clear signals immediately, but for now it's safe as Projector creates new items mostly.
-        // Actually, Projector calls this on CREATE, so no signals exist.
-        // But if called on UPDATE, we might want to clear.
-        // Let's keep it safe.
-        $this->signalRepository->clearForWorkItem($item->getId());
+        $runId = $generationRunId ?? wp_generate_uuid4();
+        $this->signalRepository->clearForWorkItem($item->getId(), $runId);
 
         // Update SLA time remaining if due date is present
         $due = $item->getScheduledDueUtc();
@@ -66,16 +63,16 @@ class SlaClockCalculator
             if ($item->getSlaSnapshotId()) {
                 // SLA Logic
                 if ($minutes < 0) {
-                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_SLA_RISK, AdvisorySignal::SEVERITY_CRITICAL, "SLA Breached by " . abs($minutes) . " minutes");
+                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_SLA_RISK, AdvisorySignal::SEVERITY_CRITICAL, "SLA Breached by " . abs($minutes) . " minutes", $runId);
                 } elseif ($minutes < 60) {
-                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_SLA_RISK, AdvisorySignal::SEVERITY_WARNING, "SLA Risk: Less than 60 minutes remaining");
+                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_SLA_RISK, AdvisorySignal::SEVERITY_WARNING, "SLA Risk: Less than 60 minutes remaining", $runId);
                 }
             } else {
                 // Standard Deadline Logic
                 if ($minutes < 0) {
-                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_DEADLINE_RISK, AdvisorySignal::SEVERITY_CRITICAL, "Deadline Overdue by " . abs($minutes) . " minutes");
+                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_DEADLINE_RISK, AdvisorySignal::SEVERITY_CRITICAL, "Deadline Overdue by " . abs($minutes) . " minutes", $runId);
                 } elseif ($minutes < 1440) { // 24 hours
-                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_DEADLINE_RISK, AdvisorySignal::SEVERITY_WARNING, "Deadline approaching (less than 24 hours)");
+                    $this->createSignal($item->getId(), AdvisorySignal::TYPE_DEADLINE_RISK, AdvisorySignal::SEVERITY_WARNING, "Deadline approaching (less than 24 hours)", $runId);
                 }
             }
         }
@@ -86,17 +83,17 @@ class SlaClockCalculator
         
         // High Priority Idle Check
         if ($newScore > 80 && $item->getStatus() === 'waiting') {
-             $this->createSignal($item->getId(), AdvisorySignal::TYPE_IDLE_HIGH_PRIORITY, AdvisorySignal::SEVERITY_WARNING, "High priority item is idle");
+             $this->createSignal($item->getId(), AdvisorySignal::TYPE_IDLE_HIGH_PRIORITY, AdvisorySignal::SEVERITY_WARNING, "High priority item is idle", $runId);
         }
 
         // Capacity Bottleneck Check (Threshold: > 10 active items in department)
         // Only flag if item is waiting (stuck in queue)
         if (($deptCounts[$item->getDepartmentId()] ?? 0) > 10 && $item->getStatus() === 'waiting') {
-            $this->createSignal($item->getId(), AdvisorySignal::TYPE_CAPACITY_BOTTLENECK, AdvisorySignal::SEVERITY_WARNING, "Department Overloaded: " . $deptCounts[$item->getDepartmentId()] . " active items");
+            $this->createSignal($item->getId(), AdvisorySignal::TYPE_CAPACITY_BOTTLENECK, AdvisorySignal::SEVERITY_WARNING, "Department Overloaded: " . $deptCounts[$item->getDepartmentId()] . " active items", $runId);
         }
     }
 
-    private function createSignal(string $workItemId, string $type, string $severity, string $message): void
+    private function createSignal(string $workItemId, string $type, string $severity, string $message, string $generationRunId): void
     {
         $signal = new AdvisorySignal(
             wp_generate_uuid4(),
@@ -104,7 +101,10 @@ class SlaClockCalculator
             $type,
             $severity,
             $message,
-            new DateTimeImmutable()
+            new DateTimeImmutable(),
+            'ACTIVE',
+            null,
+            $generationRunId
         );
         $this->signalRepository->save($signal);
     }

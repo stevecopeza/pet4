@@ -10,7 +10,7 @@ class SqlDepartmentQueueRepository implements DepartmentQueueRepository
 {
     private $wpdb;
 
-    public function __construct(\wpdb $wpdb)
+    public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
     }
@@ -21,13 +21,14 @@ class SqlDepartmentQueueRepository implements DepartmentQueueRepository
         $data = [
             'id' => $queueItem->getId(),
             'department_id' => $queueItem->getDepartmentId(),
+            'assigned_team_id' => $queueItem->getAssignedTeamId(),
             'work_item_id' => $queueItem->getWorkItemId(),
             'assigned_user_id' => $queueItem->getAssignedUserId(),
             'entered_queue_at' => $queueItem->getEnteredQueueAt()->format('Y-m-d H:i:s'),
             'picked_up_at' => $queueItem->getPickedUpAt()?->format('Y-m-d H:i:s'),
         ];
 
-        $formats = ['%s', '%s', '%s', '%s', '%s', '%s'];
+        $formats = ['%s', '%s', '%s', '%s', '%s', '%s', '%s'];
 
         $exists = $this->findById($queueItem->getId());
 
@@ -49,7 +50,10 @@ class SqlDepartmentQueueRepository implements DepartmentQueueRepository
     public function findByWorkItemId(string $workItemId): ?DepartmentQueue
     {
         $table = $this->wpdb->prefix . 'pet_department_queues';
-        $row = $this->wpdb->get_row($this->wpdb->prepare("SELECT * FROM $table WHERE work_item_id = %s", $workItemId));
+        $row = $this->wpdb->get_row($this->wpdb->prepare(
+            "SELECT * FROM $table WHERE work_item_id = %s AND picked_up_at IS NULL ORDER BY entered_queue_at DESC LIMIT 1",
+            $workItemId
+        ));
 
         return $row ? $this->mapRowToEntity($row) : null;
     }
@@ -70,6 +74,7 @@ class SqlDepartmentQueueRepository implements DepartmentQueueRepository
         return new DepartmentQueue(
             $row->id,
             $row->department_id,
+            isset($row->assigned_team_id) ? ($row->assigned_team_id !== null ? (string)$row->assigned_team_id : null) : null,
             $row->work_item_id,
             $row->assigned_user_id,
             new DateTimeImmutable($row->entered_queue_at),

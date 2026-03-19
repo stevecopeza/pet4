@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Article, SchemaDefinition } from '../types';
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 import useConversation from '../hooks/useConversation';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ArticleDetailsProps {
   article: Article;
@@ -51,7 +52,7 @@ const ArticleDetails: React.FC<ArticleDetailsProps> = ({ article, schema, onBack
       setIsEditing(false);
       // In a real app we'd refresh the list or the object
     } catch (err) {
-      alert('Failed to update article');
+      legacyAlert('Failed to update article');
     } finally {
       setSaving(false);
     }

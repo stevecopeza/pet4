@@ -926,6 +926,8 @@ class ShortcodeRegistrar
             $customerRepo = $container->get(CustomerRepository::class);
             $employeeRepo = $container->get(EmployeeRepository::class);
             $teamRepo = $container->get(TeamRepository::class);
+            $queueVisibility = $container->get(\Pet\Application\Work\Service\WorkQueueVisibilityService::class);
+            $queueQuery = $container->get(\Pet\Application\Work\Service\WorkQueueQueryService::class);
 
             // 1) Build support items based on the same assignment mapping used by TicketController
             $allItems = $workItemRepo->findAll();
@@ -1042,66 +1044,66 @@ class ShortcodeRegistrar
                 ];
             }
 
-            $employee = $employeeRepo->findByWpUserId((int) $userId);
-            if ($employee && $employee->id() !== null) {
-                $teamIds = $employee->teamIds();
-                foreach ($teamIds as $teamId) {
-                    $team = $teamRepo->find((int) $teamId);
-                    if (!$team || !$team->isActive()) {
-                        continue;
+            $visibleQueues = $queueVisibility->listVisibleQueues((int)$userId, current_user_can('manage_options'));
+            foreach ($visibleQueues as $q) {
+                $queueKey = (string)($q['queue_key'] ?? '');
+                if (!str_starts_with($queueKey, 'support:team:')) {
+                    continue;
+                }
+                $parts = explode(':', $queueKey);
+                $teamId = $parts[2] ?? null;
+                if ($teamId === null) {
+                    continue;
+                }
+                $team = $teamRepo->find((int)$teamId);
+                if (!$team || !$team->isActive()) {
+                    continue;
+                }
+
+                $departmentName = $team->name();
+                $items = $queueQuery->listItemsForQueue($queueKey);
+                if (empty($items)) {
+                    continue;
+                }
+
+                foreach ($items as $row) {
+                    $title = (string)($row['title'] ?? '');
+                    $reference = (string)($row['reference_code'] ?? '');
+                    $statusLabel = '';
+                    $status = (string)($row['status'] ?? '');
+                    if ($status === 'active') {
+                        $statusLabel = __('In Progress', 'pet');
+                    } elseif ($status === 'waiting') {
+                        $statusLabel = __('Waiting', 'pet');
+                    } elseif ($status !== '') {
+                        $statusLabel = ucfirst($status);
                     }
-                    $departmentName = $team->name();
-                    $deptItems = $workItemRepo->findByDepartmentUnassigned((string) $teamId);
-                    if (empty($deptItems)) {
-                        continue;
+
+                    $dueDate = '';
+                    $dueAt = $row['due_at'] ?? null;
+                    if (is_string($dueAt) && $dueAt !== '') {
+                        $dueDate = substr($dueAt, 0, 10);
                     }
-                    foreach ($deptItems as $item) {
-                        $status = $item->getStatus();
-                        if ($status === 'completed') {
-                            continue;
+
+                    $customerName = '';
+                    $customerId = $row['customer_id'] ?? null;
+                    if (is_int($customerId) && $customerId > 0) {
+                        $customer = $customerRepo->findById($customerId);
+                        if ($customer) {
+                            $customerName = $customer->name();
                         }
-                        $statusLabel = $status === 'active' ? __('In Progress', 'pet') : ($status === 'waiting' ? __('Waiting', 'pet') : ucfirst($status));
-                        $dueAt = $item->getScheduledDueUtc();
-                        $dueDate = $dueAt ? $dueAt->format('Y-m-d') : '';
-
-                        $title = '';
-                        $reference = '';
-                        $customerName = '';
-                        $link = '';
-
-                        if ($item->getSourceType() === 'ticket') {
-                            $ticketId = (int) $item->getSourceId();
-                            $ticket = $ticketRepo->findById($ticketId);
-                            if ($ticket) {
-                                $title = $ticket->subject();
-                                $reference = sprintf(__('Ticket #%d', 'pet'), $ticketId);
-                                $customer = $customerRepo->findById($ticket->customerId());
-                                if ($customer) {
-                                    $customerName = $customer->name();
-                                }
-                                $resolutionDue = $ticket->resolutionDueAt();
-                                if ($resolutionDue) {
-                                    $dueDate = $resolutionDue->format('Y-m-d');
-                                }
-                            } else {
-                                $reference = sprintf(__('Ticket #%d', 'pet'), $ticketId);
-                            }
-                            $link = admin_url('admin.php?page=pet-support');
-                        } else {
-                            $reference = sprintf(__('Work item %s', 'pet'), $item->getId());
-                            $link = admin_url('admin.php?page=pet-time');
-                        }
-
-                        $departmentQueues[$departmentName][] = [
-                            'title' => $title !== '' ? $title : $reference,
-                            'reference' => $reference,
-                            'status' => $statusLabel,
-                            'due' => $dueDate,
-                            'due_sort' => $dueDate !== '' ? $dueDate : '9999-12-31',
-                            'customer' => $customerName,
-                            'link' => $link,
-                        ];
                     }
+
+                    $link = admin_url('admin.php?page=pet-support');
+                    $departmentQueues[$departmentName][] = [
+                        'title' => $title !== '' ? $title : $reference,
+                        'reference' => $reference,
+                        'status' => $statusLabel,
+                        'due' => $dueDate,
+                        'due_sort' => $dueDate !== '' ? $dueDate : '9999-12-31',
+                        'customer' => $customerName,
+                        'link' => $link,
+                    ];
                 }
             }
         } catch (\Throwable $e) {

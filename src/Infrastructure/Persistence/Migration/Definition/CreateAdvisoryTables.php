@@ -8,11 +8,17 @@ use Pet\Infrastructure\Persistence\Migration\Migration;
 
 class CreateAdvisoryTables implements Migration
 {
+    private $wpdb;
+
+    public function __construct($wpdb)
+    {
+        $this->wpdb = $wpdb;
+    }
+
     public function up(): void
     {
-        global $wpdb;
-        $charset_collate = $wpdb->get_charset_collate();
-        $table_signals = $wpdb->prefix . 'pet_advisory_signals';
+        $charset_collate = $this->wpdb->get_charset_collate();
+        $table_signals = $this->wpdb->prefix . 'pet_advisory_signals';
 
         $sql = "CREATE TABLE $table_signals (
             id char(36) NOT NULL,

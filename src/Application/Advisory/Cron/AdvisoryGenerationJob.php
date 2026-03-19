@@ -6,16 +6,22 @@ namespace Pet\Application\Advisory\Cron;
 
 use Pet\Domain\Advisory\Service\AdvisoryGenerator;
 use Pet\Domain\Identity\Repository\EmployeeRepository;
+use Pet\Application\System\Service\FeatureFlagService;
 
 class AdvisoryGenerationJob
 {
     public function __construct(
         private EmployeeRepository $employeeRepository,
-        private AdvisoryGenerator $advisoryGenerator
+        private AdvisoryGenerator $advisoryGenerator,
+        private FeatureFlagService $featureFlags
     ) {}
 
     public function run(): void
     {
+        if (!$this->featureFlags->isAdvisoryEnabled()) {
+            return;
+        }
+
         $employees = $this->employeeRepository->findAll();
 
         foreach ($employees as $employee) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DataTable, Column } from './DataTable';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface RateCard {
   id: number;
@@ -82,11 +83,11 @@ const RateCards = () => {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       resetForm();
       fetchAll();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Archive this rate card?')) return;
+    if (!legacyConfirm('Archive this rate card?')) return;
     try {
       const res = await fetch(`${api}/rate-cards/${id}/archive`, {
         method: 'POST',
@@ -94,7 +95,7 @@ const RateCards = () => {
       });
       if (!res.ok) throw new Error('Failed');
       fetchAll();
-    } catch (err) { alert(err instanceof Error ? err.message : 'Error'); }
+    } catch (err) { legacyAlert(err instanceof Error ? err.message : 'Error'); }
   };
 
   const columns: Column<RateCard>[] = [

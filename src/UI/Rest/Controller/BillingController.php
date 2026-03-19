@@ -8,6 +8,8 @@ use Pet\Application\Finance\Command\CreateBillingExportCommand;
 use Pet\Application\Finance\Command\CreateBillingExportHandler;
 use Pet\Application\Finance\Command\AddBillingExportItemCommand;
 use Pet\Application\Finance\Command\AddBillingExportItemHandler;
+use Pet\Application\Finance\Command\ConfirmBillingExportCommand;
+use Pet\Application\Finance\Command\ConfirmBillingExportHandler;
 use Pet\Application\Finance\Command\QueueBillingExportForQuickBooksCommand;
 use Pet\Application\Finance\Command\QueueBillingExportForQuickBooksHandler;
 use Pet\Domain\Finance\Repository\BillingExportRepository;
@@ -26,6 +28,7 @@ final class BillingController implements RestController
         private CreateBillingExportHandler $createHandler,
         private AddBillingExportItemHandler $addItemHandler,
         private QueueBillingExportForQuickBooksHandler $queueHandler,
+        private ConfirmBillingExportHandler $confirmHandler,
         private SqlOutboxRepository $outbox
     ) {
     }
@@ -62,6 +65,14 @@ final class BillingController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'queueExport'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/exports/(?P<id>\\d+)/confirm', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'confirmExport'],
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
@@ -109,38 +120,98 @@ final class BillingController implements RestController
 
     public function createExport(WP_REST_Request $request): WP_REST_Response
     {
-        $customerId = (int)$request->get_param('customerId');
-        $periodStart = new \DateTimeImmutable((string)$request->get_param('periodStart'));
-        $periodEnd = new \DateTimeImmutable((string)$request->get_param('periodEnd'));
-        $createdByEmployeeId = (int)$request->get_param('createdByEmployeeId');
+        try {
+            $customerId = (int)$request->get_param('customerId');
+            $createdByEmployeeId = (int)$request->get_param('createdByEmployeeId');
 
-        $id = $this->createHandler->handle(
-            new CreateBillingExportCommand($customerId, $periodStart, $periodEnd, $createdByEmployeeId)
-        );
-        return new WP_REST_Response(['id' => $id], 201);
+            if ($customerId <= 0 || $createdByEmployeeId <= 0) {
+                return new WP_REST_Response(['error' => 'Invalid customerId or createdByEmployeeId'], 400);
+            }
+
+            $periodStartRaw = trim((string)$request->get_param('periodStart'));
+            $periodEndRaw = trim((string)$request->get_param('periodEnd'));
+            if ($periodStartRaw === '' || $periodEndRaw === '') {
+                return new WP_REST_Response(['error' => 'periodStart and periodEnd are required'], 400);
+            }
+
+            try {
+                $periodStart = new \DateTimeImmutable($periodStartRaw);
+                $periodEnd = new \DateTimeImmutable($periodEndRaw);
+            } catch (\Exception $e) {
+                return new WP_REST_Response(['error' => 'Invalid periodStart or periodEnd format'], 400);
+            }
+
+            $id = $this->createHandler->handle(
+                new CreateBillingExportCommand($customerId, $periodStart, $periodEnd, $createdByEmployeeId)
+            );
+            return new WP_REST_Response(['id' => $id], 201);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to create export'], 500);
+        }
     }
 
     public function addItem(WP_REST_Request $request): WP_REST_Response
     {
-        $exportId = (int)$request->get_param('id');
-        $sourceType = (string)$request->get_param('sourceType');
-        $sourceId = (int)$request->get_param('sourceId');
-        $quantity = (float)$request->get_param('quantity');
-        $unitPrice = (float)$request->get_param('unitPrice');
-        $description = (string)$request->get_param('description');
-        $qbItemRef = $request->get_param('qbItemRef');
+        try {
+            $exportId = (int)$request->get_param('id');
+            $sourceType = (string)$request->get_param('sourceType');
+            $sourceIdRaw = $request->get_param('sourceId');
+            $quantityRaw = $request->get_param('quantity');
+            $unitPriceRaw = $request->get_param('unitPrice');
+            $description = (string)$request->get_param('description');
+            $qbItemRef = $request->get_param('qbItemRef');
 
-        $itemId = $this->addItemHandler->handle(
-            new AddBillingExportItemCommand($exportId, $sourceType, $sourceId, $quantity, $unitPrice, $description, $qbItemRef ? (string)$qbItemRef : null)
-        );
-        return new WP_REST_Response(['id' => $itemId], 201);
+            if ($exportId <= 0) {
+                return new WP_REST_Response(['error' => 'Invalid export id'], 400);
+            }
+            if ($sourceType === '' || $description === '') {
+                return new WP_REST_Response(['error' => 'sourceType and description are required'], 400);
+            }
+            if (!is_numeric($sourceIdRaw) || !is_numeric($quantityRaw) || !is_numeric($unitPriceRaw)) {
+                return new WP_REST_Response(['error' => 'sourceId, quantity, and unitPrice must be numeric'], 400);
+            }
+
+            $sourceId = (int)$sourceIdRaw;
+            $quantity = (float)$quantityRaw;
+            $unitPrice = (float)$unitPriceRaw;
+
+            $itemId = $this->addItemHandler->handle(
+                new AddBillingExportItemCommand($exportId, $sourceType, $sourceId, $quantity, $unitPrice, $description, $qbItemRef ? (string)$qbItemRef : null)
+            );
+            return new WP_REST_Response(['id' => $itemId], 201);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to add export item'], 500);
+        }
     }
 
     public function queueExport(WP_REST_Request $request): WP_REST_Response
     {
-        $exportId = (int)$request->get_param('id');
-        $this->queueHandler->handle(new QueueBillingExportForQuickBooksCommand($exportId));
-        return new WP_REST_Response(['status' => 'queued'], 200);
+        try {
+            $exportId = (int)$request->get_param('id');
+            $this->queueHandler->handle(new QueueBillingExportForQuickBooksCommand($exportId));
+            return new WP_REST_Response(['status' => 'queued'], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to queue export'], 500);
+        }
+    }
+
+    public function confirmExport(WP_REST_Request $request): WP_REST_Response
+    {
+        try {
+            $exportId = (int)$request->get_param('id');
+            $status = $this->confirmHandler->handle(new ConfirmBillingExportCommand($exportId));
+            return new WP_REST_Response(['status' => $status], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => 'Failed to confirm export'], 500);
+        }
     }
 
     public function listItems(WP_REST_Request $request): WP_REST_Response

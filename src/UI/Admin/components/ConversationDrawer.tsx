@@ -4,6 +4,7 @@ import { ConversationOpenParams } from './ConversationProvider';
 import { Conversation, ConversationParticipant, Employee, Team } from '../types';
 import useNameMap from '../hooks/useNameMap';
 import '../styles/conversation-drawer.css';
+import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ConversationDrawerProps {
   params: ConversationOpenParams | null;
@@ -122,7 +123,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ params, onClose
       setParticipantSearch('');
       setRefreshSignal((s) => s + 1);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error adding participant');
+      legacyAlert(e instanceof Error ? e.message : 'Error adding participant');
     } finally {
       setAddingParticipant(false);
     }
@@ -142,7 +143,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ params, onClose
       }
       setRefreshSignal((s) => s + 1);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error removing participant');
+      legacyAlert(e instanceof Error ? e.message : 'Error removing participant');
     }
   };
 

@@ -24,7 +24,7 @@ class CreateEscalationTables implements Migration
             severity varchar(20) NOT NULL DEFAULT 'MEDIUM',
             status varchar(20) NOT NULL DEFAULT 'OPEN',
             reason text NOT NULL,
-            metadata_json longtext NOT NULL DEFAULT '{}',
+            metadata_json longtext NULL,
             created_by bigint(20) unsigned NULL,
             acknowledged_by bigint(20) unsigned NULL,
             resolved_by bigint(20) unsigned NULL,

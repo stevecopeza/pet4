@@ -78,6 +78,21 @@ class FeatureFlagService
         return $this->isEnabled('pet_pulseway_ticket_creation_enabled');
     }
 
+    public function isDashboardsEnabled(): bool
+    {
+        return $this->isEnabled('pet_dashboards_enabled');
+    }
+
+    public function isSupportOperationalImprovementsEnabled(): bool
+    {
+        return $this->isEnabled('pet_support_operational_improvements_enabled');
+    }
+
+    public function isStaffTimeCaptureEnabled(): bool
+    {
+        return $this->isEnabled('pet_staff_time_capture_enabled');
+    }
+
     private function isEnabled(string $key): bool
     {
         $setting = $this->settings->findByKey($key);

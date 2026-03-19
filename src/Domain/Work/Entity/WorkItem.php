@@ -13,12 +13,20 @@ use InvalidArgumentException;
  */
 class WorkItem
 {
+    public const ASSIGNMENT_MODE_TEAM_QUEUE = 'TEAM_QUEUE';
+    public const ASSIGNMENT_MODE_USER_ASSIGNED = 'USER_ASSIGNED';
+    public const ASSIGNMENT_MODE_UNROUTED = 'UNROUTED';
+
     public function __construct(
         private string $id,
         private string $sourceType,
         private string $sourceId,
         private ?string $assignedUserId,
         private string $departmentId,
+        private ?string $assignedTeamId,
+        private ?string $assignmentMode,
+        private ?string $queueKey,
+        private ?string $routingReason,
         private ?int $requiredRoleId,
         private ?string $slaSnapshotId,
         private ?int $slaTimeRemainingMinutes,
@@ -36,6 +44,7 @@ class WorkItem
     ) {
         $this->validateSourceType($sourceType);
         $this->validateStatus($status);
+        $this->normalizeAssignmentState();
     }
 
     public static function create(
@@ -46,14 +55,28 @@ class WorkItem
         float $priorityScore,
         string $status,
         DateTimeImmutable $createdAt,
-        ?int $requiredRoleId = null
+        ?int $requiredRoleId = null,
+        ?string $assignedTeamId = null,
+        ?string $assignedUserId = null,
+        ?string $routingReason = null
     ): self {
+        $hasUserAssignment = $assignedUserId !== null && $assignedUserId !== '';
+        $hasTeamAssignment = $assignedTeamId !== null && $assignedTeamId !== '';
+        if ($hasUserAssignment && $hasTeamAssignment) {
+            throw new InvalidArgumentException('Work item cannot be both team-queued and user-assigned.');
+        }
+        $assignmentMode = $assignedUserId ? self::ASSIGNMENT_MODE_USER_ASSIGNED : ($assignedTeamId ? self::ASSIGNMENT_MODE_TEAM_QUEUE : self::ASSIGNMENT_MODE_UNROUTED);
+
         return new self(
             $id,
             $sourceType,
             $sourceId,
-            null,
+            $assignedUserId,
             $departmentId,
+            $assignedTeamId,
+            $assignmentMode,
+            self::buildQueueKey($sourceType, $assignmentMode, $assignedTeamId, $assignedUserId),
+            $routingReason,
             $requiredRoleId,
             null,
             null,
@@ -85,12 +108,22 @@ class WorkItem
     public function assignUser(?string $userId): void
     {
         $this->assignedUserId = $userId;
+        $this->normalizeAssignmentState();
         $this->updatedAt = new DateTimeImmutable();
     }
 
     public function updateDepartment(string $departmentId): void
     {
         $this->departmentId = $departmentId;
+        $this->updatedAt = new DateTimeImmutable();
+    }
+
+    public function updateAssignment(?string $assignedTeamId, ?string $assignedUserId, ?string $routingReason = null): void
+    {
+        $this->assignedTeamId = $assignedTeamId;
+        $this->assignedUserId = $assignedUserId;
+        $this->routingReason = $routingReason;
+        $this->normalizeAssignmentState();
         $this->updatedAt = new DateTimeImmutable();
     }
 
@@ -139,6 +172,10 @@ class WorkItem
     public function getSourceId(): string { return $this->sourceId; }
     public function getAssignedUserId(): ?string { return $this->assignedUserId; }
     public function getDepartmentId(): string { return $this->departmentId; }
+    public function getAssignedTeamId(): ?string { return $this->assignedTeamId; }
+    public function getAssignmentMode(): ?string { return $this->assignmentMode; }
+    public function getQueueKey(): ?string { return $this->queueKey; }
+    public function getRoutingReason(): ?string { return $this->routingReason; }
     public function getRequiredRoleId(): ?int { return $this->requiredRoleId; }
     public function getSlaSnapshotId(): ?string { return $this->slaSnapshotId; }
     public function getSlaTimeRemainingMinutes(): ?int { return $this->slaTimeRemainingMinutes; }
@@ -169,5 +206,49 @@ class WorkItem
         if (!in_array($status, $allowed)) {
             throw new InvalidArgumentException("Invalid status: $status");
         }
+    }
+
+    private function normalizeAssignmentState(): void
+    {
+        $hasUserAssignment = $this->assignedUserId !== null && $this->assignedUserId !== '';
+        $hasTeamAssignment = $this->assignedTeamId !== null && $this->assignedTeamId !== '';
+
+        if ($hasUserAssignment && $hasTeamAssignment) {
+            throw new InvalidArgumentException('Work item cannot be both team-queued and user-assigned.');
+        }
+        if ($hasUserAssignment) {
+            $this->assignmentMode = self::ASSIGNMENT_MODE_USER_ASSIGNED;
+        } elseif ($hasTeamAssignment) {
+            $this->assignmentMode = self::ASSIGNMENT_MODE_TEAM_QUEUE;
+        } else {
+            $this->assignmentMode = self::ASSIGNMENT_MODE_UNROUTED;
+        }
+
+        if ($this->assignmentMode === self::ASSIGNMENT_MODE_UNROUTED && !$this->isUnroutedAllowedForSourceType($this->sourceType)) {
+            throw new InvalidArgumentException('Unrouted assignment mode is not allowed for this source type.');
+        }
+
+        $this->queueKey = self::buildQueueKey($this->sourceType, $this->assignmentMode, $this->assignedTeamId, $this->assignedUserId);
+    }
+
+    private static function buildQueueKey(string $sourceType, string $assignmentMode, ?string $assignedTeamId, ?string $assignedUserId): string
+    {
+        $prefix = match ($sourceType) {
+            'ticket' => 'support',
+            'project_task' => 'delivery',
+            default => $sourceType,
+        };
+
+        return match ($assignmentMode) {
+            self::ASSIGNMENT_MODE_TEAM_QUEUE => "{$prefix}:team:{$assignedTeamId}",
+            self::ASSIGNMENT_MODE_USER_ASSIGNED => "{$prefix}:user:{$assignedUserId}",
+            self::ASSIGNMENT_MODE_UNROUTED => "{$prefix}:unrouted",
+            default => "{$prefix}:unrouted",
+        };
+    }
+
+    private function isUnroutedAllowedForSourceType(string $sourceType): bool
+    {
+        return in_array($sourceType, ['ticket', 'escalation', 'admin'], true);
     }
 }

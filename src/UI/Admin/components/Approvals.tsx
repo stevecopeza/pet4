@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
 
 interface DecisionSummary {
   id: string; // Mapped from uuid
@@ -16,49 +18,54 @@ const Approvals = () => {
   const [decisions, setDecisions] = useState<DecisionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingResponse, setPendingResponse] = useState<{ uuid: string; responseType: 'approved' | 'rejected' } | null>(null);
+  const [respondBusy, setRespondBusy] = useState(false);
+  const toast = useToast();
+
+  const fetchDecisions = async () => {
+    try {
+      setLoading(true);
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      if (!apiUrl || !nonce) {
+        setError('API settings missing');
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/decisions/pending`, {
+        headers: {
+          'X-WP-Nonce': nonce,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch pending approvals');
+      }
+
+      const data = await response.json();
+      const mappedData = data.map((item: any) => ({
+          ...item,
+          id: item.uuid
+      }));
+      setDecisions(mappedData);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDecisions = async () => {
-      try {
-        setLoading(true);
-        // @ts-ignore
-        const apiUrl = window.petSettings?.apiUrl;
-        // @ts-ignore
-        const nonce = window.petSettings?.nonce;
-
-        if (!apiUrl || !nonce) {
-          setError('API settings missing');
-          return;
-        }
-
-        const response = await fetch(`${apiUrl}/decisions/pending`, {
-          headers: {
-            'X-WP-Nonce': nonce,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch pending approvals');
-        }
-
-        const data = await response.json();
-        const mappedData = data.map((item: any) => ({
-            ...item,
-            id: item.uuid
-        }));
-        setDecisions(mappedData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
 
     fetchDecisions();
   }, []);
 
   const handleRespond = async (uuid: string, responseType: 'approved' | 'rejected') => {
-    if (!confirm(`Are you sure you want to ${responseType} this request?`)) return;
+    setRespondBusy(true);
 
     try {
         // @ts-ignore
@@ -82,9 +89,13 @@ const Approvals = () => {
 
         // Refresh list
         setDecisions(decisions.filter(d => d.uuid !== uuid));
+        toast.success(`Request ${responseType}.`);
 
     } catch (err) {
-        alert(err instanceof Error ? err.message : 'Error responding');
+        toast.error(err instanceof Error ? err.message : 'Error responding');
+    } finally {
+      setRespondBusy(false);
+      setPendingResponse(null);
     }
   };
 
@@ -101,23 +112,20 @@ const Approvals = () => {
             <button 
                 className="button button-small" 
                 style={{ borderColor: '#46b450', color: '#46b450' }}
-                onClick={() => handleRespond(item.uuid, 'approved')}
+                onClick={() => setPendingResponse({ uuid: item.uuid, responseType: 'approved' })}
             >
                 Approve
             </button>
             <button 
                 className="button button-small" 
                 style={{ borderColor: '#dc3232', color: '#dc3232' }}
-                onClick={() => handleRespond(item.uuid, 'rejected')}
+                onClick={() => setPendingResponse({ uuid: item.uuid, responseType: 'rejected' })}
             >
                 Reject
             </button>
         </div>
     )},
   ];
-
-  if (loading) return <div>Loading approvals...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
 
   return (
     <div className="pet-approvals">
@@ -127,7 +135,25 @@ const Approvals = () => {
       <DataTable 
         columns={columns} 
         data={decisions} 
+        loading={loading}
+        error={error}
+        onRetry={fetchDecisions}
         emptyMessage="No pending approvals found." 
+        compatibilityMode="wp"
+      />
+
+      <ConfirmationDialog
+        open={pendingResponse !== null}
+        title={pendingResponse?.responseType === 'approved' ? 'Approve request?' : 'Reject request?'}
+        description={`Are you sure you want to ${pendingResponse?.responseType ?? 'respond to'} this request?`}
+        confirmLabel={pendingResponse?.responseType === 'approved' ? 'Approve' : 'Reject'}
+        busy={respondBusy}
+        onCancel={() => setPendingResponse(null)}
+        onConfirm={() => {
+          if (pendingResponse) {
+            handleRespond(pendingResponse.uuid, pendingResponse.responseType);
+          }
+        }}
       />
     </div>
   );

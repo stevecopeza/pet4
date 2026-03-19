@@ -1,4 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
+import LoadingState from './foundation/states/LoadingState';
+import ErrorState from './foundation/states/ErrorState';
+import EmptyState from './foundation/states/EmptyState';
 
 declare const window: Window & {
   petSettings: { apiUrl: string; nonce: string };
@@ -19,6 +24,10 @@ const api = (path: string, opts: RequestInit = {}) =>
   });
 
 type Tab = 'integrations' | 'mappings' | 'notifications' | 'devices' | 'rules';
+type ToastApi = {
+  success: (message: string) => void;
+  error: (message: string) => void;
+};
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
   padding: '10px 20px',
@@ -43,11 +52,12 @@ const badge = (color: string, text: string): React.CSSProperties => ({
 });
 
 const PulsewayRmm = () => {
+  const toast = useToast();
   const [tab, setTab] = useState<Tab>('integrations');
   const [integrations, setIntegrations] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchIntegrations = useCallback(async () => {
     setLoading(true);
@@ -55,8 +65,10 @@ const PulsewayRmm = () => {
       const data = await api('/integrations');
       setIntegrations(data);
       if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
+      setError(null);
     } catch (e: any) {
       console.error(e);
+      setError(e instanceof Error ? e.message : 'Failed to load integrations');
     } finally {
       setLoading(false);
     }
@@ -64,15 +76,8 @@ const PulsewayRmm = () => {
 
   useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
 
-  const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 4000); };
-
   return (
     <div className="pet-pulseway">
-      {msg && (
-        <div style={{ padding: '8px 16px', background: '#e7f5e7', border: '1px solid #4caf50', borderRadius: '4px', marginBottom: '16px' }}>
-          {msg}
-        </div>
-      )}
 
       <div style={{ marginBottom: '20px', borderBottom: '1px solid #ddd' }}>
         {(['integrations', 'mappings', 'notifications', 'devices', 'rules'] as Tab[]).map((t) => (
@@ -83,15 +88,17 @@ const PulsewayRmm = () => {
       </div>
 
       {loading ? (
-        <p>Loading…</p>
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchIntegrations} />
       ) : (
         <>
-          {tab === 'integrations' && <IntegrationsTab integrations={integrations} onRefresh={fetchIntegrations} flash={flash} />}
-          {tab === 'mappings' && selectedId && <MappingsTab integrationId={selectedId} flash={flash} />}
+          {tab === 'integrations' && <IntegrationsTab integrations={integrations} onRefresh={fetchIntegrations} toast={toast} />}
+          {tab === 'mappings' && selectedId && <MappingsTab integrationId={selectedId} toast={toast} />}
           {tab === 'notifications' && selectedId && <NotificationsTab integrationId={selectedId} />}
           {tab === 'devices' && selectedId && <DevicesTab integrationId={selectedId} />}
-          {tab === 'rules' && selectedId && <RulesTab integrationId={selectedId} flash={flash} />}
-          {(tab !== 'integrations') && !selectedId && <p>No integration selected. Create one first.</p>}
+          {tab === 'rules' && selectedId && <RulesTab integrationId={selectedId} toast={toast} />}
+          {(tab !== 'integrations') && !selectedId && <EmptyState message="No integration selected. Create one first." />}
 
           {integrations.length > 1 && tab !== 'integrations' && (
             <div style={{ marginTop: '16px', padding: '8px', background: '#f9f9f9', borderRadius: '4px' }}>
@@ -109,62 +116,84 @@ const PulsewayRmm = () => {
 
 // ─── Integrations Tab ────────────────────────────────────────────
 
-const IntegrationsTab = ({ integrations, onRefresh, flash }: { integrations: any[]; onRefresh: () => void; flash: (m: string) => void }) => {
+const IntegrationsTab = ({ integrations, onRefresh, toast }: { integrations: any[]; onRefresh: () => void; toast: ToastApi }) => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ label: '', api_base_url: 'https://api.pulseway.com/v3', token_id: '', token_secret: '', poll_interval_seconds: 300 });
   const [busy, setBusy] = useState(false);
+  const [pendingResetId, setPendingResetId] = useState<number | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
 
   const handleCreate = async () => {
-    if (!form.label || !form.token_id || !form.token_secret) { alert('Label, Token ID and Token Secret are required'); return; }
+    if (!form.label || !form.token_id || !form.token_secret) {
+      toast.error('Label, Token ID and Token Secret are required');
+      return;
+    }
     setBusy(true);
     try {
       await api('/integrations', { method: 'POST', body: JSON.stringify(form) });
-      flash('Integration created');
+      toast.success('Integration created');
       setShowForm(false);
       setForm({ label: '', api_base_url: 'https://api.pulseway.com/v3', token_id: '', token_secret: '', poll_interval_seconds: 300 });
       onRefresh();
-    } catch (e: any) { alert(e.message); }
-    finally { setBusy(false); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleTest = async (id: number) => {
     try {
       const res = await api(`/integrations/${id}/test`, { method: 'POST' });
-      flash(`Test: ${res.status} — ${res.message}`);
+      toast.success(`Test: ${res.status} — ${res.message}`);
       onRefresh();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handlePoll = async (id: number) => {
     try {
       const res = await api(`/integrations/${id}/poll`, { method: 'POST' });
-      flash(`Poll: ${res.status ?? 'done'} — ingested ${res.ingested ?? 0}, dupes ${res.duplicates ?? 0}`);
+      toast.success(`Poll: ${res.status ?? 'done'} — ingested ${res.ingested ?? 0}, dupes ${res.duplicates ?? 0}`);
       onRefresh();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleSync = async (id: number) => {
     try {
       const res = await api(`/integrations/${id}/sync-devices`, { method: 'POST' });
-      flash(`Sync: ${res.status ?? 'done'} — ${res.devices_synced ?? 0} devices`);
+      toast.success(`Sync: ${res.status ?? 'done'} — ${res.devices_synced ?? 0} devices`);
       onRefresh();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleResetCircuit = async (id: number) => {
-    if (!confirm('Reset circuit breaker? Polling will resume.')) return;
+    setResetBusy(true);
     try {
       await api(`/integrations/${id}/reset-circuit`, { method: 'POST' });
-      flash('Circuit breaker reset');
+      toast.success('Circuit breaker reset');
       onRefresh();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setResetBusy(false);
+      setPendingResetId(null);
+    }
   };
 
   const handleToggle = async (id: number, currentActive: boolean) => {
     try {
       await api(`/integrations/${id}`, { method: 'PUT', body: JSON.stringify({ is_active: !currentActive }) });
+      toast.success(currentActive ? 'Integration disabled.' : 'Integration enabled.');
       onRefresh();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   return (
@@ -210,7 +239,7 @@ const IntegrationsTab = ({ integrations, onRefresh, flash }: { integrations: any
       )}
 
       {integrations.length === 0 ? (
-        <p style={{ color: '#666' }}>No integrations configured. Click "Add Integration" to get started.</p>
+        <EmptyState message="No integrations configured. Click &quot;Add Integration&quot; to get started." />
       ) : (
         <table className="widefat striped" style={{ marginTop: '8px' }}>
           <thead>
@@ -251,7 +280,7 @@ const IntegrationsTab = ({ integrations, onRefresh, flash }: { integrations: any
                     <button className="button button-small" onClick={() => handlePoll(i.id)} title="Poll Notifications Now">Poll</button>{' '}
                     <button className="button button-small" onClick={() => handleSync(i.id)} title="Sync Devices Now">Sync</button>{' '}
                     <button className="button button-small" onClick={() => handleToggle(i.id, isActive)}>{isActive ? 'Disable' : 'Enable'}</button>{' '}
-                    {isCircuitOpen && <button className="button button-small" onClick={() => handleResetCircuit(i.id)} style={{ color: '#f44336' }}>Reset Circuit</button>}
+                    {isCircuitOpen && <button className="button button-small" onClick={() => setPendingResetId(i.id)} style={{ color: '#f44336' }}>Reset Circuit</button>}
                   </td>
                 </tr>
               );
@@ -259,24 +288,42 @@ const IntegrationsTab = ({ integrations, onRefresh, flash }: { integrations: any
           </tbody>
         </table>
       )}
+
+      <ConfirmationDialog
+        open={pendingResetId !== null}
+        title="Reset circuit breaker?"
+        description="Polling will resume for this integration."
+        confirmLabel="Reset circuit"
+        busy={resetBusy}
+        onCancel={() => setPendingResetId(null)}
+        onConfirm={() => {
+          if (pendingResetId !== null) {
+            handleResetCircuit(pendingResetId);
+          }
+        }}
+      />
     </div>
   );
 };
 
 // ─── Org Mappings Tab ────────────────────────────────────────────
 
-const MappingsTab = ({ integrationId, flash }: { integrationId: number; flash: (m: string) => void }) => {
+const MappingsTab = ({ integrationId, toast }: { integrationId: number; toast: ToastApi }) => {
   const [mappings, setMappings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ pulseway_org_id: '', pulseway_site_id: '', pulseway_group_id: '', pet_customer_id: '', pet_site_id: '', pet_team_id: '' });
 
   const fetchMappings = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await api(`/integrations/${integrationId}/mappings`);
       setMappings(data);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      setError(e.message);
+    }
     finally { setLoading(false); }
   };
 
@@ -292,14 +339,17 @@ const MappingsTab = ({ integrationId, flash }: { integrationId: number; flash: (
       if (form.pet_site_id) body.pet_site_id = Number(form.pet_site_id);
       if (form.pet_team_id) body.pet_team_id = Number(form.pet_team_id);
       await api(`/integrations/${integrationId}/mappings`, { method: 'POST', body: JSON.stringify(body) });
-      flash('Mapping created');
+      toast.success('Mapping created');
       setShowForm(false);
       setForm({ pulseway_org_id: '', pulseway_site_id: '', pulseway_group_id: '', pet_customer_id: '', pet_site_id: '', pet_team_id: '' });
-      fetchMappings();
-    } catch (e: any) { alert(e.message); }
+      await fetchMappings();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  if (loading) return <p>Loading mappings…</p>;
+  if (loading) return <LoadingState label="Loading mappings…" />;
+  if (error) return <ErrorState message={error} onRetry={fetchMappings} />;
 
   return (
     <div>
@@ -347,7 +397,7 @@ const MappingsTab = ({ integrationId, flash }: { integrationId: number; flash: (
       )}
 
       {mappings.length === 0 ? (
-        <p style={{ color: '#666' }}>No mappings configured yet.</p>
+        <EmptyState message="No mappings configured yet." />
       ) : (
         <table className="widefat striped">
           <thead>
@@ -385,25 +435,31 @@ const MappingsTab = ({ integrationId, flash }: { integrationId: number; flash: (
 const NotificationsTab = ({ integrationId }: { integrationId: number }) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await api(`/integrations/${integrationId}/notifications?limit=100`);
-        setNotifications(data);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api(`/integrations/${integrationId}/notifications?limit=100`);
+      setNotifications(data);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [integrationId]);
 
-  if (loading) return <p>Loading notifications…</p>;
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  if (loading) return <LoadingState label="Loading notifications…" />;
+  if (error) return <ErrorState message={error} onRetry={fetchNotifications} />;
 
   return (
     <div>
       <h3 style={{ marginTop: 0 }}>Recent Notifications</h3>
       {notifications.length === 0 ? (
-        <p style={{ color: '#666' }}>No notifications ingested yet. Run a poll first.</p>
+        <EmptyState message="No notifications ingested yet. Run a poll first." />
       ) : (
         <table className="widefat striped">
           <thead>
@@ -451,25 +507,31 @@ const NotificationsTab = ({ integrationId }: { integrationId: number }) => {
 const DevicesTab = ({ integrationId }: { integrationId: number }) => {
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await api(`/integrations/${integrationId}/devices`);
-        setDevices(data);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
+  const fetchDevices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api(`/integrations/${integrationId}/devices`);
+      setDevices(data);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, [integrationId]);
 
-  if (loading) return <p>Loading devices…</p>;
+  useEffect(() => { fetchDevices(); }, [fetchDevices]);
+
+  if (loading) return <LoadingState label="Loading devices…" />;
+  if (error) return <ErrorState message={error} onRetry={fetchDevices} />;
 
   return (
     <div>
       <h3 style={{ marginTop: 0 }}>Monitored Devices ({devices.length})</h3>
       {devices.length === 0 ? (
-        <p style={{ color: '#666' }}>No devices synced yet. Run a device sync first.</p>
+        <EmptyState message="No devices synced yet. Run a device sync first." />
       ) : (
         <table className="widefat striped">
           <thead>
@@ -509,9 +571,10 @@ const DevicesTab = ({ integrationId }: { integrationId: number }) => {
 
 // ─── Ticket Rules Tab ───────────────────────────────────────────
 
-const RulesTab = ({ integrationId, flash }: { integrationId: number; flash: (m: string) => void }) => {
+const RulesTab = ({ integrationId, toast }: { integrationId: number; toast: ToastApi }) => {
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     rule_name: '', match_severity: '', match_category: '',
@@ -521,10 +584,13 @@ const RulesTab = ({ integrationId, flash }: { integrationId: number; flash: (m: 
 
   const fetchRules = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await api(`/integrations/${integrationId}/rules`);
       setRules(data);
-    } catch (e) { console.error(e); }
+    } catch (e: any) {
+      setError(e.message);
+    }
     finally { setLoading(false); }
   };
 
@@ -538,13 +604,16 @@ const RulesTab = ({ integrationId, flash }: { integrationId: number; flash: (m: 
       if (form.output_queue_id) body.output_queue_id = form.output_queue_id;
       if (form.output_owner_user_id) body.output_owner_user_id = form.output_owner_user_id;
       await api(`/integrations/${integrationId}/rules`, { method: 'POST', body: JSON.stringify(body) });
-      flash('Rule created');
+      toast.success('Rule created');
       setShowForm(false);
-      fetchRules();
-    } catch (e: any) { alert(e.message); }
+      await fetchRules();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
-  if (loading) return <p>Loading rules…</p>;
+  if (loading) return <LoadingState label="Loading rules…" />;
+  if (error) return <ErrorState message={error} onRetry={fetchRules} />;
 
   return (
     <div>
@@ -615,7 +684,7 @@ const RulesTab = ({ integrationId, flash }: { integrationId: number; flash: (m: 
       )}
 
       {rules.length === 0 ? (
-        <p style={{ color: '#666' }}>No ticket rules configured. This is fine for Phase 1 — rules are used in Phase 2 (ticket auto-creation).</p>
+        <EmptyState message="No ticket rules configured. This is fine for Phase 1 — rules are used in Phase 2 (ticket auto-creation)." />
       ) : (
         <table className="widefat striped">
           <thead>

@@ -128,8 +128,14 @@ final class LeaveController implements RestController
             return new WP_REST_Response(['error' => ['code' => 'VALIDATION_ERROR', 'message' => 'End date before start date', 'details' => []]], 400);
         }
         $notes = $request->get_param('notes');
-        $id = $this->submitHandler->handle(new SubmitLeaveRequestCommand($employeeId, $leaveTypeId, $start, $end, $notes ? (string)$notes : null));
-        return new WP_REST_Response(['id' => $id], 201);
+        try {
+            $id = $this->submitHandler->handle(new SubmitLeaveRequestCommand($employeeId, $leaveTypeId, $start, $end, $notes ? (string)$notes : null));
+            return new WP_REST_Response(['id' => $id], 201);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to submit leave request', 'details' => []]], 500);
+        }
     }
 
     public function decide(WP_REST_Request $request): WP_REST_Response
@@ -144,8 +150,14 @@ final class LeaveController implements RestController
             return new WP_REST_Response(['error' => ['code' => 'VALIDATION_ERROR', 'message' => 'Invalid decision', 'details' => ['allowed' => ['approved','rejected','cancelled']]]], 400);
         }
         $reason = $request->get_param('reason');
-        $this->decideHandler->handle(new DecideLeaveRequestCommand($id, $by, $decision, $reason ? (string)$reason : null));
-        return new WP_REST_Response(['status' => $decision], 200);
+        try {
+            $this->decideHandler->handle(new DecideLeaveRequestCommand($id, $by, $decision, $reason ? (string)$reason : null));
+            return new WP_REST_Response(['status' => $decision], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to decide leave request', 'details' => []]], 500);
+        }
     }
 
     public function setOverride(WP_REST_Request $request): WP_REST_Response
@@ -165,7 +177,13 @@ final class LeaveController implements RestController
             return new WP_REST_Response(['error' => ['code' => 'VALIDATION_ERROR', 'message' => 'Invalid capacity percentage', 'details' => ['range' => [0,100]]]], 400);
         }
         $reason = $request->get_param('reason');
-        $this->overrideHandler->handle(new SetCapacityOverrideCommand($employeeId, $date, $pct, $reason ? (string)$reason : null));
-        return new WP_REST_Response(['status' => 'ok'], 200);
+        try {
+            $this->overrideHandler->handle(new SetCapacityOverrideCommand($employeeId, $date, $pct, $reason ? (string)$reason : null));
+            return new WP_REST_Response(['status' => 'ok'], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to set capacity override', 'details' => []]], 500);
+        }
     }
 }

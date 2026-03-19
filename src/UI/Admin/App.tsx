@@ -6,6 +6,7 @@ import Dashboards from './components/Dashboards';
 import Projects from './components/Projects';
 import Commercial from './components/Commercial';
 import TimeEntries from './components/TimeEntries';
+import StaffTimeCapture from './components/StaffTimeCapture';
 import Customers from './components/Customers';
 import Employees from './components/Employees';
 import Support from './components/Support';
@@ -20,6 +21,9 @@ import Approvals from './components/Approvals';
 import EscalationRules from './components/EscalationRules';
 import Escalations from './components/Escalations';
 import PulsewayRmm from './components/PulsewayRmm';
+import Advisory from './components/Advisory';
+import ToastProvider from './components/foundation/ToastProvider';
+import { GlobalConfirmationHost } from './components/foundation/confirmationService';
 
 declare global {
   interface Window {
@@ -43,6 +47,7 @@ const App = () => {
       case 'pet-quotes-sales': return 'Quotes & Sales';
       case 'pet-delivery': return 'Delivery';
       case 'pet-time': return 'Time';
+      case 'pet-time-capture': return 'Staff Time Capture';
       case 'pet-support': return 'Support';
       case 'pet-knowledge': return 'Knowledge';
       case 'pet-people': return 'Staff';
@@ -50,6 +55,7 @@ const App = () => {
       case 'pet-activity': return 'Activity';
       case 'pet-settings': return 'Settings';
       case 'pet-finance': return 'Finance';
+      case 'pet-advisory': return 'Advisory';
       case 'pet-conversations': return 'Conversations';
       case 'pet-approvals': return 'Approvals';
       case 'pet-escalations': return 'Escalations';
@@ -75,6 +81,8 @@ const App = () => {
         return <Commercial />;
       case 'pet-time':
         return <TimeEntries />;
+      case 'pet-time-capture':
+        return <StaffTimeCapture />;
       case 'pet-crm':
         return <Customers />;
       case 'pet-people':
@@ -83,6 +91,8 @@ const App = () => {
         return <Roles />;
       case 'pet-support':
         return <Support />;
+      case 'pet-advisory':
+        return <Advisory />;
       case 'pet-conversations':
         return <Conversations />;
       case 'pet-approvals':
@@ -114,29 +124,35 @@ const App = () => {
   // Dashboards page renders full-screen without WP wrapper
   if (isDashboardsPage) {
     return (
-      <ErrorBoundary>
-        <ConversationProvider>
-          {renderContent()}
-        </ConversationProvider>
-      </ErrorBoundary>
+      <ToastProvider>
+        <ErrorBoundary>
+          <ConversationProvider>
+            {renderContent()}
+            <GlobalConfirmationHost />
+          </ConversationProvider>
+        </ErrorBoundary>
+      </ToastProvider>
     );
   }
 
   return (
-    <ErrorBoundary>
-      <ConversationProvider>
-        <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
-          <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
-            <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
-            <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
-          </header>
-          
-          <main>
-            {renderContent()}
-          </main>
-        </div>
-      </ConversationProvider>
-    </ErrorBoundary>
+    <ToastProvider>
+      <ErrorBoundary>
+        <ConversationProvider>
+          <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
+            <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
+              <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
+              <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
+            </header>
+            
+            <main>
+              {renderContent()}
+            </main>
+            <GlobalConfirmationHost />
+          </div>
+        </ConversationProvider>
+      </ErrorBoundary>
+    </ToastProvider>
   );
 };
 

@@ -4,6 +4,8 @@ import { DataTable, Column } from './DataTable';
 import KebabMenu, { KebabMenuItem } from './KebabMenu';
 import ArticleForm from './ArticleForm';
 import ArticleDetails from './ArticleDetails';
+import ConfirmationDialog from './foundation/ConfirmationDialog';
+import useToast from './foundation/useToast';
 
 const Knowledge = () => {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -14,6 +16,10 @@ const Knowledge = () => {
   const [viewingArticle, setViewingArticle] = useState<Article | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
+  const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
+  const toast = useToast();
 
   const fetchSchema = async () => {
     try {
@@ -78,7 +84,7 @@ const Knowledge = () => {
   };
 
   const handleArchive = async (id: number) => {
-    if (!confirm('Are you sure you want to archive this article?')) return;
+    setArchiveBusy(true);
 
     try {
       // @ts-ignore
@@ -98,35 +104,56 @@ const Knowledge = () => {
       }
 
       fetchArticles();
+      setSelectedIds(prev => prev.filter(sid => sid !== id));
+      toast.success('Article archived');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to archive');
+      toast.error(err instanceof Error ? err.message : 'Failed to archive');
+    } finally {
+      setArchiveBusy(false);
+      setPendingArchiveId(null);
     }
   };
 
   const handleBulkArchive = async () => {
-    if (!confirm(`Are you sure you want to archive ${selectedIds.length} articles?`)) return;
+    setArchiveBusy(true);
 
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
     // @ts-ignore
     const nonce = window.petSettings?.nonce;
 
-    // Process sequentially to avoid overwhelming server
-    for (const id of selectedIds) {
-      try {
-        await fetch(`${apiUrl}/articles/${id}`, {
-          method: 'DELETE',
-          headers: {
-            'X-WP-Nonce': nonce,
-          },
-        });
-      } catch (e) {
-        console.error(`Failed to archive ${id}`, e);
+    let failedCount = 0;
+    try {
+      // Process sequentially to avoid overwhelming server
+      for (const id of selectedIds) {
+        try {
+          const response = await fetch(`${apiUrl}/articles/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'X-WP-Nonce': nonce,
+            },
+          });
+          if (!response.ok) {
+            failedCount += 1;
+          }
+        } catch (e) {
+          console.error(`Failed to archive ${id}`, e);
+          failedCount += 1;
+        }
       }
+      
+      const successCount = selectedIds.length - failedCount;
+      setSelectedIds([]);
+      fetchArticles();
+      if (failedCount > 0) {
+        toast.error(`Archived ${successCount} articles; ${failedCount} failed.`);
+      } else {
+        toast.success(`Archived ${successCount} articles.`);
+      }
+    } finally {
+      setArchiveBusy(false);
+      setConfirmBulkArchive(false);
     }
-    
-    setSelectedIds([]);
-    fetchArticles();
   };
 
   const columns: Column<Article>[] = [
@@ -150,8 +177,6 @@ const Knowledge = () => {
     return <ArticleDetails article={viewingArticle} schema={activeSchema} onBack={() => setViewingArticle(null)} />;
   }
 
-  if (loading && !articles.length) return <div>Loading knowledge base...</div>;
-  if (error) return <div style={{ color: 'red' }}>Error: {error}</div>;
 
   const isFormVisible = showForm || !!editingArticle;
 
@@ -179,14 +204,18 @@ const Knowledge = () => {
           {selectedIds.length > 0 && (
             <div style={{ padding: '10px', background: '#e5f5fa', border: '1px solid #b5e1ef', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '15px' }}>
               <strong>{selectedIds.length} items selected</strong>
-              <button className="button" onClick={handleBulkArchive}>Archive Selected</button>
+              <button className="button" onClick={() => setConfirmBulkArchive(true)}>Archive Selected</button>
             </div>
           )}
 
           <DataTable 
             columns={columns} 
             data={articles} 
+            loading={loading}
+            error={error}
+            onRetry={fetchArticles}
             emptyMessage="No articles found." 
+            compatibilityMode="wp"
             selection={{
               selectedIds,
               onSelectionChange: setSelectedIds
@@ -197,10 +226,34 @@ const Knowledge = () => {
                 { type: 'action', label: 'Edit', onClick: () => setEditingArticle(item), disabled: item.status === 'archived', disabledReason: 'Archived articles cannot be edited' },
               ];
               if (item.status !== 'archived') {
-                items.push({ type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true });
+                items.push({ type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true });
               }
               return <KebabMenu items={items} />;
             }}
+          />
+
+          <ConfirmationDialog
+            open={pendingArchiveId !== null}
+            title="Archive article?"
+            description="This action will archive the selected article."
+            confirmLabel="Archive"
+            busy={archiveBusy}
+            onCancel={() => setPendingArchiveId(null)}
+            onConfirm={() => {
+              if (pendingArchiveId !== null) {
+                handleArchive(pendingArchiveId);
+              }
+            }}
+          />
+
+          <ConfirmationDialog
+            open={confirmBulkArchive}
+            title="Archive selected articles?"
+            description={`This action will archive ${selectedIds.length} selected articles.`}
+            confirmLabel="Archive selected"
+            busy={archiveBusy}
+            onCancel={() => setConfirmBulkArchive(false)}
+            onConfirm={handleBulkArchive}
           />
         </>
       )}

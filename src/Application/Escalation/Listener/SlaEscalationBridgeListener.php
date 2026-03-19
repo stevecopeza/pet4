@@ -46,7 +46,8 @@ class SlaEscalationBridgeListener
                 'origin' => 'sla_breach',
                 'stage' => $event->stage(),
                 'tier_priority' => $event->tierPriority(),
-            ]
+            ],
+            'SLA Breach'
         );
 
         $this->handler->handle($command);

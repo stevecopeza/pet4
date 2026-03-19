@@ -364,8 +364,16 @@ class ContainerFactory
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlWorkItemRepository($wpdb);
             },
+            \Pet\Infrastructure\Persistence\Repository\SqlWorkItemRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlWorkItemRepository($wpdb);
+            },
             
             \Pet\Domain\Work\Repository\DepartmentQueueRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlDepartmentQueueRepository($wpdb);
+            },
+            \Pet\Infrastructure\Persistence\Repository\SqlDepartmentQueueRepository::class => function () {
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlDepartmentQueueRepository($wpdb);
             },
@@ -373,6 +381,19 @@ class ContainerFactory
             \Pet\Domain\Advisory\Repository\AdvisorySignalRepository::class => function () {
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlAdvisorySignalRepository($wpdb);
+            },
+            \Pet\Domain\Advisory\Repository\AdvisoryReportRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlAdvisoryReportRepository($wpdb);
+            },
+
+            \Pet\Domain\Resilience\Repository\ResilienceAnalysisRunRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlResilienceAnalysisRunRepository($wpdb);
+            },
+            \Pet\Domain\Resilience\Repository\ResilienceSignalRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlResilienceSignalRepository($wpdb);
             },
 
             // DUPLICATE Feed repos REMOVED (already defined above at line ~211)
@@ -497,6 +518,8 @@ class ContainerFactory
             \Pet\Application\Work\Command\UpdatePerformanceReviewHandler::class => \DI\autowire(\Pet\Application\Work\Command\UpdatePerformanceReviewHandler::class),
             \Pet\Application\Work\Command\AssignWorkItemHandler::class => \DI\autowire(\Pet\Application\Work\Command\AssignWorkItemHandler::class),
             \Pet\Application\Work\Command\OverrideWorkItemPriorityHandler::class => \DI\autowire(\Pet\Application\Work\Command\OverrideWorkItemPriorityHandler::class),
+            \Pet\Application\Advisory\Command\GenerateAdvisoryReportHandler::class => \DI\autowire(\Pet\Application\Advisory\Command\GenerateAdvisoryReportHandler::class),
+            \Pet\Application\Resilience\Command\GenerateResilienceAnalysisHandler::class => \DI\autowire(\Pet\Application\Resilience\Command\GenerateResilienceAnalysisHandler::class),
             
             // Projectors
             \Pet\Application\Work\Projection\WorkItemProjector::class => \DI\autowire(\Pet\Application\Work\Projection\WorkItemProjector::class),
@@ -504,6 +527,41 @@ class ContainerFactory
             \Pet\Domain\Work\Service\SlaClockCalculator::class => \DI\autowire(\Pet\Domain\Work\Service\SlaClockCalculator::class),
             \Pet\Domain\Calendar\Service\BusinessTimeCalculator::class => \DI\autowire(\Pet\Domain\Calendar\Service\BusinessTimeCalculator::class),
             \Pet\Domain\Work\Service\CapacityCalendar::class => \DI\autowire(\Pet\Domain\Work\Service\CapacityCalendar::class),
+            \Pet\Application\Work\Service\WorkQueueQueryService::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Work\Service\WorkQueueQueryService($wpdb);
+            },
+            \Pet\Application\Support\Query\SupportTeamOperationalSummaryQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Support\Query\SupportTeamOperationalSummaryQuery($wpdb);
+            },
+            \Pet\Application\Dashboard\Query\TeamSupportSummaryQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Dashboard\Query\TeamSupportSummaryQuery($wpdb);
+            },
+            \Pet\Application\Dashboard\Query\TeamEscalationSummaryQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Dashboard\Query\TeamEscalationSummaryQuery($wpdb);
+            },
+            \Pet\Application\Dashboard\Query\TeamAdvisorySummaryQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Dashboard\Query\TeamAdvisorySummaryQuery($wpdb);
+            },
+            \Pet\Application\Resilience\Query\TeamWorkloadConcentrationQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Resilience\Query\TeamWorkloadConcentrationQuery($wpdb);
+            },
+            \Pet\Application\Advisory\Service\CustomerAdvisorySnapshotQuery::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Advisory\Service\CustomerAdvisorySnapshotQuery($wpdb);
+            },
+            \Pet\Application\Advisory\Service\CustomerAdvisoryAccessService::class => function () {
+                global $wpdb;
+                return new \Pet\Application\Advisory\Service\CustomerAdvisoryAccessService($wpdb);
+            },
+            \Pet\Domain\Dashboard\Service\DashboardAccessPolicy::class => \DI\autowire(\Pet\Domain\Dashboard\Service\DashboardAccessPolicy::class),
+            \Pet\Application\Dashboard\Service\DashboardCompositionService::class => \DI\autowire(\Pet\Application\Dashboard\Service\DashboardCompositionService::class),
+            \Pet\Application\Resilience\Service\ResilienceAnalysisGenerator::class => \DI\autowire(\Pet\Application\Resilience\Service\ResilienceAnalysisGenerator::class),
             \Pet\Application\Integration\Service\OutboxDispatcherService::class => \DI\autowire(\Pet\Application\Integration\Service\OutboxDispatcherService::class),
             \Pet\Application\Integration\Cron\OutboxDispatchJob::class => \DI\autowire(\Pet\Application\Integration\Cron\OutboxDispatchJob::class),
             \Pet\Application\Integration\Service\QbMockPullService::class => \DI\autowire(\Pet\Application\Integration\Service\QbMockPullService::class),
@@ -521,6 +579,9 @@ class ContainerFactory
             \Pet\Application\Support\Command\CreateTicketHandler::class => \DI\autowire(\Pet\Application\Support\Command\CreateTicketHandler::class),
             \Pet\Application\Support\Command\UpdateTicketHandler::class => \DI\autowire(\Pet\Application\Support\Command\UpdateTicketHandler::class),
             \Pet\Application\Support\Command\DeleteTicketHandler::class => \DI\autowire(\Pet\Application\Support\Command\DeleteTicketHandler::class),
+            \Pet\Application\Support\Command\AssignTicketToTeamHandler::class => \DI\autowire(\Pet\Application\Support\Command\AssignTicketToTeamHandler::class),
+            \Pet\Application\Support\Command\AssignTicketToUserHandler::class => \DI\autowire(\Pet\Application\Support\Command\AssignTicketToUserHandler::class),
+            \Pet\Application\Support\Command\PullTicketHandler::class => \DI\autowire(\Pet\Application\Support\Command\PullTicketHandler::class),
             \Pet\Application\Knowledge\Command\CreateArticleHandler::class => \DI\autowire(\Pet\Application\Knowledge\Command\CreateArticleHandler::class),
             \Pet\Application\Knowledge\Command\UpdateArticleHandler::class => \DI\autowire(\Pet\Application\Knowledge\Command\UpdateArticleHandler::class),
             \Pet\Application\Knowledge\Command\ArchiveArticleHandler::class => \DI\autowire(\Pet\Application\Knowledge\Command\ArchiveArticleHandler::class),
@@ -529,16 +590,19 @@ class ContainerFactory
             \Pet\UI\Rest\Controller\QuoteController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\LeadController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\TimeEntryController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\StaffTimeCaptureController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\CustomerController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\ContactController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SiteController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\EmployeeController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\TicketController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\SupportOperationalController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\ArticleController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\ActivityController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SettingsController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SchemaController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\DashboardController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\DashboardsController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\CalendarController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SlaController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\RoleController::class => \DI\autowire(),
@@ -553,7 +617,11 @@ class ContainerFactory
             \Pet\UI\Rest\Controller\RoleKpiController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\PersonKpiController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\WorkController::class => \DI\autowire(\Pet\UI\Rest\Controller\WorkController::class),
+            \Pet\UI\Rest\Controller\WorkQueueController::class => \DI\autowire(\Pet\UI\Rest\Controller\WorkQueueController::class),
             \Pet\UI\Rest\Controller\WorkItemController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\AdvisorySignalController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\AdvisoryReportController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\ResilienceController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\LeaveController::class => \DI\autowire(),
             \Pet\Application\System\Service\DemoSeedService::class => function () {
                 global $wpdb;
