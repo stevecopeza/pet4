@@ -39,9 +39,23 @@ class AdminPageRegistry
         $submenus = [
             'pet-dashboard' => 'Overview', // Rename first item
             'pet-dashboards' => 'Dashboards',
+            'pet-crm' => 'Customers',
+            'pet-quotes-sales' => 'Quotes & Sales',
+            'pet-finance' => 'Finance',
             'pet-delivery' => 'Delivery',
+            'pet-time' => 'Time',
             'pet-support' => 'Support',
+            'pet-conversations' => 'Conversations',
             'pet-advisory' => 'Advisory',
+            'pet-approvals' => 'Approvals',
+            'pet-knowledge' => 'Knowledge',
+            'pet-people' => 'Staff',
+            'pet-roles' => 'Roles & Capabilities',
+            'pet-activity' => 'Activity',
+            'pet-settings' => 'Settings',
+            'pet-pulseway' => 'Pulseway RMM',
+            'pet-shortcodes' => 'Shortcodes',
+            'pet-demo-tools' => 'Demo Tools',
         ];
 
         // Conditionally add Escalations submenu when feature is enabled
