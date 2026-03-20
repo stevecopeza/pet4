@@ -1,6 +1,6 @@
 # PET Dashboard Composition and Manager Summary Surfaces — Completion Specification v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md`
+**Target location:** `plugins/pet/docs/10_dashboards/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md`
 
 ## 0. Purpose
 

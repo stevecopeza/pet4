@@ -2,7 +2,7 @@
 # PET Support / Helpdesk UX and Operational Completion — Specification v1
 
 Target location:
-plugins/pet/docs/ToBeMoved/PET_Support_Helpdesk_Operational_Completion_v1.md
+plugins/pet/docs/31_support_helpdesk/PET_Support_Helpdesk_Operational_Completion_v1.md
 
 ## 0 Purpose
 

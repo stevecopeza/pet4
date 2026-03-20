@@ -244,6 +244,364 @@
   color: #a00;
   border-color: #a00;
 }
+.pet-projects .pet-page-shell-header,
+.pet-employees .pet-page-shell-header {
+  padding: 2px 2px 6px;
+}
+
+.pet-projects-summary-panel,
+.pet-employees-summary-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  border-color: #cfe0f4;
+  box-shadow: 0 10px 22px rgba(16, 37, 61, 0.08);
+}
+
+.pet-projects-summary-grid,
+.pet-employees-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.pet-projects-summary-item,
+.pet-employees-summary-item {
+  border: 1px solid #d7e6f8;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f9fcff 0%, #f1f7ff 100%);
+  padding: 12px 12px 11px;
+}
+
+.pet-projects-summary-label,
+.pet-employees-summary-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #5d6f85;
+  margin-bottom: 4px;
+}
+
+.pet-projects-summary-value,
+.pet-employees-summary-value {
+  font-size: 22px;
+  line-height: 1.05;
+  color: #12263d;
+  letter-spacing: 0.2px;
+}
+
+.pet-projects-filters-panel,
+.pet-employees-filters-panel {
+  background: linear-gradient(180deg, #fcfeff 0%, #f6faff 100%);
+  border-color: #d9e7f7;
+}
+
+.pet-projects-filters-grid,
+.pet-employees-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.pet-projects-filter-field,
+.pet-employees-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pet-projects-filter-field span,
+.pet-employees-filter-field span {
+  font-size: 12px;
+  color: #506176;
+  font-weight: 600;
+}
+
+.pet-projects-filter-field input,
+.pet-projects-filter-field select,
+.pet-employees-filter-field input,
+.pet-employees-filter-field select {
+  width: 100%;
+  min-height: 34px;
+  border-color: #c9d8ea;
+  border-radius: 6px;
+}
+
+.pet-projects-filter-actions,
+.pet-employees-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: end;
+}
+
+.pet-projects-preset-bar,
+.pet-employees-preset-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid #deebfa;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.pet-projects-preset-btn,
+.pet-employees-preset-btn {
+  min-height: 30px;
+  border-radius: 999px;
+  border-color: #bed2ea;
+  background: #f8fbff;
+  color: #234462;
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+.pet-projects-preset-btn.is-active,
+.pet-employees-preset-btn.is-active {
+  background: #dcecff;
+  border-color: #8db8ea;
+  color: #143c62;
+  font-weight: 600;
+}
+
+.pet-projects-bulk-text,
+.pet-employees-bulk-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-projects-bulk-eyebrow,
+.pet-employees-bulk-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #4b6583;
+}
+
+.pet-projects-table-panel,
+.pet-employees-table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.pet-projects-table-header,
+.pet-employees-table-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e1e9f3;
+  background: #f9fbfe;
+}
+
+.pet-projects-table-header h3,
+.pet-employees-table-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #16253a;
+}
+
+.pet-projects-table-header p,
+.pet-employees-table-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #5d6f85;
+}
+
+.pet-projects-table-panel .pet-data-table-container,
+.pet-employees-table-panel .pet-data-table-container {
+  padding: 0 12px 12px;
+}
+
+.pet-projects-table-panel .pet-data-table tbody tr:nth-child(even) td,
+.pet-employees-table-panel .pet-data-table tbody tr:nth-child(even) td {
+  background: #fbfdff;
+}
+
+.pet-projects-table-panel .pet-data-table tbody tr:hover td,
+.pet-employees-table-panel .pet-data-table tbody tr:hover td {
+  background: #f1f7ff;
+}
+
+.pet-project-row-primary,
+.pet-employee-row-primary {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-project-row-title-line,
+.pet-employee-row-title-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pet-project-row-link,
+.pet-employee-row-link {
+  background: none;
+  border: none;
+  color: #135e96;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+}
+
+.pet-project-row-link:hover,
+.pet-employee-row-link:hover {
+  text-decoration: underline;
+}
+
+.pet-project-row-meta,
+.pet-employee-row-meta {
+  color: #6a7f97;
+  font-size: 11px;
+}
+
+.pet-project-row-context,
+.pet-project-row-delivery,
+.pet-employee-row-context {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-project-row-context-primary,
+.pet-project-row-context-secondary,
+.pet-project-row-hours,
+.pet-project-row-tasks,
+.pet-employee-row-context-primary,
+.pet-employee-row-context-secondary {
+  color: #254363;
+}
+
+.pet-project-row-context-secondary,
+.pet-project-row-tasks,
+.pet-employee-row-context-secondary {
+  font-size: 11px;
+  color: #6a7f97;
+}
+
+.pet-project-row-hours {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #edf4ff;
+  color: #1c3f66;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.pet-project-row-signals,
+.pet-employee-row-signals {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pet-project-health-dot {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.pet-project-health-dot--red {
+  background: #fde8e8;
+  color: #9f1d1d;
+}
+
+.pet-project-health-dot--amber {
+  background: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-project-health-dot--grey {
+  background: #edf2f7;
+  color: #4d6179;
+}
+
+.pet-project-attention-list,
+.pet-employee-attention-list {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pet-project-attention-tag,
+.pet-employee-attention-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+
+.pet-project-attention-tag--high,
+.pet-employee-attention-tag--high {
+  background: #fbe4e8;
+  color: #8a1f2d;
+}
+
+.pet-project-attention-tag--medium,
+.pet-employee-attention-tag--medium {
+  background: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-project-attention-tag--low,
+.pet-employee-attention-tag--low {
+  background: #e8f4fd;
+  color: #0b4f80;
+}
+
+.pet-project-attention-empty,
+.pet-employee-attention-empty {
+  color: #8a94a3;
+}
+
+.pet-project-conversation-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 37, 58, 0.25);
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pet-project-conversation-dot:hover {
+  filter: brightness(0.92);
+}
+
+.pet-project-conversation-dot:focus-visible {
+  outline: 2px solid #2271b1;
+  outline-offset: 1px;
+}
+
+.pet-project-row--attention td,
+.pet-employee-row--attention td {
+  background: #fff9f0 !important;
+}
+
+.pet-employee-row-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.pet-employees-tabs {
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e7ef;
+  padding-bottom: 8px;
+}
 
 .pet-time-entries .pet-page-shell-header {
   padding: 2px 2px 6px;
@@ -255,20 +613,22 @@
 }
 
 .pet-time-entries-context-panel {
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  border-color: #cfe0f4;
+  box-shadow: 0 10px 22px rgba(16, 37, 61, 0.08);
 }
 
 .pet-time-entries-context-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
 }
 
 .pet-time-entries-context-item {
-  border: 1px solid #deebfa;
-  border-radius: 8px;
-  background: #f7fbff;
-  padding: 10px 12px;
+  border: 1px solid #d7e6f8;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f9fcff 0%, #f1f7ff 100%);
+  padding: 12px 12px 11px;
 }
 
 .pet-time-entries-context-label {
@@ -281,25 +641,27 @@
 }
 
 .pet-time-entries-context-value {
-  font-size: 20px;
-  line-height: 1;
-  color: #16253a;
+  font-size: 24px;
+  line-height: 1.05;
+  color: #12263d;
+  letter-spacing: 0.2px;
 }
 
 .pet-time-entries-filters-panel {
-  background: #fdfefe;
+  background: linear-gradient(180deg, #fcfeff 0%, #f6faff 100%);
+  border-color: #d9e7f7;
 }
 
 .pet-time-entries-filters-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 1.2fr) auto;
+  gap: 10px;
   align-items: end;
 }
 
 .pet-time-entries-filter-field {
   display: flex;
-  flex-direction: column;
+  gap: 5px;
   gap: 6px;
 }
 
@@ -312,11 +674,49 @@
 .pet-time-entries-filter-field input,
 .pet-time-entries-filter-field select {
   width: 100%;
+  min-height: 34px;
+  border-color: #c9d8ea;
+  border-radius: 6px;
 }
 
 .pet-time-entries-filter-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: end;
+}
+
+.pet-time-entries-clear-filters {
+  min-height: 34px;
+  border-radius: 6px;
+  border-color: #b7c8dd;
+  color: #344d6b;
+  background: #f8fbff;
+}
+
+.pet-time-entries-preset-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid #deebfa;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.pet-time-entries-preset-btn {
+  min-height: 30px;
+  border-radius: 999px;
+  border-color: #bed2ea;
+  background: #f8fbff;
+  color: #234462;
+  font-size: 12px;
+  padding: 0 12px;
+}
+
+.pet-time-entries-preset-btn.is-active {
+  background: #dcecff;
+  border-color: #8db8ea;
+  color: #143c62;
+  font-weight: 600;
 }
 
 .pet-time-entries-status-badge {
@@ -445,6 +845,173 @@
   gap: 8px;
 }
 
+.pet-time-entry-ticket-link {
+  color: #135e96;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.pet-time-entry-ticket-link:hover {
+  text-decoration: underline;
+  color: #0f4d7a;
+}
+
+.pet-time-entry-cell-identity {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-time-entry-cell-identity-primary {
+  color: #1a2e45;
+  font-weight: 600;
+}
+
+.pet-time-entry-cell-identity-secondary {
+  color: #6a7f97;
+  font-size: 11px;
+}
+
+.pet-time-entry-cell-context {
+  color: #254363;
+}
+
+.pet-time-entry-cell-datetime {
+  color: #304e6d;
+  font-variant-numeric: tabular-nums;
+}
+
+.pet-time-entry-cell-duration {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #edf4ff;
+  color: #1c3f66;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.pet-time-entry-cell-signals-time {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.pet-time-entry-signal-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.pet-time-entry-billing-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+
+.pet-time-entry-billing-badge--ready {
+  background: #e7f7ef;
+  color: #1f7a44;
+}
+
+.pet-time-entry-billing-badge--blocked {
+  background: #fde8e8;
+  color: #9f1d1d;
+}
+
+.pet-time-entry-billing-badge--billed {
+  background: #edf2f7;
+  color: #4d6179;
+}
+
+.pet-time-entry-billing-badge--non-billable {
+  background: #f3f6fa;
+  color: #667a93;
+}
+
+.pet-time-entry-billing-badge--unknown {
+  background: #f3f6fa;
+  color: #667a93;
+}
+
+.pet-time-entry-time-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pet-time-entry-cell-description {
+  color: #1f3349;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pet-time-entries-table-panel .pet-data-table tbody tr:nth-child(even) td {
+  background: #fbfdff;
+}
+
+.pet-time-entries-table-panel .pet-data-table tbody tr:hover td {
+  background: #f1f7ff;
+}
+
+.pet-time-entry-row--attention td {
+  background: #fff9f0 !important;
+}
+
+.pet-time-entries-table-panel .pet-data-table thead th {
+  color: #2a4664;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.pet-time-entry-attention-list {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pet-time-entry-attention-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+}
+
+.pet-time-entry-attention-tag--high {
+  background: #fbe4e8;
+  color: #8a1f2d;
+}
+
+.pet-time-entry-attention-tag--medium {
+  background: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-time-entry-attention-tag--low {
+  background: #e8f4fd;
+  color: #0b4f80;
+}
+
+.pet-time-entry-attention-empty {
+  color: #8a94a3;
+}
+
 .pet-time-entry-conversation-dot {
   width: 10px;
   height: 10px;
@@ -509,19 +1076,13 @@
   padding: 0 12px 12px;
 }
 
-.pet-time-entries-table-panel .pet-data-table thead th:nth-last-child(4),
-.pet-time-entries-table-panel .pet-data-table thead th:nth-last-child(3),
 .pet-time-entries-table-panel .pet-data-table thead th:nth-last-child(2),
-.pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(4),
-.pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(3),
 .pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(2) {
   padding-left: 1px;
   padding-right: 1px;
-  text-align: center;
+  text-align: left;
 }
 
-.pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(4),
-.pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(3),
 .pet-time-entries-table-panel .pet-data-table tbody td:nth-last-child(2) {
   overflow: visible;
 }
@@ -761,10 +1322,16 @@
 }
 
 @media (max-width: 782px) {
+  .pet-projects-summary-grid,
+  .pet-employees-summary-grid,
   .pet-time-entries-context-grid,
+  .pet-projects-filters-grid,
+  .pet-employees-filters-grid,
   .pet-time-entries-filters-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
+  .pet-projects-filter-actions,
+  .pet-employees-filter-actions,
 
   .pet-time-entries-filter-actions {
     justify-content: flex-start;

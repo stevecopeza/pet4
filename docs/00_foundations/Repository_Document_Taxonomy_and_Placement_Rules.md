@@ -155,7 +155,6 @@ Examples of shadowing that should be avoided:
 
 ## Staging rule
 Temporary migration content should live in a clearly non-authoritative folder such as:
-- `docs/ToBeMoved/`
 - `docs/_staging/`
 
 That folder must contain a warning README and must not be treated as active authority.

@@ -4,7 +4,7 @@
 
 This document is the recovery specification for implemented-or-partially-implemented PET features that currently have thin, missing, or ambiguous documentation. It exists to make those features safe to maintain, extend, test, and demo.
 
-This pack is intentionally documentation-first. It is designed to be copied into `docs/ToBeMoved` and treated as binding input for implementation recovery, documentation alignment, UI completion, and demo seed updates.
+This pack is intentionally documentation-first. It is designed to be maintained in `docs/15_implementation_blueprint/` and treated as binding input for implementation recovery, documentation alignment, UI completion, and demo seed updates.
 
 ## Scope
 

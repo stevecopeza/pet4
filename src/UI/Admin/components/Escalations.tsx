@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import ConfirmationDialog from './foundation/ConfirmationDialog';
+import Dialog from './foundation/Dialog';
 import useToast from './foundation/useToast';
 import LoadingState from './foundation/states/LoadingState';
 import ErrorState from './foundation/states/ErrorState';
@@ -79,7 +80,10 @@ const Escalations = () => {
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ id: number; action: 'acknowledge' | 'resolve' } | null>(null);
+  const [pendingAcknowledgeId, setPendingAcknowledgeId] = useState<number | null>(null);
+  const [pendingResolveId, setPendingResolveId] = useState<number | null>(null);
+  const [resolutionNote, setResolutionNote] = useState('');
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -124,19 +128,17 @@ const Escalations = () => {
     }
   };
 
-  const doAction = async (id: number, action: 'acknowledge' | 'resolve') => {
+  const doAction = async (id: number, action: 'acknowledge') => {
     setActionBusy(true);
     try {
-      const body = action === 'resolve' ? JSON.stringify({ resolution_note: prompt('Resolution note (optional):') || null }) : undefined;
       const res = await fetch(`${window.petSettings.apiUrl}/escalations/${id}/${action}`, {
         method: 'POST',
         headers: { 'X-WP-Nonce': window.petSettings.nonce, 'Content-Type': 'application/json' },
-        body,
       });
       if (!res.ok) {
         throw new Error(`Failed to ${action} escalation`);
       }
-      toast.success(action === 'acknowledge' ? 'Escalation acknowledged.' : 'Escalation resolved.');
+      toast.success('Escalation acknowledged.');
       fetchData();
       if (selectedId === id) {
         fetchDetail(id);
@@ -145,7 +147,36 @@ const Escalations = () => {
       toast.error(err instanceof Error ? err.message : 'Escalation action failed');
     } finally {
       setActionBusy(false);
-      setPendingAction(null);
+      setPendingAcknowledgeId(null);
+    }
+  };
+
+  const resolveEscalation = async () => {
+    if (pendingResolveId === null) {
+      return;
+    }
+    setActionBusy(true);
+    setResolveError(null);
+    try {
+      const res = await fetch(`${window.petSettings.apiUrl}/escalations/${pendingResolveId}/resolve`, {
+        method: 'POST',
+        headers: { 'X-WP-Nonce': window.petSettings.nonce, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution_note: resolutionNote.trim() || null }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to resolve escalation');
+      }
+      toast.success('Escalation resolved.');
+      fetchData();
+      if (selectedId === pendingResolveId) {
+        fetchDetail(pendingResolveId);
+      }
+      setPendingResolveId(null);
+      setResolutionNote('');
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : 'Escalation action failed');
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -183,10 +214,20 @@ const Escalations = () => {
       render: (_val, item) => (
         <>
           {item.status === 'OPEN' && (
-            <button className="button button-small" onClick={() => setPendingAction({ id: item.id, action: 'acknowledge' })}>Acknowledge</button>
+            <button className="button button-small" onClick={() => setPendingAcknowledgeId(item.id)}>Acknowledge</button>
           )}
           {(item.status === 'OPEN' || item.status === 'ACKED') && (
-            <button className="button button-small" style={{ marginLeft: 4 }} onClick={() => setPendingAction({ id: item.id, action: 'resolve' })}>Resolve</button>
+            <button
+              className="button button-small"
+              style={{ marginLeft: 4 }}
+              onClick={() => {
+                setPendingResolveId(item.id);
+                setResolutionNote('');
+                setResolveError(null);
+              }}
+            >
+              Resolve
+            </button>
           )}
         </>
       )
@@ -316,20 +357,61 @@ const Escalations = () => {
       )}
 
       <ConfirmationDialog
-        open={pendingAction !== null}
-        title={pendingAction?.action === 'acknowledge' ? 'Acknowledge escalation?' : 'Resolve escalation?'}
-        description={pendingAction?.action === 'acknowledge'
-          ? 'This action will acknowledge the selected escalation.'
-          : 'This action will resolve the selected escalation.'}
-        confirmLabel={pendingAction?.action === 'acknowledge' ? 'Acknowledge' : 'Resolve'}
+        open={pendingAcknowledgeId !== null}
+        title="Acknowledge escalation?"
+        description="This action will acknowledge the selected escalation."
+        confirmLabel="Acknowledge"
         busy={actionBusy}
-        onCancel={() => setPendingAction(null)}
+        onCancel={() => setPendingAcknowledgeId(null)}
         onConfirm={() => {
-          if (pendingAction) {
-            doAction(pendingAction.id, pendingAction.action);
+          if (pendingAcknowledgeId !== null) {
+            doAction(pendingAcknowledgeId, 'acknowledge');
           }
         }}
       />
+      <Dialog
+        open={pendingResolveId !== null}
+        title="Resolve escalation"
+        description="Provide an optional resolution note before resolving this escalation."
+        onClose={() => {
+          if (!actionBusy) {
+            setPendingResolveId(null);
+            setResolutionNote('');
+            setResolveError(null);
+          }
+        }}
+      >
+        <div style={{ display: 'grid', gap: 12 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Resolution note (optional)</span>
+            <textarea
+              rows={4}
+              value={resolutionNote}
+              onChange={(event) => setResolutionNote(event.target.value)}
+              placeholder="Add context for how this escalation was resolved."
+              disabled={actionBusy}
+            />
+          </label>
+          {resolveError && <div style={{ color: '#d63638' }}>{resolveError}</div>}
+          <div className="pet-dialog-actions">
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setPendingResolveId(null);
+                setResolutionNote('');
+                setResolveError(null);
+              }}
+              disabled={actionBusy}
+            >
+              Cancel
+            </button>
+            <button type="button" className="button button-primary" onClick={resolveEscalation} disabled={actionBusy}>
+              {actionBusy ? 'Working…' : 'Resolve'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 };

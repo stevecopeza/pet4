@@ -95,6 +95,13 @@ const modeLabel = (mode: string | null): string => {
   return mode;
 };
 
+const mapQueuePriorityToTicketPriority = (priority: number): string => {
+  if (priority >= 90) return 'urgent';
+  if (priority >= 70) return 'high';
+  if (priority >= 40) return 'medium';
+  return 'low';
+};
+
 const relativeTime = (iso: string | null): string => {
   if (!iso) return '\u2014';
   const diff = Date.now() - new Date(iso).getTime();
@@ -283,14 +290,34 @@ const SupportOperational = () => {
   }, [selectedQueueKey]);
 
   /* --- Drill-through --- */
-  const openTicketDetail = async (sourceId: string) => {
+  const buildTicketFromQueueItem = (item: QueueItem): Ticket => ({
+    id: Number(item.source_id),
+    customerId: item.customer_id ?? 0,
+    siteId: item.site_id ?? undefined,
+    subject: item.title || `Ticket ${item.reference_code || item.source_id}`,
+    description: item.routing_reason || 'Ticket details loaded from support queue.',
+    status: item.status || 'open',
+    priority: mapQueuePriorityToTicketPriority(item.priority),
+    createdAt: item.created_at,
+    resolvedAt: null,
+    queueId: item.queue_key,
+    lifecycleOwner: 'support',
+  });
+
+  const openTicketDetail = async (item: QueueItem) => {
+    const sourceId = item.source_id;
     try {
       const res = await fetch(`${getApiUrl()}/tickets?status=`, { headers: hdrs() });
-      if (!res.ok) return;
-      const tickets: Ticket[] = await res.json();
-      const t = tickets.find((tk) => String(tk.id) === sourceId);
-      if (t) setDetailTicket(t);
+      if (res.ok) {
+        const tickets: Ticket[] = await res.json();
+        const t = tickets.find((tk) => String(tk.id) === sourceId);
+        if (t) {
+          setDetailTicket(t);
+          return;
+        }
+      }
     } catch { /* noop */ }
+    setDetailTicket(buildTicketFromQueueItem(item));
   };
 
   /* ============================================================
@@ -405,6 +432,9 @@ const SupportOperational = () => {
           <div className="pd-header-subtitle">{queues.length} queue{queues.length !== 1 ? 's' : ''} visible</div>
         </div>
         <div className="pd-header-right">
+          <a className="pd-refresh-btn" href="/wp-admin/admin.php?page=pet-escalations" style={{ marginRight: 8 }}>
+            Escalations
+          </a>
           <button type="button" className="pd-refresh-btn" onClick={() => { fetchQueues(); if (selectedQueueKey) fetchQueueItems(selectedQueueKey); }}>
             \u21BB Refresh
           </button>
@@ -516,7 +546,7 @@ const SupportOperational = () => {
                   <div
                     className="pd-attention-body"
                     style={{ cursor: isTicket ? 'pointer' : undefined }}
-                    onClick={() => { if (isTicket) openTicketDetail(item.source_id); }}
+                    onClick={() => { if (isTicket) openTicketDetail(item); }}
                   >
                     <div className="pd-attention-subject">
                       <span style={{ color: '#0d6efd', marginRight: 6 }}>{item.reference_code}</span>

@@ -5,7 +5,7 @@ SUPERSESSION DATE: 2026-03-17
 NOTES: Retained for historical traceability only. Do not use this v1 spec for new implementation decisions.
 # PET Escalation Engine Completion — Specification v1
 
-Location: docs/ToBeMoved/PET_Escalation_Engine_Completion_v1.md
+Location: docs/22_escalation_and_risk/PET_Escalation_Engine_Completion_v1.md
 
 ## Purpose
 Complete the Escalation subsystem so that risk detection in tickets/projects produces deterministic escalations, visible timelines, and actionable management workflows.

@@ -3,7 +3,7 @@ import '../dashboard-styles.css';
 import { computeTicketHealth, computeProjectHealth, computeQuoteHealth, computeLeadHealth, HealthResult, HealthHistory } from '../healthCompute';
 import type { JourneyData } from '../healthCompute';
 import JourneyBar from './JourneyBar';
-import { legacyAlert, legacyConfirm } from './legacyDialogs';
+import { legacyConfirm } from './legacyDialogs';
 
 /* ============================================================
    Types
@@ -1459,24 +1459,6 @@ const TicketDetailPanel: React.FC<{
     }
   };
 
-  const handleCorrectEntry = async (entry: TimeEntryItem) => {
-    const reason = prompt('Correction description (why is this being corrected?)');
-    if (!reason) return;
-
-    try {
-      await apiPost(`time-entries/${entry.id}/correct`, {
-        description: `CORRECTION: ${reason}`,
-        start: entry.start,
-        end: entry.end,
-        isBillable: entry.billable,
-      });
-      // Refresh time entries
-      const freshEntries = await api(`time-entries?ticket_id=${ticket.id}`).catch(() => []);
-      setDetail(prev => ({ ...prev, timeEntries: Array.isArray(freshEntries) ? freshEntries : [] }));
-    } catch (err) {
-      legacyAlert(err instanceof Error ? err.message : 'Failed to create correction');
-    }
-  };
 
   const startEdit = (entry: TimeEntryItem) => {
     setEditingEntryId(entry.id);
@@ -1649,11 +1631,6 @@ const TicketDetailPanel: React.FC<{
                               {entry.status === 'draft' && (entry.employeeId === currentEmployeeId || entry.employeeId === currentUserId) && (
                                 <button className="pd-worklog-edit-btn" onClick={() => startEdit(entry)} title="Edit draft">
                                   \u270E
-                                </button>
-                              )}
-                              {(entry.status === 'submitted' || entry.status === 'locked') && !entry.isCorrection && (
-                                <button className="pd-worklog-edit-btn" onClick={() => handleCorrectEntry(entry)} title="Create correction">
-                                  \u21BA
                                 </button>
                               )}
                             </div>

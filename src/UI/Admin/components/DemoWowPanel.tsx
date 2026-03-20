@@ -15,6 +15,7 @@ interface DemoWowData {
     actions: {
         escalationRulesUrl: string;
         helpdeskUrl: string;
+        advisoryUrl?: string;
     };
 }
 
@@ -34,6 +35,11 @@ export const DemoWowPanel: React.FC<DemoWowPanelProps> = ({ data }) => {
                     <a href={data.actions.helpdeskUrl} className="button button-primary">
                         Helpdesk
                     </a>
+                    {data.actions.advisoryUrl && (
+                        <a href={data.actions.advisoryUrl} className="button" style={{ marginLeft: '10px' }}>
+                            Advisory
+                        </a>
+                    )}
                 </div>
             </div>
             

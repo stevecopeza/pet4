@@ -8,6 +8,7 @@ use Pet\Application\Time\Command\LogTimeCommand;
 use Pet\Application\Time\Command\LogTimeHandler;
 use Pet\Application\Time\Command\UpdateDraftTimeEntryCommand;
 use Pet\Application\Time\Command\UpdateDraftTimeEntryHandler;
+use Pet\Domain\Time\Entity\TimeEntry;
 use Pet\Domain\Time\Repository\TimeEntryRepository;
 use Pet\UI\Rest\Validation\InputValidation as V;
 use WP_REST_Request;
@@ -22,15 +23,25 @@ class TimeEntryController implements RestController
     private TimeEntryRepository $timeEntryRepository;
     private LogTimeHandler $logTimeHandler;
     private UpdateDraftTimeEntryHandler $updateDraftHandler;
+    private \wpdb $wpdb;
+    private bool $billingTablesAvailable;
 
     public function __construct(
         TimeEntryRepository $timeEntryRepository,
         LogTimeHandler $logTimeHandler,
-        UpdateDraftTimeEntryHandler $updateDraftHandler
+        UpdateDraftTimeEntryHandler $updateDraftHandler,
+        \wpdb $wpdb
     ) {
         $this->timeEntryRepository = $timeEntryRepository;
         $this->logTimeHandler = $logTimeHandler;
         $this->updateDraftHandler = $updateDraftHandler;
+        $this->wpdb = $wpdb;
+
+        $itemsTable = $this->wpdb->prefix . 'pet_billing_export_items';
+        $exportsTable = $this->wpdb->prefix . 'pet_billing_exports';
+        $this->billingTablesAvailable =
+            ($this->wpdb->get_var($this->wpdb->prepare('SHOW TABLES LIKE %s', $itemsTable)) === $itemsTable)
+            && ($this->wpdb->get_var($this->wpdb->prepare('SHOW TABLES LIKE %s', $exportsTable)) === $exportsTable);
     }
 
     public function registerRoutes(): void
@@ -111,7 +122,12 @@ class TimeEntryController implements RestController
             $entries = $this->timeEntryRepository->findAll();
         }
 
-        $data = array_map(function ($entry) {
+        $billingByEntryId = $this->loadBillingLinkageByEntryId($entries);
+        $data = array_map(function ($entry) use ($billingByEntryId) {
+            $billingOverlay = $this->deriveBillingOverlay(
+                $entry,
+                isset($billingByEntryId[$entry->id()]) ? $billingByEntryId[$entry->id()] : null
+            );
             return [
                 'id' => $entry->id(),
                 'employeeId' => $entry->employeeId(),
@@ -127,6 +143,8 @@ class TimeEntryController implements RestController
                 'isCorrection' => $entry->isCorrection(),
                 'createdAt' => $entry->createdAt() ? $entry->createdAt()->format('Y-m-d H:i:s') : null,
                 'archivedAt' => $entry->archivedAt() ? $entry->archivedAt()->format('Y-m-d H:i:s') : null,
+                'billingStatus' => $billingOverlay['billingStatus'],
+                'billingBlockReason' => $billingOverlay['billingBlockReason'],
             ];
         }, $entries);
 
@@ -230,5 +248,104 @@ class TimeEntryController implements RestController
         } catch (\Exception $e) {
             return new WP_REST_Response(['error' => $e->getMessage()], 400);
         }
+    }
+
+    /**
+     * @param TimeEntry[] $entries
+     * @return array<int, array{exportStatus:?string}>
+     */
+    private function loadBillingLinkageByEntryId(array $entries): array
+    {
+        if (!$this->billingTablesAvailable || empty($entries)) {
+            return [];
+        }
+
+        $entryIds = array_values(array_map(static fn (TimeEntry $entry): int => $entry->id(), $entries));
+        $placeholders = implode(', ', array_fill(0, count($entryIds), '%d'));
+        $itemsTable = $this->wpdb->prefix . 'pet_billing_export_items';
+        $exportsTable = $this->wpdb->prefix . 'pet_billing_exports';
+        $sql = "
+            SELECT bei.source_id AS time_entry_id, be.status AS export_status
+            FROM {$itemsTable} bei
+            LEFT JOIN {$exportsTable} be ON be.id = bei.export_id
+            WHERE bei.source_type = %s
+              AND bei.source_id IN ({$placeholders})
+            ORDER BY bei.id DESC
+        ";
+        $query = $this->wpdb->prepare($sql, ...array_merge(['time_entry'], $entryIds));
+        $rows = $this->wpdb->get_results($query, ARRAY_A);
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $linkedById = [];
+        foreach ($rows as $row) {
+            $timeEntryId = isset($row['time_entry_id']) ? (int) $row['time_entry_id'] : 0;
+            if ($timeEntryId <= 0 || isset($linkedById[$timeEntryId])) {
+                continue;
+            }
+
+            $linkedById[$timeEntryId] = [
+                'exportStatus' => isset($row['export_status']) ? (string) $row['export_status'] : null,
+            ];
+        }
+
+        return $linkedById;
+    }
+
+    /**
+     * @param array{exportStatus:?string}|null $billingLink
+     * @return array{billingStatus:string,billingBlockReason:?string}
+     */
+    private function deriveBillingOverlay(TimeEntry $entry, ?array $billingLink): array
+    {
+        if (!$entry->isBillable()) {
+            return [
+                'billingStatus' => 'non_billable',
+                'billingBlockReason' => null,
+            ];
+        }
+
+        if ($billingLink !== null) {
+            return [
+                'billingStatus' => 'billed',
+                'billingBlockReason' => null,
+            ];
+        }
+
+        $blockReason = $this->resolveBillingBlockReason($entry);
+        if ($blockReason !== null) {
+            return [
+                'billingStatus' => 'blocked',
+                'billingBlockReason' => $blockReason,
+            ];
+        }
+
+        return [
+            'billingStatus' => 'ready',
+            'billingBlockReason' => null,
+        ];
+    }
+
+    private function resolveBillingBlockReason(TimeEntry $entry): ?string
+    {
+        if ($entry->archivedAt() !== null) {
+            return 'Archived entries cannot be billed.';
+        }
+
+        if (trim($entry->description()) === '') {
+            return 'Description is required before billing.';
+        }
+
+        if ($entry->durationMinutes() <= 0) {
+            return 'Duration must be greater than zero.';
+        }
+
+        $normalizedStatus = strtolower(trim($entry->status()));
+        if (!in_array($normalizedStatus, ['approved', 'locked'], true)) {
+            return sprintf('Status "%s" is not billing-ready.', $entry->status());
+        }
+
+        return null;
     }
 }

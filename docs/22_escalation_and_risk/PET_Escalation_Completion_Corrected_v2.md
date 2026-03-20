@@ -1,6 +1,6 @@
 # PET Escalation Completion — Corrected Specification v2
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Escalation_Completion_Corrected_v2.md`
+**Target location:** `plugins/pet/docs/22_escalation_and_risk/PET_Escalation_Completion_Corrected_v2.md`
 
 ## 0. Purpose
 

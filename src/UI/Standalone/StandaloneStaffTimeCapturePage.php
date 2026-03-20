@@ -54,7 +54,7 @@ class StandaloneStaffTimeCapturePage
      */
     public function bypassCanonicalRedirect($redirect)
     {
-        if (get_query_var('pet_standalone_staff_time_capture')) {
+        if ($this->isStandaloneRequest()) {
             return false;
         }
         return $redirect;
@@ -62,11 +62,11 @@ class StandaloneStaffTimeCapturePage
 
     public function render(): void
     {
-        if (!get_query_var('pet_standalone_staff_time_capture')) {
+        if (!$this->isStandaloneRequest()) {
             return;
         }
-
-        if (!$this->featureFlags->isStaffTimeCaptureEnabled()) {
+        $isAdmin = current_user_can('manage_options');
+        if (!$this->featureFlags->isStaffTimeCaptureEnabled() && !$isAdmin) {
             status_header(404);
             exit;
         }
@@ -77,13 +77,15 @@ class StandaloneStaffTimeCapturePage
         }
 
         $wpUserId = (int) get_current_user_id();
-        $resolved = $this->staffEmployeeResolver->resolve($wpUserId);
-        if (!$resolved['ok']) {
-            wp_die(
-                esc_html((string) $resolved['message']),
-                'Forbidden',
-                ['response' => 403]
-            );
+        if (!$isAdmin) {
+            $resolved = $this->staffEmployeeResolver->resolve($wpUserId);
+            if (!$resolved['ok']) {
+                wp_die(
+                    esc_html((string) $resolved['message']),
+                    'Forbidden',
+                    ['response' => 403]
+                );
+            }
         }
 
         $manifestPath = $this->pluginPath . '/dist/.vite/manifest.json';
@@ -106,6 +108,11 @@ class StandaloneStaffTimeCapturePage
         $cacheBust = '1.0.2.' . time();
         $nonce = wp_create_nonce('wp_rest');
         $apiUrl = rest_url('pet/v1');
+        status_header(200);
+        global $wp_query;
+        if ($wp_query instanceof \WP_Query) {
+            $wp_query->is_404 = false;
+        }
 
         header('Content-Type: text/html; charset=utf-8');
         ?>
@@ -137,5 +144,22 @@ class StandaloneStaffTimeCapturePage
 </html>
         <?php
         exit;
+    }
+
+    private function isStandaloneRequest(): bool
+    {
+        if ((bool) get_query_var('pet_standalone_staff_time_capture')) {
+            return true;
+        }
+
+        $requestUri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+        if ($requestUri === '') {
+            return false;
+        }
+
+        $path = (string) wp_parse_url($requestUri, PHP_URL_PATH);
+        $normalized = trim($path, '/');
+
+        return $normalized === 'pet-time-capture';
     }
 }

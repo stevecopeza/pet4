@@ -4,7 +4,7 @@ SUPERSESSION DATE: 2026-03-17
 NOTES: Retained for historical traceability only. Use v2 for architectural and implementation guidance.
 # PET Work Orchestration, Assignment Routing, and Queue Visibility — Completion Specification v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md`
+**Target location:** `plugins/pet/docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md`
 
 ## 0. Purpose
 

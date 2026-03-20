@@ -39,15 +39,9 @@ class AdminPageRegistry
         $submenus = [
             'pet-dashboard' => 'Overview', // Rename first item
             'pet-dashboards' => 'Dashboards',
-            'pet-crm' => 'Customers',
-            'pet-quotes-sales' => 'Quotes & Sales',
-            'pet-finance' => 'Finance',
             'pet-delivery' => 'Delivery',
-            'pet-time' => 'Time',
-            'pet-time-capture' => 'Staff Time Capture',
             'pet-support' => 'Support',
             'pet-advisory' => 'Advisory',
-            'pet-conversations' => 'Conversations',
         ];
 
         // Conditionally add Escalations submenu when feature is enabled
@@ -55,17 +49,6 @@ class AdminPageRegistry
             $submenus['pet-escalations'] = 'Escalations';
         }
 
-        $submenus += [
-            'pet-approvals' => 'Approvals',
-            'pet-knowledge' => 'Knowledge',
-            'pet-people' => 'Staff',
-            'pet-roles' => 'Roles & Capabilities',
-            'pet-activity' => 'Activity',
-            'pet-settings' => 'Settings',
-            'pet-pulseway' => 'Pulseway RMM',
-            'pet-shortcodes' => 'Shortcodes',
-            'pet-demo-tools' => 'Demo Tools',
-        ];
 
         foreach ($submenus as $slug => $title) {
             add_submenu_page(
@@ -223,10 +206,21 @@ class AdminPageRegistry
 
     public function enqueueScripts(string $hook): void
     {
+        $isPetPage = strpos($hook, 'page_pet-') !== false;
+        $isAdminHome = ($hook === 'index.php');
+
+        // Transition-context hardening for manager demo path:
+        // on wp-admin home, some external admin scripts call jQuery.fn.pointer
+        // without ensuring the pointer plugin exists.
+        if ($isAdminHome) {
+            wp_enqueue_script('jquery-core');
+            wp_add_inline_script('common', "if(window.jQuery&&window.jQuery.fn&&typeof window.jQuery.fn.pointer!=='function'){window.jQuery.fn.pointer=function(){return this;};}", 'before');
+            return;
+        }
         // Check if we are on a PET page
         // Top level is 'toplevel_page_pet-dashboard'
         // Submenus are usually 'pet_page_{slug}'
-        if (strpos($hook, 'page_pet-') === false) {
+        if (!$isPetPage) {
             return;
         }
 
@@ -235,6 +229,78 @@ class AdminPageRegistry
         if (in_array($currentPage, ['pet-shortcodes', 'pet-demo-tools'], true)) {
             return;
         }
+        // PET demo-path hardening:
+        // - Provide a safe no-op for missing jQuery pointer plugin invoked by external admin scripts.
+        // - Block third-party Mixpanel telemetry calls on PET admin pages to prevent noisy CORS console errors.
+        wp_enqueue_script('jquery-core');
+        $consoleHardening = <<<'JS'
+(function(){
+  try{
+    if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.pointer !== 'function') {
+      window.jQuery.fn.pointer = function(){ return this; };
+    }
+  }catch(_){}
+
+  var MIXPANEL_HOST = 'api-js.mixpanel.com';
+
+  try{
+    if (typeof navigator.sendBeacon === 'function') {
+      var originalSendBeacon = navigator.sendBeacon.bind(navigator);
+      navigator.sendBeacon = function(url, data){
+        var target = (typeof url === 'string') ? url : '';
+        if (target.indexOf(MIXPANEL_HOST) !== -1) {
+          return true;
+        }
+        return originalSendBeacon(url, data);
+      };
+    }
+  }catch(_){}
+
+  try{
+    if (typeof window.fetch === 'function') {
+      var originalFetch = window.fetch.bind(window);
+      window.fetch = function(input, init){
+        var url = '';
+        if (typeof input === 'string') {
+          url = input;
+        } else if (input && typeof input.url === 'string') {
+          url = input.url;
+        }
+        if (url.indexOf(MIXPANEL_HOST) !== -1) {
+          return Promise.resolve(new Response('', { status: 204, statusText: 'No Content' }));
+        }
+        return originalFetch(input, init);
+      };
+    }
+  }catch(_){}
+
+  try{
+    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+      var xhrOpen = window.XMLHttpRequest.prototype.open;
+      var xhrSend = window.XMLHttpRequest.prototype.send;
+
+      window.XMLHttpRequest.prototype.open = function(method, url){
+        this.__petBlockMixpanel = (typeof url === 'string' && url.indexOf(MIXPANEL_HOST) !== -1);
+        return xhrOpen.apply(this, arguments);
+      };
+
+      window.XMLHttpRequest.prototype.send = function(body){
+        if (this.__petBlockMixpanel) {
+          try {
+            this.dispatchEvent(new Event('readystatechange'));
+            this.dispatchEvent(new Event('load'));
+            this.dispatchEvent(new Event('loadend'));
+          } catch(_) {}
+          return;
+        }
+        return xhrSend.apply(this, arguments);
+      };
+    }
+  }catch(_){}
+})();
+JS;
+        wp_add_inline_script('jquery-core', $consoleHardening, 'after');
+        wp_add_inline_script('common', "if(window.jQuery&&window.jQuery.fn&&typeof window.jQuery.fn.pointer!=='function'){window.jQuery.fn.pointer=function(){return this;};}", 'before');
 
         wp_enqueue_media();
 

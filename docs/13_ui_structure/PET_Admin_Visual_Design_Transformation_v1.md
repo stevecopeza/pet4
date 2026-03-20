@@ -1,6 +1,6 @@
 # PET Admin Visual Design Transformation v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Admin_Visual_Design_Transformation_v1.md`
+**Target location:** `plugins/pet/docs/13_ui_structure/PET_Admin_Visual_Design_Transformation_v1.md`
 
 ## 0. Purpose
 

@@ -1,6 +1,6 @@
 # PET People Resilience Outputs — Completion Specification v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_People_Resilience_Outputs_v1.md`
+**Target location:** `plugins/pet/docs/23_people_resilience/PET_People_Resilience_Outputs_v1.md`
 
 ## 0. Purpose
 

@@ -30,9 +30,6 @@ class StandaloneDashboardPage
 
     public function register(): void
     {
-        if (!$this->featureFlags->isDashboardsEnabled()) {
-            return;
-        }
 
         add_action('init', [$this, 'addRewriteRule']);
         add_filter('query_vars', [$this, 'addQueryVar']);
@@ -63,7 +60,7 @@ class StandaloneDashboardPage
      */
     public function bypassCanonicalRedirect($redirect)
     {
-        if (get_query_var('pet_standalone_dashboard')) {
+        if ($this->isStandaloneRequest()) {
             return false;
         }
         return $redirect;
@@ -71,13 +68,8 @@ class StandaloneDashboardPage
 
     public function render(): void
     {
-        if (!get_query_var('pet_standalone_dashboard')) {
+        if (!$this->isStandaloneRequest()) {
             return;
-        }
-
-        if (!$this->featureFlags->isDashboardsEnabled()) {
-            status_header(404);
-            exit;
         }
 
         if (!is_user_logged_in()) {
@@ -87,10 +79,18 @@ class StandaloneDashboardPage
 
         $wpUserId = (int)get_current_user_id();
         $isAdmin = current_user_can('manage_options');
-        $scopes = $this->accessPolicy->listVisibleTeamScopes($wpUserId, $isAdmin);
-        if (empty($scopes)) {
-            wp_die('Forbidden', 'Forbidden', ['response' => 403]);
+        if (!$this->featureFlags->isDashboardsEnabled() && !$isAdmin) {
+            status_header(404);
+            exit;
         }
+
+        if (!$isAdmin) {
+            $scopes = $this->accessPolicy->listVisibleTeamScopes($wpUserId, false);
+            if (empty($scopes)) {
+                wp_die('Forbidden', 'Forbidden', ['response' => 403]);
+            }
+        }
+
 
         $manifestPath = $this->pluginPath . '/dist/.vite/manifest.json';
         if (!file_exists($manifestPath)) {
@@ -114,6 +114,11 @@ class StandaloneDashboardPage
         $nonce = wp_create_nonce('wp_rest');
         $apiUrl = rest_url('pet/v1');
         $currentUserId = $wpUserId;
+        status_header(200);
+        global $wp_query;
+        if ($wp_query instanceof \WP_Query) {
+            $wp_query->is_404 = false;
+        }
 
         // Output a minimal, standalone HTML page
         header('Content-Type: text/html; charset=utf-8');
@@ -147,5 +152,22 @@ class StandaloneDashboardPage
 </html>
         <?php
         exit;
+    }
+
+    private function isStandaloneRequest(): bool
+    {
+        if ((bool) get_query_var('pet_standalone_dashboard')) {
+            return true;
+        }
+
+        $requestUri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
+        if ($requestUri === '') {
+            return false;
+        }
+
+        $path = (string) wp_parse_url($requestUri, PHP_URL_PATH);
+        $normalized = trim($path, '/');
+
+        return $normalized === 'pet-dashboards';
     }
 }

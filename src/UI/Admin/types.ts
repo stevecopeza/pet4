@@ -58,6 +58,7 @@ export interface DashboardData {
     actions: {
       escalationRulesUrl: string;
       helpdeskUrl: string;
+      advisoryUrl?: string;
     };
   };
 }
@@ -274,6 +275,8 @@ export interface TimeEntry {
   isCorrection?: boolean;
   createdAt?: string;
   archivedAt?: string | null;
+  billingStatus?: 'ready' | 'blocked' | 'billed' | 'non_billable';
+  billingBlockReason?: string | null;
 }
 
 export interface SlaTier {

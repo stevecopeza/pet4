@@ -16,7 +16,7 @@ It preserves prior history while clarifying current validation outcomes and docu
 - Frontend production build (`tsc --noEmit && vite build`): passed.
 
 ## Documentation Reconciliation Actions Completed
-The following active specifications were additively promoted from `docs/ToBeMoved/` into canonical sections (original files retained):
+The following active specifications were additively promoted from staging into canonical sections:
 - `docs/22_escalation_and_risk/PET_Escalation_Completion_Corrected_v2.md`
 - `docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
 - `docs/25_advisory_layer/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
@@ -28,13 +28,13 @@ The following active specifications were additively promoted from `docs/ToBeMove
 
 ## Supersession Markers Applied
 Legacy v1 documents were retained and explicitly marked as superseded:
-- `docs/ToBeMoved/PET_Escalation_Engine_Completion_v1.md` → superseded by corrected v2.
-- `docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md` → superseded by v2.
+- `docs/22_escalation_and_risk/PET_Escalation_Engine_Completion_v1.md` → superseded by corrected v2.
+- `docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v1.md` → superseded by v2.
 
 ## Operational Safety Note
 All reconciliation actions in this addendum were additive:
-- no destructive deletes
-- no overwrite of historical source files in `docs/ToBeMoved`
+- no destructive deletes during the original reconciliation pass
+- no overwrite of historical source files during promotion
 - prior status artifacts retained intact
 
 ## Next Recommended Step

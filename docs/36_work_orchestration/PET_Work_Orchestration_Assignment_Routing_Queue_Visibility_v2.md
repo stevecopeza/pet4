@@ -1,6 +1,6 @@
 # PET Work Orchestration, Assignment Routing, and Queue Visibility — Completion Specification v2
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
+**Target location:** `plugins/pet/docs/36_work_orchestration/PET_Work_Orchestration_Assignment_Routing_Queue_Visibility_v2.md`
 
 ## 0. Purpose
 

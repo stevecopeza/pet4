@@ -1,6 +1,6 @@
 # PET Staff Time Capture Access & Rollout Enablement v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Staff_Time_Capture_Access_And_Rollout_Enablement_v1.md`
+**Target location:** `plugins/pet/docs/09_time/PET_Staff_Time_Capture_Access_And_Rollout_Enablement_v1.md`
 
 ## 0. Purpose
 

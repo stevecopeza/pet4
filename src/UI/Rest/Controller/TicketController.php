@@ -211,6 +211,12 @@ class TicketController implements RestController
     {
         $customerId = $request->get_param('customer_id');
         $status = $request->get_param('status');
+        if (is_string($status)) {
+            $status = trim($status);
+            if ($status === '') {
+                $status = null;
+            }
+        }
         $ticketMode = $request->get_param('ticket_mode');
         $lifecycleOwner = $request->get_param('lifecycle_owner');
         $assignedUserId = $request->get_param('assigned_user_id');
@@ -246,18 +252,7 @@ class TicketController implements RestController
             });
         }
 
-        $ticketAssignments = [];
-
-        $workItems = $this->workItemRepository->findAll();
-
-        foreach ($workItems as $item) {
-            if ($item->getSourceType() !== 'ticket') {
-                continue;
-            }
-
-            $ticketId = (int)$item->getSourceId();
-            $ticketAssignments[$ticketId] = $item->getAssignedUserId();
-        }
+        $ticketAssignments = $this->loadTicketAssignments();
 
         if ($assignedUserId || $unassigned || $assigned) {
             $tickets = array_filter($tickets, function ($ticket) use ($assignedUserId, $unassigned, $assigned, $ticketAssignments) {
@@ -348,6 +343,49 @@ class TicketController implements RestController
         }, $tickets);
 
         return new WP_REST_Response(array_values($data), 200);
+    }
+
+    /**
+     * Return a deterministic ticket assignment map without hydrating WorkItem entities.
+     *
+     * Some legacy/seeded datasets may contain work-item assignment combinations that are
+     * invalid for strict WorkItem domain hydration, but ticket listing only needs the
+     * assigned_user_id projection for filtering and response decoration.
+     *
+     * @return array<int, string|null>
+     */
+    private function loadTicketAssignments(): array
+    {
+        global $wpdb;
+
+        if (!$wpdb || !isset($wpdb->prefix)) {
+            return [];
+        }
+
+        $workTable = $wpdb->prefix . 'pet_work_items';
+        $query = $wpdb->prepare(
+            "SELECT source_id, assigned_user_id FROM $workTable WHERE source_type = %s",
+            'ticket'
+        );
+        $rows = $wpdb->get_results($query);
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $ticketAssignments = [];
+        foreach ($rows as $row) {
+            if (!isset($row->source_id)) {
+                continue;
+            }
+            $ticketId = (int)$row->source_id;
+            if ($ticketId <= 0) {
+                continue;
+            }
+            $assignedUserId = isset($row->assigned_user_id) ? (string)$row->assigned_user_id : null;
+            $ticketAssignments[$ticketId] = ($assignedUserId === '') ? null : $assignedUserId;
+        }
+
+        return $ticketAssignments;
     }
 
     public function createTicket(WP_REST_Request $request): WP_REST_Response

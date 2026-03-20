@@ -17,6 +17,7 @@ class SqlWorkItemRepository implements WorkItemRepository
 
     public function save(WorkItem $workItem): void
     {
+        $this->assertAssignmentInvariant($workItem);
         $table = $this->wpdb->prefix . 'pet_work_items';
         $data = [
             'id' => $workItem->getId(),
@@ -54,6 +55,18 @@ class SqlWorkItemRepository implements WorkItemRepository
             $this->wpdb->update($table, $data, ['id' => $workItem->getId()], $formats, ['%s']);
         } else {
             $this->wpdb->insert($table, $data, $formats);
+        }
+    }
+
+    private function assertAssignmentInvariant(WorkItem $workItem): void
+    {
+        $assignedTeamId = $workItem->getAssignedTeamId();
+        $assignedUserId = $workItem->getAssignedUserId();
+        $hasTeam = $assignedTeamId !== null && $assignedTeamId !== '';
+        $hasUser = $assignedUserId !== null && $assignedUserId !== '';
+
+        if ($hasTeam && $hasUser) {
+            throw new \InvalidArgumentException('Invalid work item persistence: both assigned_team_id and assigned_user_id are set.');
         }
     }
 

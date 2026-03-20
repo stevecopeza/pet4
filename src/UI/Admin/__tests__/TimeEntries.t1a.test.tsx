@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import TimeEntries from '../components/TimeEntries';
 import ToastProvider from '../components/foundation/ToastProvider';
@@ -37,6 +37,105 @@ describe('TimeEntries T1-A operational surface', () => {
     conversationStatuses = new Map();
   });
 
+  it('renders billing badges and computes billing summary counters from backend status fields', async () => {
+    vi.spyOn(window, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/time-entries') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([
+          {
+            id: 101,
+            employeeId: 11,
+            ticketId: 901,
+            start: '2026-03-10T12:00:00Z',
+            end: '2026-03-10T13:00:00Z',
+            duration: 60,
+            description: 'Ready row',
+            billable: true,
+            status: 'approved',
+            isCorrection: false,
+            correctsEntryId: null,
+            billingStatus: 'ready',
+            billingBlockReason: null,
+          },
+          {
+            id: 102,
+            employeeId: 12,
+            ticketId: 902,
+            start: '2026-03-10T13:00:00Z',
+            end: '2026-03-10T14:00:00Z',
+            duration: 60,
+            description: 'Blocked row',
+            billable: true,
+            status: 'submitted',
+            isCorrection: false,
+            correctsEntryId: null,
+            billingStatus: 'blocked',
+            billingBlockReason: 'Status \"submitted\" is not billing-ready.',
+          },
+          {
+            id: 103,
+            employeeId: 13,
+            ticketId: 903,
+            start: '2026-03-10T14:00:00Z',
+            end: '2026-03-10T15:00:00Z',
+            duration: 60,
+            description: 'Billed row',
+            billable: true,
+            status: 'approved',
+            isCorrection: false,
+            correctsEntryId: null,
+            billingStatus: 'billed',
+            billingBlockReason: null,
+          },
+          {
+            id: 104,
+            employeeId: 14,
+            ticketId: 904,
+            start: '2026-03-10T15:00:00Z',
+            end: '2026-03-10T16:00:00Z',
+            duration: 60,
+            description: 'Non-billable row',
+            billable: false,
+            status: 'approved',
+            isCorrection: false,
+            correctsEntryId: null,
+            billingStatus: 'non_billable',
+            billingBlockReason: null,
+          },
+        ]), { status: 200 }));
+      }
+
+      if ((url.endsWith('/employees') || url.endsWith('/tickets') || url.endsWith('/customers') || url.endsWith('/sites')) && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+
+    renderWithToast(<TimeEntries />);
+    await screen.findByText('Ready row');
+
+    expect(screen.getByLabelText('Billing status: ready')).toHaveTextContent('Billing: Ready');
+    expect(screen.getByLabelText('Billing status: blocked')).toHaveTextContent('Billing: Blocked');
+    expect(screen.getByLabelText('Billing status: billed')).toHaveTextContent('Billing: Billed');
+    expect(screen.getByLabelText('Billing status: non_billable')).toHaveTextContent('Billing: Non-billable');
+
+    const blockedBadge = screen.getByLabelText('Billing status: blocked');
+    expect(blockedBadge).toHaveAttribute(
+      'title',
+      'Billing: Blocked — Status \"submitted\" is not billing-ready.'
+    );
+
+    const summaryPanel = screen.getByTestId('time-entries-context-panel');
+    expect(summaryPanel).toHaveTextContent(/Ready to Bill\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Blocked\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Billed\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Needs Attention\s*1/);
+    expect(screen.getByText('Billing Blocked')).toBeInTheDocument();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -60,6 +159,8 @@ describe('TimeEntries T1-A operational surface', () => {
             status: 'approved',
             isCorrection: false,
             correctsEntryId: null,
+            billingStatus: 'ready',
+            billingBlockReason: null,
           },
           {
             id: 2,
@@ -73,6 +174,8 @@ describe('TimeEntries T1-A operational surface', () => {
             status: 'draft',
             isCorrection: true,
             correctsEntryId: 1,
+            billingStatus: 'non_billable',
+            billingBlockReason: null,
           },
         ]), { status: 200 }));
       }
@@ -105,8 +208,10 @@ describe('TimeEntries T1-A operational surface', () => {
     expect(summaryPanel).toHaveTextContent(/Total Logged\s*1h 30m/);
     expect(summaryPanel).toHaveTextContent(/Billable\s*1h 0m \(67%\)/);
     expect(summaryPanel).toHaveTextContent(/Non-billable\s*30m/);
-    expect(summaryPanel).toHaveTextContent(/Distinct Staff\s*2/);
-    expect(summaryPanel).toHaveTextContent(/Corrections\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Needs Attention\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Ready to Bill\s*1/);
+    expect(summaryPanel).toHaveTextContent(/Blocked\s*0/);
+    expect(summaryPanel).toHaveTextContent(/Billed\s*0/);
   });
 
   it('sends authoritative employee_id and ticket_id query params from dropdown and ticket filter', async () => {
@@ -299,9 +404,9 @@ describe('TimeEntries T1-A operational surface', () => {
 
     expect(screen.getAllByText('44').length).toBeGreaterThan(0);
     expect(screen.getByText('555')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByLabelText('Actions'));
+    fireEvent.click(screen.getAllByLabelText('Actions')[0]);
     expect(screen.getByText('Discuss')).toBeInTheDocument();
   });
 
@@ -384,5 +489,112 @@ describe('TimeEntries T1-A operational surface', () => {
       subject: 'Time Entry #1',
       subjectKey: 'time_entry:1',
     });
+  });
+
+  it('surfaces deterministic attention indicators and safe ticket drill-through without regressing row actions', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    const alertSpy = vi.spyOn(window, 'alert');
+
+    vi.spyOn(window, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/time-entries') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([
+          {
+            id: 10,
+            employeeId: 11,
+            ticketId: 501,
+            start: '2026-03-10T08:00:00Z',
+            end: '2026-03-10T16:30:00Z',
+            duration: 510,
+            description: '',
+            billable: true,
+            status: 'submitted',
+            isCorrection: true,
+            correctsEntryId: 2,
+          },
+          {
+            id: 11,
+            employeeId: 12,
+            ticketId: 502,
+            start: '2026-03-10T09:00:00Z',
+            end: '2026-03-10T13:00:00Z',
+            duration: 240,
+            description: 'Internal workshop',
+            billable: false,
+            status: 'draft',
+            isCorrection: false,
+            correctsEntryId: null,
+          },
+          {
+            id: 12,
+            employeeId: 13,
+            ticketId: 503,
+            start: '2026-03-10T10:00:00Z',
+            end: '2026-03-10T11:00:00Z',
+            duration: 60,
+            description: 'Clean row',
+            billable: true,
+            status: 'approved',
+            isCorrection: false,
+            correctsEntryId: null,
+          },
+        ]), { status: 200 }));
+      }
+
+      if (url.endsWith('/employees') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      if (url.endsWith('/tickets') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 501, customerId: 1, siteId: 10, subject: 'Major outage', description: '', status: 'open', priority: 'high', createdAt: '2026-01-01T00:00:00Z', resolvedAt: null },
+          { id: 502, customerId: 1, siteId: null, subject: 'Internal planning', description: '', status: 'open', priority: 'medium', createdAt: '2026-01-01T00:00:00Z', resolvedAt: null },
+          { id: 503, customerId: 1, siteId: null, subject: 'Minor update', description: '', status: 'open', priority: 'low', createdAt: '2026-01-01T00:00:00Z', resolvedAt: null },
+        ]), { status: 200 }));
+      }
+
+      if (url.endsWith('/customers') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      if (url.endsWith('/sites') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+
+    renderWithToast(<TimeEntries />);
+    await screen.findByText('Internal workshop');
+
+    expect(screen.getByText('Long Entry')).toBeInTheDocument();
+    expect(screen.getByText('No Description')).toBeInTheDocument();
+    expect(screen.getByText('Correction')).toBeInTheDocument();
+    expect(screen.getByText('Long Non-billable')).toBeInTheDocument();
+
+    const cleanRow = screen.getByText('Clean row').closest('tr');
+    expect(cleanRow).not.toBeNull();
+    const cleanRowScope = within(cleanRow as HTMLElement);
+    expect(cleanRowScope.queryByText('Long Entry')).not.toBeInTheDocument();
+    expect(cleanRowScope.queryByText('No Description')).not.toBeInTheDocument();
+    expect(cleanRowScope.queryByText('Long Non-billable')).not.toBeInTheDocument();
+    expect(cleanRowScope.getByText('—')).toBeInTheDocument();
+
+    const ticketLink = screen.getByRole('link', { name: 'View ticket 501' });
+    expect(ticketLink).toHaveAttribute('href', '/wp-admin/admin.php?page=pet-support#ticket=501');
+    expect(ticketLink).toHaveAttribute('title', 'Open ticket #501 in Support');
+
+    const summaryPanel = screen.getByTestId('time-entries-context-panel');
+    expect(summaryPanel).toHaveTextContent(/Needs Attention\s*2/);
+
+    fireEvent.click(screen.getAllByLabelText('Actions')[0]);
+    expect(screen.getByText('Edit')).toBeInTheDocument();
+    expect(screen.getByText('Discuss')).toBeInTheDocument();
+    expect(screen.getByText('Archive')).toBeInTheDocument();
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 });

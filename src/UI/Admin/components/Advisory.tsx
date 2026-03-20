@@ -45,7 +45,7 @@ const severityClass = (sev: string): string => {
 };
 
 const Advisory = () => {
-  const [tab, setTab] = useState<Tab>('reports');
+  const [tab, setTab] = useState<Tab>('signals');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState<string>('');
   const [reportType, setReportType] = useState<string>('customer_advisory_summary');

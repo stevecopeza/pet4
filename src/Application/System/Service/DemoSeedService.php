@@ -131,6 +131,169 @@ final class DemoSeedService
             }
         }
 
+        // Demo hardening: guarantee required advisory categories are present and derived from seeded truth.
+        $insertSignal = function (
+            string $type,
+            string $severity,
+            string $title,
+            string $summary,
+            string $message,
+            ?string $sourceType,
+            ?string $sourceId,
+            ?int $signalCustomerId
+        ) use ($wpdb, $signalsTable, $seedRunId, $seededAt) {
+            $signalId = $this->uuid();
+            $workItemId = $this->uuid();
+            $wpdb->insert($signalsTable, [
+                'id' => $signalId,
+                'work_item_id' => $workItemId,
+                'signal_type' => $type,
+                'severity' => $severity,
+                'status' => 'ACTIVE',
+                'resolved_at' => null,
+                'generation_run_id' => $seedRunId,
+                'title' => $title,
+                'summary' => $summary,
+                'metadata_json' => wp_json_encode([
+                    'seed_profile' => 'demo_full',
+                    'source' => 'demo_seed_advisory_hardening',
+                ]),
+                'source_entity_type' => $sourceType,
+                'source_entity_id' => $sourceId,
+                'customer_id' => $signalCustomerId,
+                'site_id' => null,
+                'message' => $message,
+                'created_at' => $seededAt,
+            ]);
+            $this->registryAdd($seedRunId, $signalsTable, $signalId);
+        };
+
+        $customersTable = $wpdb->prefix . 'pet_customers';
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+        $escalationsTable = $wpdb->prefix . 'pet_escalations';
+        $feedTable = $wpdb->prefix . 'pet_feed_events';
+
+        $hasSupportPressure = (int)$wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM $signalsTable WHERE status = %s AND signal_type = %s", 'ACTIVE', 'support_pressure')
+        ) > 0;
+        $hasDeliveryRisk = (int)$wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM $signalsTable WHERE status = %s AND signal_type = %s", 'ACTIVE', 'delivery_risk')
+        ) > 0;
+
+        // Required signal #1: customer escalation/support pressure
+        if (!$hasSupportPressure) {
+            $openEsc = $wpdb->get_row(
+                "SELECT customer_id, customer_name, SUM(open_count) AS open_count
+                 FROM (
+                   SELECT t.customer_id AS customer_id, c.name AS customer_name, COUNT(*) AS open_count
+                   FROM $escalationsTable e
+                   INNER JOIN $ticketsTable t
+                     ON e.source_entity_type = 'ticket' AND CAST(e.source_entity_id AS UNSIGNED) = t.id
+                   INNER JOIN $customersTable c
+                     ON c.id = t.customer_id
+                   WHERE e.status = 'OPEN'
+                   GROUP BY t.customer_id, c.name
+                   UNION ALL
+                   SELECT p.customer_id AS customer_id, c.name AS customer_name, COUNT(*) AS open_count
+                   FROM $escalationsTable e
+                   INNER JOIN $projectsTable p
+                     ON e.source_entity_type = 'project' AND CAST(e.source_entity_id AS UNSIGNED) = p.id
+                   INNER JOIN $customersTable c
+                     ON c.id = p.customer_id
+                   WHERE e.status = 'OPEN'
+                   GROUP BY p.customer_id, c.name
+                 ) open_escalations
+                 GROUP BY customer_id, customer_name
+                 ORDER BY open_count DESC
+                 LIMIT 1"
+            );
+
+            if ($openEsc && isset($openEsc->customer_id) && (int)$openEsc->customer_id > 0) {
+                $customerIdInt = (int)$openEsc->customer_id;
+                $customerName = (string)$openEsc->customer_name;
+                $openCount = (int)$openEsc->open_count;
+                $insertSignal(
+                    'support_pressure',
+                    'critical',
+                    sprintf('%s has active escalation pressure', $customerName),
+                    sprintf('%d open escalation%s currently impacting service confidence.', $openCount, $openCount === 1 ? '' : 's'),
+                    sprintf('Open escalations detected for %s — prioritize support stabilisation and stakeholder comms.', $customerName),
+                    'customer',
+                    (string)$customerIdInt,
+                    $customerIdInt
+                );
+            }
+        }
+
+        // Required signal #2: project/delivery risk
+        if (!$hasDeliveryRisk) {
+            $projectRisk = $wpdb->get_row(
+                "SELECT p.id AS project_id, p.name AS project_name, p.customer_id AS customer_id, c.name AS customer_name
+                 FROM $escalationsTable e
+                 INNER JOIN $projectsTable p
+                   ON e.source_entity_type = 'project' AND CAST(e.source_entity_id AS UNSIGNED) = p.id
+                 INNER JOIN $customersTable c
+                   ON c.id = p.customer_id
+                 WHERE e.status = 'OPEN'
+                 ORDER BY e.id DESC
+                 LIMIT 1"
+            );
+
+            if ($projectRisk && isset($projectRisk->project_id)) {
+                $projectId = (string)$projectRisk->project_id;
+                $projectName = (string)$projectRisk->project_name;
+                $customerName = (string)$projectRisk->customer_name;
+                $riskCustomerId = (int)$projectRisk->customer_id;
+                if ($riskCustomerId <= 0) {
+                    $riskCustomerId = null;
+                }
+                $insertSignal(
+                    'delivery_risk',
+                    'warning',
+                    sprintf('Delivery risk flagged on %s', $projectName),
+                    sprintf('Open project escalation indicates delivery pressure for %s.', $customerName),
+                    sprintf('Project escalation is open for %s; validate timeline confidence and mitigation plan.', $projectName),
+                    'project',
+                    $projectId,
+                    $riskCustomerId
+                );
+            } else {
+                $riskEvent = $wpdb->get_row(
+                    $wpdb->prepare(
+                        "SELECT title, summary
+                         FROM $feedTable
+                         WHERE source_engine = %s
+                           AND event_type = %s
+                           AND classification = %s
+                         ORDER BY created_at DESC
+                         LIMIT 1",
+                        'delivery',
+                        'project_status_changed',
+                        'critical'
+                    )
+                );
+                if ($riskEvent) {
+                    $title = isset($riskEvent->title) && is_string($riskEvent->title) && $riskEvent->title !== ''
+                        ? $riskEvent->title
+                        : 'Delivery risk requires manager attention';
+                    $summary = isset($riskEvent->summary) && is_string($riskEvent->summary) && $riskEvent->summary !== ''
+                        ? $riskEvent->summary
+                        : 'Critical delivery risk detected in active project state.';
+                    $insertSignal(
+                        'delivery_risk',
+                        'warning',
+                        $title,
+                        $summary,
+                        'Recent delivery telemetry indicates risk posture deterioration; verify mitigation and timeline confidence.',
+                        'project',
+                        null,
+                        null
+                    );
+                }
+            }
+        }
+
         return ['generated' => 1, 'customer_id' => $customerId];
     }
 

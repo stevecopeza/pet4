@@ -155,8 +155,9 @@ class DashboardController implements RestController
                     'unassignedTicketsCount' => $unassignedCount,
                 ],
                 'actions' => [
-                    'escalationRulesUrl' => admin_url('admin.php?page=pet-escalation-rules'),
-                    'helpdeskUrl' => admin_url('admin.php?page=pet-helpdesk'),
+                    'escalationRulesUrl' => admin_url('admin.php?page=' . ($this->featureFlagService->isEscalationEngineEnabled() ? 'pet-escalations' : 'pet-support')),
+                    'helpdeskUrl' => admin_url('admin.php?page=pet-support'),
+                    'advisoryUrl' => admin_url('admin.php?page=pet-advisory'),
                 ],
             ];
         }

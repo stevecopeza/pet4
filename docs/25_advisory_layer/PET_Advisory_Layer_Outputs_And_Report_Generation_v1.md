@@ -1,6 +1,6 @@
 # PET Advisory Layer Outputs and Report Generation — Completion Specification v1
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
+**Target location:** `plugins/pet/docs/25_advisory_layer/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
 
 ## 0. Purpose
 

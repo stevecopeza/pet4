@@ -1,10 +1,10 @@
 # Wave 1 Staging Pack — Core Ticket / Commercial / Delivery Alignment
 
 WARNING
+This file is an archived README from the original Wave 1 staging pack.
 
-Files in this directory are staging documents.
-
-They are NOT authoritative until moved into the main documentation tree by a controlled migration.
+The staging pack content has already been promoted into canonical documentation locations.
+Use this file for historical migration context only.
 
 This pack is limited to Wave 1 only:
 - ticket backbone authority alignment
@@ -13,5 +13,5 @@ This pack is limited to Wave 1 only:
 - project delivery alignment
 - helpdesk / SLA / project-delivery boundary clarification
 
-No document content outside this staging area should be edited manually as part of this wave.
-Use the accompanying WARP prompt to install these documents deterministically.
+No additional edits should be made through this archived staging flow.
+Use current canonical documents for any new changes.

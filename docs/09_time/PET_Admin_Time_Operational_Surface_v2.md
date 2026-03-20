@@ -1,6 +1,6 @@
 # PET Admin Time Operational Surface v2
 
-**Target location:** `plugins/pet/docs/ToBeMoved/PET_Admin_Time_Operational_Surface_v2.md`
+**Target location:** `plugins/pet/docs/09_time/PET_Admin_Time_Operational_Surface_v2.md`
 
 ## 0. Purpose
 

@@ -30,6 +30,75 @@ const formatDateTimeCompact = (value: string) => (
   })
 );
 
+type AttentionSignal = {
+  key: string;
+  label: string;
+  title: string;
+  tone: 'high' | 'medium' | 'low';
+};
+
+type BillingStatus = 'ready' | 'blocked' | 'billed' | 'non_billable';
+
+const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
+  ready: 'Ready',
+  blocked: 'Blocked',
+  billed: 'Billed',
+  non_billable: 'Non-billable',
+};
+
+const getAttentionSignals = (entry: TimeEntry): AttentionSignal[] => {
+  const signals: AttentionSignal[] = [];
+  const duration = entry.duration || 0;
+  const description = (entry.description || '').trim();
+
+  if (entry.isCorrection || entry.correctsEntryId) {
+    signals.push({
+      key: 'correction',
+      label: 'Correction',
+      title: 'Correction entry',
+      tone: 'medium',
+    });
+  }
+
+  if (!description) {
+    signals.push({
+      key: 'missing-description',
+      label: 'No Description',
+      title: 'Missing description',
+      tone: 'high',
+    });
+  }
+
+  if (duration >= 480) {
+    signals.push({
+      key: 'large-duration',
+      label: 'Long Entry',
+      title: `Large single duration (${formatMinutes(duration)})`,
+      tone: 'medium',
+    });
+  }
+
+  if (!entry.billable && duration >= 240) {
+    signals.push({
+      key: 'long-non-billable',
+      label: 'Long Non-billable',
+      title: `Long non-billable duration (${formatMinutes(duration)})`,
+      tone: 'low',
+    });
+  }
+
+  if (entry.billingStatus === 'blocked') {
+    signals.push({
+      key: 'billing-blocked',
+      label: 'Billing Blocked',
+      title: entry.billingBlockReason || 'Blocked for billing',
+      tone: 'high',
+    });
+  }
+
+  return signals;
+};
+
 const TimeEntries = () => {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -43,6 +112,7 @@ const TimeEntries = () => {
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [employeeFilter, setEmployeeFilter] = useState<string>('');
   const [ticketFilter, setTicketFilter] = useState<string>('');
+  const [activePreset, setActivePreset] = useState<'none' | 'attention'>('none');
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
   const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
@@ -105,16 +175,20 @@ const TimeEntries = () => {
     const billableMinutes = entries.reduce((sum, entry) => sum + (entry.billable ? (entry.duration || 0) : 0), 0);
     const nonBillableMinutes = totalMinutes - billableMinutes;
     const billablePercent = totalMinutes > 0 ? Math.round((billableMinutes / totalMinutes) * 100) : 0;
-    const distinctStaff = new Set(entries.map((entry) => entry.employeeId)).size;
-    const correctionCount = entries.filter((entry) => entry.isCorrection || entry.correctsEntryId).length;
+    const readyToBillCount = entries.filter((entry) => entry.billingStatus === 'ready').length;
+    const blockedCount = entries.filter((entry) => entry.billingStatus === 'blocked').length;
+    const billedCount = entries.filter((entry) => entry.billingStatus === 'billed').length;
+    const attentionCount = entries.filter((entry) => getAttentionSignals(entry).length > 0).length;
     return {
       entryCount,
       totalMinutes,
       billableMinutes,
       nonBillableMinutes,
       billablePercent,
-      distinctStaff,
-      correctionCount,
+      readyToBillCount,
+      blockedCount,
+      billedCount,
+      attentionCount,
     };
   }, [entries]);
 
@@ -316,7 +390,13 @@ const TimeEntries = () => {
       header: 'Employee',
       render: (_, entry) => {
         const employee = employeesById.get(entry.employeeId);
-        return employee?.displayName || `${entry.employeeId}`;
+        const name = employee?.displayName || `${entry.employeeId}`;
+        return (
+          <span className="pet-time-entry-cell-identity">
+            <span className="pet-time-entry-cell-identity-primary">{name}</span>
+            <span className="pet-time-entry-cell-identity-secondary">Emp #{entry.employeeId}</span>
+          </span>
+        );
       },
     },
     {
@@ -324,10 +404,29 @@ const TimeEntries = () => {
       header: 'Ticket',
       render: (_, entry) => {
         const ticket = ticketsById.get(entry.ticketId);
+        const href = `/wp-admin/admin.php?page=pet-support#ticket=${entry.ticketId}`;
         if (!ticket) {
-          return `${entry.ticketId}`;
+          return (
+            <a
+              className="pet-time-entry-ticket-link"
+              href={href}
+              aria-label={`View ticket ${entry.ticketId}`}
+              title={`Open ticket #${entry.ticketId} in Support`}
+            >
+              {entry.ticketId}
+            </a>
+          );
         }
-        return `#${ticket.id} · ${ticket.subject || 'Untitled ticket'}`;
+        return (
+          <a
+            className="pet-time-entry-ticket-link"
+            href={href}
+            aria-label={`View ticket ${ticket.id}`}
+            title={`Open ticket #${ticket.id} in Support`}
+          >
+            <span className="pet-time-entry-cell-context">{`#${ticket.id} · ${ticket.subject || 'Untitled ticket'}`}</span>
+          </a>
+        );
       },
     },
     {
@@ -344,79 +443,103 @@ const TimeEntries = () => {
         const customerName = customersById.get(customerId)?.name || `Customer ${customerId}`;
 
         if (!ticket.siteId) {
-          return customerName;
+          return <span className="pet-time-entry-cell-context">{customerName}</span>;
         }
 
         const siteName = sitesById.get(ticket.siteId)?.name || `Site ${ticket.siteId}`;
-        return `${customerName} · ${siteName}`;
+        return <span className="pet-time-entry-cell-context">{`${customerName} · ${siteName}`}</span>;
       },
     },
-    { key: 'start', header: 'Start', width: 120, render: (val) => formatDateTimeCompact(val as string) },
-    { key: 'end', header: 'End', width: 120, render: (val) => formatDateTimeCompact(val as string) },
-    { key: 'duration', header: 'Duration', render: (_, entry) => formatMinutes(entry.duration || 0) },
-    { key: 'description', header: 'Description' },
     {
-      key: 'billable',
-      header: '',
-      width: 24,
-      render: (_, item) => (
-        <span
-          className={item.billable ? 'pet-time-entry-indicator pet-time-entry-indicator--billable' : 'pet-time-entry-indicator pet-time-entry-indicator--non-billable'}
-          role="img"
-          aria-label={item.billable ? 'Billable' : 'Non-billable'}
-          title={item.billable ? 'Billable: Billable' : 'Billable: Non-billable'}
-          data-tooltip={item.billable ? 'Billable: Billable' : 'Billable: Non-billable'}
-        >
-          $
-        </span>
-      ),
+      id: 'signalsAndTime',
+      key: 'duration',
+      header: 'Signals / Time',
+      width: 270,
+      render: (_, entry) => {
+        const signals = getAttentionSignals(entry);
+        const statusKey = getStatusKey(entry.status || 'unknown');
+        const billingStatus = entry.billingStatus || 'unknown';
+        const billingLabel = billingStatus === 'unknown' ? 'Unknown' : BILLING_STATUS_LABELS[billingStatus];
+        const billingReason = billingStatus === 'blocked'
+          ? (entry.billingBlockReason || 'Blocked for billing')
+          : null;
+        const billingTooltip = billingReason
+          ? `Billing: ${billingLabel} — ${billingReason}`
+          : `Billing: ${billingLabel}`;
+        return (
+          <div className="pet-time-entry-cell-signals-time">
+            <div className="pet-time-entry-signal-cluster">
+              <span
+                className={entry.billable ? 'pet-time-entry-indicator pet-time-entry-indicator--billable' : 'pet-time-entry-indicator pet-time-entry-indicator--non-billable'}
+                role="img"
+                aria-label={entry.billable ? 'Billable' : 'Non-billable'}
+                title={entry.billable ? 'Billable: Billable' : 'Billable: Non-billable'}
+                data-tooltip={entry.billable ? 'Billable: Billable' : 'Billable: Non-billable'}
+              >
+                $
+              </span>
+              <span
+                className={`pet-time-entry-indicator pet-time-entry-indicator--status status-${statusKey}`}
+                role="img"
+                aria-label={`Status: ${entry.status}`}
+                title={`Status: ${entry.status}`}
+                data-tooltip={`Status: ${entry.status}`}
+              >
+                ●
+              </span>
+              {entry.isCorrection || entry.correctsEntryId
+                ? (
+                  <span
+                    className="pet-time-entry-indicator pet-time-entry-indicator--correction"
+                    role="img"
+                    aria-label="Correction entry"
+                    title="Correction: Correction entry"
+                    data-tooltip="Correction: Correction entry"
+                  >
+                    ↺
+                  </span>
+                )
+                : (
+                  <span
+                    className="pet-time-entry-indicator pet-time-entry-indicator--original"
+                    role="img"
+                    aria-label="Original entry"
+                    title="Correction: Original entry"
+                    data-tooltip="Correction: Original entry"
+                  >
+                    •
+                  </span>
+                )}
+              <span
+                className={`pet-time-entry-billing-badge pet-time-entry-billing-badge--${billingStatus.replace('_', '-')}`}
+                aria-label={`Billing status: ${billingStatus}`}
+                title={billingTooltip}
+              >
+                Billing: {billingLabel}
+              </span>
+              {signals.length > 0 ? (
+                <span className="pet-time-entry-attention-list" aria-label={`Attention signals: ${signals.map((s) => s.label).join(', ')}`}>
+                  {signals.map((signal) => (
+                    <span
+                      key={`${entry.id}-${signal.key}`}
+                      className={`pet-time-entry-attention-tag pet-time-entry-attention-tag--${signal.tone}`}
+                      title={signal.title}
+                    >
+                      {signal.label}
+                    </span>
+                  ))}
+                </span>
+              ) : <span className="pet-time-entry-attention-empty">—</span>}
+            </div>
+            <div className="pet-time-entry-time-cluster">
+              <span className="pet-time-entry-cell-duration">{formatMinutes(entry.duration || 0)}</span>
+              <span className="pet-time-entry-cell-datetime">{formatDateTimeCompact(entry.start)} → {formatDateTimeCompact(entry.end)}</span>
+            </div>
+          </div>
+        );
+      },
     },
-    {
-      key: 'status',
-      header: '',
-      width: 24,
-      render: (_, item) => (
-        <span
-          className={`pet-time-entry-indicator pet-time-entry-indicator--status status-${getStatusKey(item.status || 'unknown')}`}
-          role="img"
-          aria-label={`Status: ${item.status}`}
-          title={`Status: ${item.status}`}
-          data-tooltip={`Status: ${item.status}`}
-        >
-          ●
-        </span>
-      ),
-    },
-    {
-      key: 'correctsEntryId',
-      header: '',
-      width: 24,
-      render: (_, item) => (
-        item.isCorrection || item.correctsEntryId
-          ? (
-            <span
-              className="pet-time-entry-indicator pet-time-entry-indicator--correction"
-              role="img"
-              aria-label="Correction entry"
-              title="Correction: Correction entry"
-              data-tooltip="Correction: Correction entry"
-            >
-              ↺
-            </span>
-          )
-          : (
-            <span
-              className="pet-time-entry-indicator pet-time-entry-indicator--original"
-              role="img"
-              aria-label="Original entry"
-              title="Correction: Original entry"
-              data-tooltip="Correction: Original entry"
-            >
-              •
-            </span>
-          )
-      ),
-    },
+    { key: 'description', header: 'Description', render: (_, entry) => <span className="pet-time-entry-cell-description">{entry.description}</span> },
   ];
 
   return (
@@ -452,12 +575,20 @@ const TimeEntries = () => {
             <strong className="pet-time-entries-context-value">{formatMinutes(summary.nonBillableMinutes)}</strong>
           </div>
           <div className="pet-time-entries-context-item">
-            <span className="pet-time-entries-context-label">Distinct Staff</span>
-            <strong className="pet-time-entries-context-value">{summary.distinctStaff}</strong>
+            <span className="pet-time-entries-context-label">Needs Attention</span>
+            <strong className="pet-time-entries-context-value">{summary.attentionCount}</strong>
           </div>
           <div className="pet-time-entries-context-item">
-            <span className="pet-time-entries-context-label">Corrections</span>
-            <strong className="pet-time-entries-context-value">{summary.correctionCount}</strong>
+            <span className="pet-time-entries-context-label">Ready to Bill</span>
+            <strong className="pet-time-entries-context-value">{summary.readyToBillCount}</strong>
+          </div>
+          <div className="pet-time-entries-context-item">
+            <span className="pet-time-entries-context-label">Blocked</span>
+            <strong className="pet-time-entries-context-value">{summary.blockedCount}</strong>
+          </div>
+          <div className="pet-time-entries-context-item">
+            <span className="pet-time-entries-context-label">Billed</span>
+            <strong className="pet-time-entries-context-value">{summary.billedCount}</strong>
           </div>
         </div>
       </Panel>
@@ -499,10 +630,11 @@ const TimeEntries = () => {
           <div className="pet-time-entries-filter-actions">
             <button
               type="button"
-              className="button"
+              className={`button pet-time-entries-clear-filters`}
               onClick={() => {
                 setEmployeeFilter('');
                 setTicketFilter('');
+                setActivePreset('none');
                 setSelectedIds([]);
               }}
               disabled={!employeeFilter && !ticketFilter}
@@ -510,6 +642,16 @@ const TimeEntries = () => {
               Clear Filters
             </button>
           </div>
+        </div>
+        <div className="pet-time-entries-preset-bar" role="group" aria-label="Quick presets">
+          <button
+            type="button"
+            className={`button pet-time-entries-preset-btn ${activePreset === 'attention' ? 'is-active' : ''}`}
+            onClick={() => setActivePreset((current) => (current === 'attention' ? 'none' : 'attention'))}
+            title="Highlights attention rows in the current dataset"
+          >
+            {activePreset === 'attention' ? 'Attention Highlight On' : 'Needs Attention'}
+          </button>
         </div>
       </Panel>
 
@@ -546,6 +688,11 @@ const TimeEntries = () => {
           onRetry={fetchEntries}
           emptyMessage="No time entries found."
           compatibilityMode="wp"
+          rowClassName={(item) => (
+            activePreset === 'attention' && getAttentionSignals(item).length > 0
+              ? 'pet-time-entry-row--attention'
+              : ''
+          )}
           selection={{
             selectedIds,
             onSelectionChange: setSelectedIds,
