@@ -3,6 +3,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import ConversationProvider from './components/ConversationProvider';
 import Dashboard from './components/Dashboard';
 import Dashboards from './components/Dashboards';
+import MyWork from './components/MyWork';
+import MyProfile from './components/MyProfile';
 import Projects from './components/Projects';
 import Commercial from './components/Commercial';
 import TimeEntries from './components/TimeEntries';
@@ -22,6 +24,7 @@ import EscalationRules from './components/EscalationRules';
 import Escalations from './components/Escalations';
 import PulsewayRmm from './components/PulsewayRmm';
 import Advisory from './components/Advisory';
+import Performance from './components/Performance';
 import ToastProvider from './components/foundation/ToastProvider';
 import { GlobalConfirmationHost } from './components/foundation/confirmationService';
 
@@ -43,6 +46,8 @@ const App = () => {
     switch (slug) {
       case 'pet-dashboard': return 'Overview';
       case 'pet-dashboards': return 'Dashboards';
+      case 'pet-my-work': return 'My Work';
+      case 'pet-my-profile': return 'My Profile';
       case 'pet-crm': return 'Customers';
       case 'pet-quotes-sales': return 'Quotes & Sales';
       case 'pet-delivery': return 'Delivery';
@@ -56,6 +61,7 @@ const App = () => {
       case 'pet-settings': return 'Settings';
       case 'pet-finance': return 'Finance';
       case 'pet-advisory': return 'Advisory';
+      case 'pet-performance': return 'Performance';
       case 'pet-conversations': return 'Conversations';
       case 'pet-approvals': return 'Approvals';
       case 'pet-escalations': return 'Escalations';
@@ -73,6 +79,10 @@ const App = () => {
         return <Dashboard />;
       case 'pet-dashboards':
         return <Dashboards />;
+      case 'pet-my-work':
+        return <MyWork />;
+      case 'pet-my-profile':
+        return <MyProfile />;
       case 'pet-work':
         return <WorkItems />;
       case 'pet-delivery':
@@ -93,6 +103,8 @@ const App = () => {
         return <Support />;
       case 'pet-advisory':
         return <Advisory />;
+      case 'pet-performance':
+        return <Performance />;
       case 'pet-conversations':
         return <Conversations />;
       case 'pet-approvals':

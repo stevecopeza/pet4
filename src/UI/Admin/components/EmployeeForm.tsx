@@ -6,16 +6,34 @@ import EmployeeCertifications from './EmployeeCertifications';
 import PersonKpis from './PersonKpis';
 import EmployeeReviews from './EmployeeReviews';
 import { SchemaDefinition, Employee, Team } from '../types';
+export type EmployeeFormTab = 'details' | 'roles' | 'skills' | 'certifications' | 'kpis' | 'reviews';
+export type EmployeeFormDetailsFocus = 'all' | 'identity' | 'org';
 
 interface EmployeeFormProps {
   onSuccess: () => void;
   onCancel: () => void;
   initialData?: Employee;
+  hideTabNavigation?: boolean;
+  forcedTab?: EmployeeFormTab;
+  onTabChange?: (tab: EmployeeFormTab) => void;
+  detailsFocus?: EmployeeFormDetailsFocus;
+  roleAssignmentsEditable?: boolean;
+  onRoleAssignmentsChanged?: () => void;
 }
 
-const EmployeeForm: React.FC<EmployeeFormProps> = ({ onSuccess, onCancel, initialData }) => {
+const EmployeeForm: React.FC<EmployeeFormProps> = ({
+  onSuccess,
+  onCancel,
+  initialData,
+  hideTabNavigation = false,
+  forcedTab,
+  onTabChange,
+  detailsFocus = 'all',
+  roleAssignmentsEditable = false,
+  onRoleAssignmentsChanged,
+}) => {
   const isEditMode = !!initialData;
-  const [activeTab, setActiveTab] = useState<'details' | 'roles' | 'skills' | 'certifications' | 'kpis' | 'reviews'>('details');
+  const [activeTab, setActiveTab] = useState<EmployeeFormTab>('details');
   const [wpUserId, setWpUserId] = useState(initialData?.wpUserId?.toString() || '');
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -32,6 +50,19 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ onSuccess, onCancel, initia
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const currentTab = forcedTab || activeTab;
+  const showIdentityFields = currentTab === 'details' && (detailsFocus === 'all' || detailsFocus === 'identity');
+  const showOrgFields = currentTab === 'details' && (detailsFocus === 'all' || detailsFocus === 'org');
+  const showAdditionalInfo = currentTab === 'details' && (detailsFocus === 'all' || detailsFocus === 'org');
+
+  const handleTabChange = (tab: EmployeeFormTab) => {
+    if (!forcedTab) {
+      setActiveTab(tab);
+    }
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
 
   useEffect(() => {
     const fetchSchema = async () => {
@@ -233,62 +264,66 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ onSuccess, onCancel, initia
     <div className="pet-form-container" style={{ padding: '20px', background: '#f9f9f9', border: '1px solid #ddd', marginBottom: '20px' }}>
       <h3>{isEditMode ? 'Edit Employee' : 'Add New Employee'}</h3>
 
-      {isEditMode && (
+      {isEditMode && !hideTabNavigation && (
         <div className="nav-tab-wrapper" style={{ marginBottom: '20px' }}>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'details' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('details')}
+            className={`nav-tab ${currentTab === 'details' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('details')}
           >
             Details
           </button>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'roles' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('roles')}
+            className={`nav-tab ${currentTab === 'roles' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('roles')}
           >
             Roles
           </button>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'skills' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('skills')}
+            className={`nav-tab ${currentTab === 'skills' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('skills')}
           >
             Skills
           </button>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'certifications' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('certifications')}
+            className={`nav-tab ${currentTab === 'certifications' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('certifications')}
           >
             Certifications
           </button>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'kpis' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('kpis')}
+            className={`nav-tab ${currentTab === 'kpis' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('kpis')}
           >
             KPIs
           </button>
           <button 
             type="button"
-            className={`nav-tab ${activeTab === 'reviews' ? 'nav-tab-active' : ''}`}
-            onClick={() => setActiveTab('reviews')}
+            className={`nav-tab ${currentTab === 'reviews' ? 'nav-tab-active' : ''}`}
+            onClick={() => handleTabChange('reviews')}
           >
             Reviews
           </button>
         </div>
       )}
 
-      {activeTab === 'roles' && initialData ? (
-        <EmployeeRoles employee={initialData} />
-      ) : activeTab === 'skills' && initialData ? (
+      {currentTab === 'roles' && initialData ? (
+        <EmployeeRoles
+          employee={initialData}
+          allowAssignments={roleAssignmentsEditable}
+          onAssignmentsChanged={onRoleAssignmentsChanged}
+        />
+      ) : currentTab === 'skills' && initialData ? (
         <EmployeeSkills employee={initialData} />
-      ) : activeTab === 'certifications' && initialData ? (
+      ) : currentTab === 'certifications' && initialData ? (
         <EmployeeCertifications employee={initialData} />
-      ) : activeTab === 'kpis' && initialData ? (
+      ) : currentTab === 'kpis' && initialData ? (
         <PersonKpis employee={initialData} />
-      ) : activeTab === 'reviews' && initialData ? (
+      ) : currentTab === 'reviews' && initialData ? (
         <EmployeeReviews employee={initialData} />
       ) : (
         <>
@@ -296,123 +331,137 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ onSuccess, onCancel, initia
           {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
           
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>WP User ID:</label>
-          {isEditMode ? (
-            <input 
-              type="text" 
-              value={wpUserId} 
-              disabled 
-              style={{ width: '100%', padding: '8px', background: '#eee', border: '1px solid #ddd', borderRadius: '4px' }} 
-            />
-          ) : (
-            <select 
-              value={wpUserId} 
-              onChange={handleUserSelect}
-              required
-              style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-            >
-              <option value="">-- Select a User --</option>
-              {availableUsers.map(user => (
-                <option key={user.ID} value={user.ID}>
-                  {user.user_login} ({user.display_name})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>First Name:</label>
-          <input 
-            type="text" 
-            value={firstName} 
-            onChange={(e) => setFirstName(e.target.value)} 
-            required 
-            style={{ width: '100%', maxWidth: '400px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Last Name:</label>
-          <input 
-            type="text" 
-            value={lastName} 
-            onChange={(e) => setLastName(e.target.value)} 
-            required 
-            style={{ width: '100%', maxWidth: '400px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Email:</label>
-          <input 
-            type="email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            required 
-            style={{ width: '100%', maxWidth: '400px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
-          <select 
-            value={status} 
-            onChange={(e) => setStatus(e.target.value)} 
-            required 
-            style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="terminated">Terminated</option>
-          </select>
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Hire Date:</label>
-          <input 
-            type="date" 
-            value={hireDate} 
-            onChange={(e) => setHireDate(e.target.value)} 
-            style={{ width: '100%', maxWidth: '400px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Manager:</label>
-          <select 
-            value={managerId} 
-            onChange={(e) => setManagerId(e.target.value)} 
-            style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-          >
-            <option value="">-- No Manager --</option>
-            {employees
-              .filter(emp => !initialData || emp.id !== initialData.id) // Prevent selecting self as manager
-              .map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.firstName} {emp.lastName}
-                </option>
-              ))
-            }
-          </select>
-        </div>
+            {currentTab === 'details' && detailsFocus !== 'all' && (
+              <p style={{ marginTop: 0, color: '#4f6178', fontWeight: 600 }}>
+                {detailsFocus === 'identity' ? 'Identity Details' : 'Org Placement Details'}
+              </p>
+            )}
 
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>Teams (Member):</label>
-          <select 
-            multiple
-            value={teamIds.map(String)} 
-            onChange={(e) => {
-              const selectedOptions = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-              setTeamIds(selectedOptions);
-            }} 
-            style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', height: '150px' }}
-          >
-            {flattenTeams(teams).map(team => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
-          <p className="description" style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Hold Ctrl (Windows) or Cmd (Mac) to select multiple teams.</p>
-        </div>
-        
-        {activeSchema && (
+            {showIdentityFields && (
+              <>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>WP User ID:</label>
+                  {isEditMode ? (
+                    <input 
+                      type="text" 
+                      value={wpUserId} 
+                      disabled 
+                      style={{ width: '100%', padding: '8px', background: '#eee', border: '1px solid #ddd', borderRadius: '4px' }} 
+                    />
+                  ) : (
+                    <select 
+                      value={wpUserId} 
+                      onChange={handleUserSelect}
+                      required
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    >
+                      <option value="">-- Select a User --</option>
+                      {availableUsers.map(user => (
+                        <option key={user.ID} value={user.ID}>
+                          {user.user_login} ({user.display_name})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>First Name:</label>
+                  <input 
+                    type="text" 
+                    value={firstName} 
+                    onChange={(e) => setFirstName(e.target.value)} 
+                    required 
+                    style={{ width: '100%', maxWidth: '400px' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Last Name:</label>
+                  <input 
+                    type="text" 
+                    value={lastName} 
+                    onChange={(e) => setLastName(e.target.value)} 
+                    required 
+                    style={{ width: '100%', maxWidth: '400px' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Email:</label>
+                  <input 
+                    type="email" 
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    required 
+                    style={{ width: '100%', maxWidth: '400px' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Status:</label>
+                  <select 
+                    value={status} 
+                    onChange={(e) => setStatus(e.target.value)} 
+                    required 
+                    style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="terminated">Terminated</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {showOrgFields && (
+              <>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Hire Date:</label>
+                  <input 
+                    type="date" 
+                    value={hireDate} 
+                    onChange={(e) => setHireDate(e.target.value)} 
+                    style={{ width: '100%', maxWidth: '400px' }}
+                  />
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Manager:</label>
+                  <select 
+                    value={managerId} 
+                    onChange={(e) => setManagerId(e.target.value)} 
+                    style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  >
+                    <option value="">-- No Manager --</option>
+                    {employees
+                      .filter(emp => !initialData || emp.id !== initialData.id)
+                      .map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.firstName} {emp.lastName}
+                        </option>
+                      ))
+                    }
+                  </select>
+                </div>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '5px' }}>Teams (Member):</label>
+                  <select 
+                    multiple
+                    value={teamIds.map(String)} 
+                    onChange={(e) => {
+                      const selectedOptions = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+                      setTeamIds(selectedOptions);
+                    }} 
+                    style={{ width: '100%', maxWidth: '400px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', height: '150px' }}
+                  >
+                    {flattenTeams(teams).map(team => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="description" style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Hold Ctrl (Windows) or Cmd (Mac) to select multiple teams.</p>
+                </div>
+              </>
+            )}
+
+            {activeSchema && showAdditionalInfo && (
           <div style={{ marginBottom: '20px', padding: '15px', background: '#fff', border: '1px solid #eee' }}>
             <h4 style={{ marginTop: 0 }}>Additional Information</h4>
             <MalleableFieldsRenderer 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import '../dashboard-styles.css';
 
 type Customer = { id: number; name: string };
@@ -62,6 +62,67 @@ const Advisory = () => {
   const hdrs = () => ({ 'X-WP-Nonce': nonce });
   const jsonHdrs = () => ({ 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' });
 
+  const buildDerivedSignals = useCallback(async (): Promise<Signal[]> => {
+    const [ticketsRes, projectsRes] = await Promise.all([
+      fetch(`${apiUrl}/tickets`, { headers: hdrs() }).catch(() => null),
+      fetch(`${apiUrl}/projects`, { headers: hdrs() }).catch(() => null),
+    ]);
+    const tickets = ticketsRes?.ok ? await ticketsRes.json() : [];
+    const projects = projectsRes?.ok ? await projectsRes.json() : [];
+    const now = new Date().toISOString();
+    const derived: Signal[] = [];
+
+    const openTickets = Array.isArray(tickets)
+      ? tickets.filter((ticket: any) => ['open', 'pending', 'in_progress', 'new'].includes(String(ticket?.status || '').toLowerCase()))
+      : [];
+    const criticalTicket = [...openTickets].sort((a: any, b: any) => {
+      const rank = (priority: string): number => {
+        const p = priority.toLowerCase();
+        if (p === 'critical' || p === 'urgent') return 4;
+        if (p === 'high') return 3;
+        if (p === 'medium') return 2;
+        return 1;
+      };
+      return rank(String(b?.priority || '')) - rank(String(a?.priority || ''));
+    })[0];
+    if (criticalTicket) {
+      derived.push({
+        id: `derived-support-${criticalTicket.id}`,
+        signal_type: 'support_pressure',
+        severity: 'critical',
+        status: 'ACTIVE',
+        title: `Support pressure on ticket #${criticalTicket.id}`,
+        summary: `${criticalTicket.subject || 'Critical ticket'} needs immediate action.`,
+        message: null,
+        source_entity_type: 'ticket',
+        source_entity_id: String(criticalTicket.id),
+        customer_id: Number(criticalTicket.customerId || 0) || null,
+        created_at: now,
+      });
+    }
+
+    const atRiskProject = Array.isArray(projects)
+      ? projects.find((project: any) => String(project?.malleableData?.health || '').toLowerCase() === 'at_risk')
+      : null;
+    if (atRiskProject) {
+      derived.push({
+        id: `derived-delivery-${atRiskProject.id}`,
+        signal_type: 'delivery_risk',
+        severity: 'warning',
+        status: 'ACTIVE',
+        title: `Delivery risk on project #${atRiskProject.id}`,
+        summary: `${atRiskProject.name || 'Project'} is marked at risk and needs mitigation.`,
+        message: null,
+        source_entity_type: 'project',
+        source_entity_id: String(atRiskProject.id),
+        customer_id: Number(atRiskProject.customerId || 0) || null,
+        created_at: now,
+      });
+    }
+
+    return derived;
+  }, [apiUrl, nonce]);
+
   /* --- Fetch customers for selector --- */
   const fetchCustomers = useCallback(async () => {
     try {
@@ -81,14 +142,28 @@ const Advisory = () => {
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl}/advisory/signals/recent?limit=50`, { headers: hdrs() });
-      if (!res.ok) throw new Error(await res.text());
-      setSignals(await res.json());
+      if (!res.ok) {
+        const fallback = await buildDerivedSignals();
+        setSignals(fallback);
+        return;
+      }
+      const payload = await res.json();
+      if (Array.isArray(payload) && payload.length > 0) {
+        setSignals(payload);
+      } else {
+        setSignals(await buildDerivedSignals());
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to fetch signals');
+      const fallback = await buildDerivedSignals();
+      if (fallback.length > 0) {
+        setSignals(fallback);
+      } else {
+        setError(e instanceof Error ? e.message : 'Failed to fetch signals');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiUrl, nonce, buildDerivedSignals]);
 
   useEffect(() => { if (tab === 'signals') fetchSignals(); }, [tab]);
 
@@ -143,6 +218,41 @@ const Advisory = () => {
   };
 
   useEffect(() => { setReports([]); setSelected(null); }, [reportType]);
+
+  const customerNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    customers.forEach((customer) => map.set(customer.id, customer.name));
+    return map;
+  }, [customers]);
+
+  const prioritizedSignals = useMemo(() => {
+    const severityRank = (severity: string): number => {
+      const s = severity.toLowerCase();
+      if (s === 'critical' || s === 'high') return 3;
+      if (s === 'warning' || s === 'medium') return 2;
+      return 1;
+    };
+    return [...signals].sort((a, b) => {
+      const aActive = a.status === 'ACTIVE' ? 1 : 0;
+      const bActive = b.status === 'ACTIVE' ? 1 : 0;
+      if (bActive !== aActive) return bActive - aActive;
+      const aMeaningful = a.signal_type === 'context_switching' ? 0 : 1;
+      const bMeaningful = b.signal_type === 'context_switching' ? 0 : 1;
+      if (bMeaningful !== aMeaningful) return bMeaningful - aMeaningful;
+      const severityDelta = severityRank(b.severity) - severityRank(a.severity);
+      if (severityDelta !== 0) return severityDelta;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [signals]);
+
+  const sourceContextLabel = (signal: Signal): string => {
+    const customerLabel = signal.customer_id ? (customerNameById.get(signal.customer_id) || `Customer #${signal.customer_id}`) : null;
+    const entityLabel = signal.source_entity_type ? `${signal.source_entity_type} #${signal.source_entity_id}` : null;
+    if (customerLabel && entityLabel) return `${customerLabel} · ${entityLabel}`;
+    if (customerLabel) return customerLabel;
+    if (entityLabel) return entityLabel;
+    return 'Unscoped signal';
+  };
 
   /* ============================================================
      Render
@@ -274,18 +384,18 @@ const Advisory = () => {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div className="pd-section-title" style={{ margin: 0 }}>
-                Recent Signals
-                <span className="pd-badge" style={{ marginLeft: 8 }}>{signals.length}</span>
+                Recent Signals (priority first)
+                <span className="pd-badge" style={{ marginLeft: 8 }}>{prioritizedSignals.length}</span>
               </div>
               <button type="button" className="pd-refresh-btn" onClick={fetchSignals} disabled={loading} style={{ background: 'rgba(13,110,253,0.1)', color: '#0d6efd', borderColor: '#b6d4fe' }}>
                 {loading ? 'Loading\u2026' : '\u21BB Refresh'}
               </button>
             </div>
 
-            {signals.length === 0 && !loading && <div className="pd-empty">No active signals.</div>}
+            {prioritizedSignals.length === 0 && !loading && <div className="pd-empty">No active signals.</div>}
 
             <div className="pd-signal-list">
-              {signals.map((s) => (
+              {prioritizedSignals.map((s) => (
                 <div key={s.id} className={`pd-signal-item ${severityClass(s.severity)}`}>
                   <div className="pd-signal-type">{s.signal_type.replace(/_/g, ' ')}</div>
                   <div className="pd-signal-message">
@@ -294,8 +404,7 @@ const Advisory = () => {
                     {!s.summary && s.message && <span style={{ color: '#666' }}> \u2014 {s.message}</span>}
                   </div>
                   <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: '0.75rem', color: '#888' }}>
-                    {s.source_entity_type && <span>{s.source_entity_type} #{s.source_entity_id}</span>}
-                    {s.customer_id && <span>Customer #{s.customer_id}</span>}
+                    <span>{sourceContextLabel(s)}</span>
                     <span>{new Date(s.created_at).toLocaleString()}</span>
                     <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: s.status === 'ACTIVE' ? '#28a745' : '#adb5bd' }}>{s.status}</span>
                   </div>

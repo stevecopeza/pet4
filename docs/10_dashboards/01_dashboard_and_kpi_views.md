@@ -147,6 +147,21 @@ Typical KPIs:
 
 ---
 
+### Performance Benchmark Surface (Admin)
+
+Audience:
+- Administrators / platform operators
+
+Focus:
+- runtime benchmark diagnostics
+- probe metrics, workload contract metrics, and recommendations
+
+This is an operational benchmark route and is separate from persona KPI dashboards.
+
+See: `10_dashboards/performance_benchmark_surface.md`.
+
+---
+
 ## KPI Widget Behaviour
 
 Rules:

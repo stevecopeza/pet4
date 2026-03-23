@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Employee, Team } from '../types';
 import { DataTable, Column } from './DataTable';
-import KebabMenu from './KebabMenu';
-import EmployeeForm from './EmployeeForm';
+import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import EmployeeForm, { EmployeeFormDetailsFocus, EmployeeFormTab } from './EmployeeForm';
 import Teams from './Teams';
 import ConfirmationDialog from './foundation/ConfirmationDialog';
 import useToast from './foundation/useToast';
@@ -18,6 +18,153 @@ type EmployeeAttentionSignal = {
   label: string;
   title: string;
   tone: 'high' | 'medium' | 'low';
+};
+
+type StaffJourneyStepKey = 'identity' | 'org_placement' | 'role_assignment' | 'capabilities' | 'management_context';
+type StaffSetupReadiness = 'incomplete' | 'partial' | 'ready';
+
+type AssignmentRecord = {
+  employee_id: number;
+  status?: string;
+  end_date?: string | null;
+};
+
+type StaffSetupState = {
+  readiness: StaffSetupReadiness;
+  nextStepKey: StaffJourneyStepKey;
+  nextStepHint: string;
+  hasIdentity: boolean;
+  hasOrgPlacement: boolean;
+  hasRoleAssignment: boolean;
+};
+
+type JourneyStepDefinition = {
+  key: StaffJourneyStepKey;
+  label: string;
+  description: string;
+  defaultTab: EmployeeFormTab;
+  optional?: boolean;
+};
+
+const STAFF_JOURNEY_STEPS: JourneyStepDefinition[] = [
+  {
+    key: 'identity',
+    label: 'Identity',
+    description: 'Capture core identity details: name, email, and active status.',
+    defaultTab: 'details',
+  },
+  {
+    key: 'org_placement',
+    label: 'Org Placement',
+    description: 'Set manager and team placement so reporting lines and context are clear.',
+    defaultTab: 'details',
+  },
+  {
+    key: 'role_assignment',
+    label: 'Role Assignment',
+    description: 'Assign at least one active role to reach readiness.',
+    defaultTab: 'roles',
+  },
+  {
+    key: 'capabilities',
+    label: 'Capabilities',
+    description: 'Add skills and certifications (optional, non-blocking).',
+    defaultTab: 'skills',
+    optional: true,
+  },
+  {
+    key: 'management_context',
+    label: 'Management Context',
+    description: 'Capture KPIs and reviews (optional, non-blocking).',
+    defaultTab: 'kpis',
+    optional: true,
+  },
+];
+
+const STAFF_SETUP_READINESS_ORDER: Record<StaffSetupReadiness, number> = {
+  incomplete: 0,
+  partial: 1,
+  ready: 2,
+};
+
+const getEmployeeDisplayName = (employee: Employee): string => (
+  employee.displayName
+  || [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim()
+  || `Employee #${employee.id}`
+);
+
+const hasIdentityCompleted = (employee: Employee): boolean => {
+  const firstName = String(employee.firstName || '').trim();
+  const lastName = String(employee.lastName || '').trim();
+  const email = String(employee.email || '').trim();
+  const status = String(employee.status || '').trim();
+  return Boolean(firstName && lastName && email && status);
+};
+
+const hasOrgPlacementCompleted = (employee: Employee, hasDirectReports: boolean): boolean => {
+  const hasManager = Boolean(employee.managerId);
+  const hasTeam = Array.isArray(employee.teamIds) && employee.teamIds.length > 0;
+  return (hasManager && hasTeam) || (!hasManager && hasTeam && hasDirectReports);
+};
+
+const isActiveAssignment = (assignment: AssignmentRecord): boolean => {
+  const status = String(assignment.status || '').toLowerCase();
+  if (status) {
+    return status === 'active';
+  }
+  return !assignment.end_date;
+};
+
+export const deriveStaffSetupState = (employee: Employee, activeRoleCount: number, hasDirectReports: boolean = false): StaffSetupState => {
+  const hasIdentity = hasIdentityCompleted(employee);
+  const hasOrgPlacement = hasOrgPlacementCompleted(employee, hasDirectReports);
+  const hasRoleAssignment = activeRoleCount > 0;
+
+  if (!hasIdentity) {
+    return {
+      readiness: 'incomplete',
+      nextStepKey: 'identity',
+      nextStepHint: 'Complete identity details.',
+      hasIdentity,
+      hasOrgPlacement,
+      hasRoleAssignment,
+    };
+  }
+
+  if (!hasOrgPlacement) {
+    const missingManager = !employee.managerId;
+    const missingTeam = !Array.isArray(employee.teamIds) || employee.teamIds.length === 0;
+    return {
+      readiness: 'incomplete',
+      nextStepKey: 'org_placement',
+      nextStepHint: missingManager && missingTeam
+        ? 'Assign manager and team.'
+        : (missingManager ? 'Assign manager.' : 'Assign to a team.'),
+      hasIdentity,
+      hasOrgPlacement,
+      hasRoleAssignment,
+    };
+  }
+
+  if (!hasRoleAssignment) {
+    return {
+      readiness: 'partial',
+      nextStepKey: 'role_assignment',
+      nextStepHint: 'Assign at least one active role.',
+      hasIdentity,
+      hasOrgPlacement,
+      hasRoleAssignment,
+    };
+  }
+
+  return {
+    readiness: 'ready',
+    nextStepKey: 'capabilities',
+    nextStepHint: 'Optional: add capabilities and management context.',
+    hasIdentity,
+    hasOrgPlacement,
+    hasRoleAssignment,
+  };
 };
 
 const formatDateLabel = (value?: string | null) => (
@@ -96,8 +243,16 @@ const Employees = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [managerFilter, setManagerFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
   const [searchFilter, setSearchFilter] = useState<string>('');
+  const [sortMode, setSortMode] = useState<'readiness' | 'name'>('readiness');
   const [activePreset, setActivePreset] = useState<'none' | 'active' | 'no_manager' | 'archived'>('none');
+  const [roleAssignments, setRoleAssignments] = useState<AssignmentRecord[]>([]);
+  const [journeyStep, setJourneyStep] = useState<StaffJourneyStepKey>('identity');
+  const [visitedJourneySteps, setVisitedJourneySteps] = useState<StaffJourneyStepKey[]>(['identity']);
+  const [capabilitiesView, setCapabilitiesView] = useState<'skills' | 'certifications'>('skills');
+  const [managementView, setManagementView] = useState<'kpis' | 'reviews'>('kpis');
   const toast = useToast();
+  // @ts-ignore
+  const staffSetupJourneyEnabled = Boolean(window.petSettings?.featureFlags?.staff_setup_journey_enabled);
 
   const fetchSchema = async () => {
     try {
@@ -144,6 +299,28 @@ const Employees = () => {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAssignments = async () => {
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const response = await fetch(`${apiUrl}/assignments`, {
+        headers: {
+          'X-WP-Nonce': nonce,
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch assignments');
+      }
+      const data = await response.json();
+      setRoleAssignments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to fetch assignments for staff setup journey', err);
+      setRoleAssignments([]);
     }
   };
 
@@ -243,12 +420,17 @@ const Employees = () => {
       fetchEmployees();
       fetchSchema();
       fetchLeaveTypes();
+      if (staffSetupJourneyEnabled) {
+        fetchAssignments();
+      } else {
+        setRoleAssignments([]);
+      }
     }
     if (activeTab === 'org') {
       fetchEmployees();
       fetchOrgTeams();
     }
-  }, [activeTab]);
+  }, [activeTab, staffSetupJourneyEnabled]);
 
   useEffect(() => {
     const eid = editingEmployee?.id || (typeof selectedIds[0] === 'number' ? Number(selectedIds[0]) : null);
@@ -267,13 +449,43 @@ const Employees = () => {
     }
   }, [activeTab, editingEmployee, selectedIds]);
 
-  const handleFormSuccess = () => {
+  const closeEmployeeEditor = () => {
     setShowAddForm(false);
     setEditingEmployee(null);
+    setJourneyStep('identity');
+    setVisitedJourneySteps(['identity']);
+    setCapabilitiesView('skills');
+    setManagementView('kpis');
+  };
+  const goToJourneyStep = (step: StaffJourneyStepKey) => {
+    setJourneyStep(step);
+    setVisitedJourneySteps((prev) => (prev.includes(step) ? prev : [...prev, step]));
+  };
+
+  const openSetupJourney = (employee: Employee, step?: StaffJourneyStepKey) => {
+    const initialStep = step || 'identity';
+    setEditingEmployee(employee);
+    setJourneyStep(initialStep);
+    setVisitedJourneySteps([initialStep]);
+    setCapabilitiesView('skills');
+    setManagementView('kpis');
+    setShowAddForm(true);
+  };
+
+  const handleFormSuccess = () => {
     fetchEmployees();
+    if (staffSetupJourneyEnabled && editingEmployee) {
+      fetchAssignments();
+      return;
+    }
+    closeEmployeeEditor();
   };
 
   const handleEdit = (employee: Employee) => {
+    if (staffSetupJourneyEnabled) {
+      openSetupJourney(employee);
+      return;
+    }
     setEditingEmployee(employee);
     setShowAddForm(true);
   };
@@ -360,9 +572,8 @@ const Employees = () => {
     if (!employee) {
       return;
     }
-    setEditingEmployee(employee);
-    setShowAddForm(true);
     setActiveTab('people');
+    handleEdit(employee);
   };
 
   const renderTeamNode = (team: Team, depth: number = 0): React.ReactNode => {
@@ -477,6 +688,43 @@ const Employees = () => {
     });
     return byId;
   }, [employees]);
+  const directReportsCountByManagerId = useMemo(() => {
+    const byManager = new Map<number, number>();
+    employees.forEach((employee) => {
+      if (!employee.managerId) {
+        return;
+      }
+      byManager.set(employee.managerId, (byManager.get(employee.managerId) || 0) + 1);
+    });
+    return byManager;
+  }, [employees]);
+
+  const activeRoleCountByEmployee = useMemo(() => {
+    const byEmployee = new Map<number, number>();
+    roleAssignments.forEach((assignment) => {
+      const employeeId = Number(assignment.employee_id);
+      if (!employeeId || !isActiveAssignment(assignment)) {
+        return;
+      }
+      byEmployee.set(employeeId, (byEmployee.get(employeeId) || 0) + 1);
+    });
+    return byEmployee;
+  }, [roleAssignments]);
+
+  const setupStateByEmployeeId = useMemo(() => {
+    const byEmployee = new Map<number, StaffSetupState>();
+    employees.forEach((employee) => {
+      byEmployee.set(
+        employee.id,
+        deriveStaffSetupState(
+          employee,
+          activeRoleCountByEmployee.get(employee.id) || 0,
+          (directReportsCountByManagerId.get(employee.id) || 0) > 0
+        )
+      );
+    });
+    return byEmployee;
+  }, [activeRoleCountByEmployee, directReportsCountByManagerId, employees]);
 
   const statusOptions = useMemo(
     () => Array.from(new Set(employees.map((employee) => String(employee.status || 'unknown').toLowerCase()))).sort(),
@@ -485,7 +733,7 @@ const Employees = () => {
 
   const filteredEmployees = useMemo(() => {
     const query = searchFilter.trim().toLowerCase();
-    return employees.filter((employee) => {
+    const matches = employees.filter((employee) => {
       const status = String(employee.status || 'unknown').toLowerCase();
       if (statusFilter !== 'all' && status !== statusFilter) {
         return false;
@@ -508,11 +756,30 @@ const Employees = () => {
       if (!query) {
         return true;
       }
-      const displayName = employee.displayName || [employee.firstName, employee.lastName].filter(Boolean).join(' ');
+      const displayName = getEmployeeDisplayName(employee);
       const searchable = `${employee.id} ${displayName} ${employee.email}`.toLowerCase();
       return searchable.includes(query);
     });
-  }, [activePreset, employees, managerFilter, searchFilter, statusFilter]);
+    if (!staffSetupJourneyEnabled) {
+      return matches;
+    }
+    if (sortMode === 'name') {
+      return [...matches].sort((a, b) => getEmployeeDisplayName(a).localeCompare(getEmployeeDisplayName(b)));
+    }
+    return [...matches].sort((a, b) => {
+      const aState = setupStateByEmployeeId.get(a.id) || deriveStaffSetupState(a, activeRoleCountByEmployee.get(a.id) || 0, (directReportsCountByManagerId.get(a.id) || 0) > 0);
+      const bState = setupStateByEmployeeId.get(b.id) || deriveStaffSetupState(b, activeRoleCountByEmployee.get(b.id) || 0, (directReportsCountByManagerId.get(b.id) || 0) > 0);
+      const readinessOrderDiff = STAFF_SETUP_READINESS_ORDER[aState.readiness] - STAFF_SETUP_READINESS_ORDER[bState.readiness];
+      if (readinessOrderDiff !== 0) {
+        return readinessOrderDiff;
+      }
+      const roleDiff = (activeRoleCountByEmployee.get(a.id) || 0) - (activeRoleCountByEmployee.get(b.id) || 0);
+      if (roleDiff !== 0) {
+        return roleDiff;
+      }
+      return getEmployeeDisplayName(a).localeCompare(getEmployeeDisplayName(b));
+    });
+  }, [activePreset, activeRoleCountByEmployee, directReportsCountByManagerId, employees, managerFilter, searchFilter, setupStateByEmployeeId, sortMode, staffSetupJourneyEnabled, statusFilter]);
 
   const peopleSummary = useMemo(() => {
     const total = filteredEmployees.length;
@@ -559,12 +826,65 @@ const Employees = () => {
     }
   };
 
+  const activeJourneySetupState = editingEmployee
+    ? (setupStateByEmployeeId.get(editingEmployee.id) || deriveStaffSetupState(
+      editingEmployee,
+      activeRoleCountByEmployee.get(editingEmployee.id) || 0,
+      (directReportsCountByManagerId.get(editingEmployee.id) || 0) > 0
+    ))
+    : null;
+  const isJourneyOpen = staffSetupJourneyEnabled && showAddForm && editingEmployee !== null;
+  const activeJourneyStep = STAFF_JOURNEY_STEPS.find((step) => step.key === journeyStep) || STAFF_JOURNEY_STEPS[0];
+  const activeJourneyStepIndex = STAFF_JOURNEY_STEPS.findIndex((step) => step.key === activeJourneyStep.key);
+  const activeJourneyFormTab: EmployeeFormTab = (() => {
+    if (activeJourneyStep.key === 'capabilities') {
+      return capabilitiesView;
+    }
+    if (activeJourneyStep.key === 'management_context') {
+      return managementView;
+    }
+    return activeJourneyStep.defaultTab;
+  })();
+  const activeJourneyDetailsFocus: EmployeeFormDetailsFocus = activeJourneyStep.key === 'identity'
+    ? 'identity'
+    : (activeJourneyStep.key === 'org_placement' ? 'org' : 'all');
+  const completedRequiredStepCount = activeJourneySetupState
+    ? [activeJourneySetupState.hasIdentity, activeJourneySetupState.hasOrgPlacement, activeJourneySetupState.hasRoleAssignment].filter(Boolean).length
+    : 0;
+  const completedOptionalStepCount = ['capabilities', 'management_context'].filter((key) => visitedJourneySteps.includes(key as StaffJourneyStepKey)).length;
+  const completedJourneyStepCount = Math.min(STAFF_JOURNEY_STEPS.length, completedRequiredStepCount + completedOptionalStepCount);
+  const journeyProgressPct = Math.round((completedJourneyStepCount / STAFF_JOURNEY_STEPS.length) * 100);
+
+  const getJourneyStepStatusLabel = (stepKey: StaffJourneyStepKey): string => {
+    if (!activeJourneySetupState) {
+      return '';
+    }
+    if (stepKey === 'identity') {
+      return activeJourneySetupState.hasIdentity ? 'Done' : 'Required';
+    }
+    if (stepKey === 'org_placement') {
+      return activeJourneySetupState.hasOrgPlacement ? 'Done' : 'Required';
+    }
+    if (stepKey === 'role_assignment') {
+      return activeJourneySetupState.hasRoleAssignment ? 'Done' : 'Required';
+    }
+    return visitedJourneySteps.includes(stepKey) ? 'Done' : 'Optional';
+  };
+
+  const moveJourneyStepBy = (delta: number) => {
+    const nextIndex = Math.min(
+      STAFF_JOURNEY_STEPS.length - 1,
+      Math.max(0, activeJourneyStepIndex + delta)
+    );
+    goToJourneyStep(STAFF_JOURNEY_STEPS[nextIndex].key);
+  };
+
   const columns: Column<Employee>[] = [
     {
       key: 'firstName',
       header: 'Employee',
       render: (_, item: Employee) => {
-        const displayName = item.displayName || [item.firstName, item.lastName].filter(Boolean).join(' ').trim() || `Employee #${item.id}`;
+        const displayName = getEmployeeDisplayName(item);
         const subtitle = item.jobTitle ? `${item.email} · ${item.jobTitle}` : item.email;
         // @ts-ignore
         const avatarUrl = item.avatarUrl ? String((item as any).avatarUrl) : '';
@@ -604,6 +924,44 @@ const Employees = () => {
         );
       },
     },
+    ...(staffSetupJourneyEnabled ? [
+      {
+        id: 'staff-setup-status',
+        key: 'id' as keyof Employee,
+        header: 'Setup Status',
+        render: (_: Employee[keyof Employee], item: Employee) => {
+          const setupState = setupStateByEmployeeId.get(item.id) || deriveStaffSetupState(item, activeRoleCountByEmployee.get(item.id) || 0, (directReportsCountByManagerId.get(item.id) || 0) > 0);
+          return (
+            <span className={`pet-status-badge status-${setupState.readiness}`}>
+              {setupState.readiness}
+            </span>
+          );
+        },
+      },
+      {
+        id: 'staff-setup-next-step',
+        key: 'id' as keyof Employee,
+        header: 'Next Step',
+        render: (_: Employee[keyof Employee], item: Employee) => {
+          const setupState = setupStateByEmployeeId.get(item.id) || deriveStaffSetupState(item, activeRoleCountByEmployee.get(item.id) || 0, (directReportsCountByManagerId.get(item.id) || 0) > 0);
+          return (
+            <span className="pet-employee-setup-guidance">
+              <span className="pet-employee-setup-guidance-text">{setupState.nextStepHint}</span>
+              <button
+                type="button"
+                className="button button-small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openSetupJourney(item, setupState.nextStepKey);
+                }}
+              >
+                Open Setup Journey
+              </button>
+            </span>
+          );
+        },
+      },
+    ] : []),
     {
       key: 'hireDate',
       header: 'Employment',
@@ -841,17 +1199,144 @@ const Employees = () => {
                 Archived
               </button>
             </div>
+            {staffSetupJourneyEnabled && (
+              <div className="pet-employees-sort-bar">
+                <label className="pet-employees-sort-field" htmlFor="pet-employee-sort-mode">
+                  <span>Sort By</span>
+                  <select
+                    id="pet-employee-sort-mode"
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as 'readiness' | 'name')}
+                  >
+                    <option value="readiness">Readiness</option>
+                    <option value="name">Name</option>
+                  </select>
+                </label>
+              </div>
+            )}
           </Panel>
 
-          {showAddForm && (
+          {showAddForm && staffSetupJourneyEnabled && editingEmployee ? (
+            <Panel className="pet-employees-form-panel pet-employees-journey-panel">
+              <div className="pet-employee-journey-header">
+                <div>
+                  <h3 style={{ margin: 0 }}>Staff Setup Journey</h3>
+                  <p style={{ margin: '6px 0 0' }}>
+                    {getEmployeeDisplayName(editingEmployee)}
+                  </p>
+                  <div className="pet-employee-journey-progress">
+                    <span className="pet-employee-journey-progress-label">
+                      Progress {completedJourneyStepCount}/{STAFF_JOURNEY_STEPS.length}
+                    </span>
+                    <span className="pet-employee-journey-progress-secondary">
+                      Required {completedRequiredStepCount}/3
+                    </span>
+                    <div className="pet-employee-journey-progress-track" aria-hidden="true">
+                      <span className="pet-employee-journey-progress-fill" style={{ width: `${journeyProgressPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+                <button type="button" className="button" onClick={closeEmployeeEditor}>
+                  Close Journey
+                </button>
+              </div>
+
+              <div className="pet-employee-journey-step-grid">
+                {STAFF_JOURNEY_STEPS.map((step, index) => (
+                  <button
+                    key={step.key}
+                    type="button"
+                    className={`button pet-employee-journey-step ${activeJourneyStep.key === step.key ? 'is-active' : ''}`}
+                    onClick={() => goToJourneyStep(step.key)}
+                  >
+                    <span className="pet-employee-journey-step-index">{index + 1}</span>
+                    <span className="pet-employee-journey-step-title">{step.label}</span>
+                    <span className="pet-employee-journey-step-status">{getJourneyStepStatusLabel(step.key)}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="pet-employee-journey-step-body">
+                <p className="pet-employee-journey-step-description">{activeJourneyStep.description}</p>
+                {activeJourneyStep.key === 'capabilities' && (
+                  <div className="pet-employee-journey-substeps" role="group" aria-label="Capabilities">
+                    <button
+                      type="button"
+                      className={`button button-small ${capabilitiesView === 'skills' ? 'button-primary' : ''}`}
+                      onClick={() => setCapabilitiesView('skills')}
+                    >
+                      Skills
+                    </button>
+                    <button
+                      type="button"
+                      className={`button button-small ${capabilitiesView === 'certifications' ? 'button-primary' : ''}`}
+                      onClick={() => setCapabilitiesView('certifications')}
+                    >
+                      Certifications
+                    </button>
+                  </div>
+                )}
+                {activeJourneyStep.key === 'management_context' && (
+                  <div className="pet-employee-journey-substeps" role="group" aria-label="Management Context">
+                    <button
+                      type="button"
+                      className={`button button-small ${managementView === 'kpis' ? 'button-primary' : ''}`}
+                      onClick={() => setManagementView('kpis')}
+                    >
+                      KPIs
+                    </button>
+                    <button
+                      type="button"
+                      className={`button button-small ${managementView === 'reviews' ? 'button-primary' : ''}`}
+                      onClick={() => setManagementView('reviews')}
+                    >
+                      Reviews
+                    </button>
+                  </div>
+                )}
+                <EmployeeForm
+                  onSuccess={handleFormSuccess}
+                  onCancel={closeEmployeeEditor}
+                  initialData={editingEmployee}
+                  hideTabNavigation
+                  forcedTab={activeJourneyFormTab}
+                  detailsFocus={activeJourneyDetailsFocus}
+                  roleAssignmentsEditable
+                  onRoleAssignmentsChanged={() => {
+                    fetchAssignments();
+                    fetchEmployees();
+                  }}
+                />
+              </div>
+
+              <div className="pet-employee-journey-footer">
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => moveJourneyStepBy(-1)}
+                  disabled={activeJourneyStepIndex <= 0}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => moveJourneyStepBy(1)}
+                  disabled={activeJourneyStepIndex >= STAFF_JOURNEY_STEPS.length - 1}
+                >
+                  Next
+                </button>
+              </div>
+            </Panel>
+          ) : showAddForm ? (
             <Panel className="pet-employees-form-panel">
               <EmployeeForm
                 onSuccess={handleFormSuccess}
-                onCancel={() => { setShowAddForm(false); setEditingEmployee(null); }}
+                onCancel={closeEmployeeEditor}
                 initialData={editingEmployee || undefined}
               />
             </Panel>
-          )}
+          ) : null}
 
           {selectedIds.length > 0 && (
             <ActionBar className="pet-employees-bulk-strip" testId="employees-bulk-strip">
@@ -868,7 +1353,11 @@ const Employees = () => {
           <Panel className="pet-employees-table-panel" testId="employees-main-panel">
             <div className="pet-employees-table-header">
               <h3>Employee List</h3>
-              <p>Review people records, management coverage, and staffing signals at a glance.</p>
+              <p>
+                {staffSetupJourneyEnabled
+                  ? `Review readiness, next actions, and staffing signals at a glance. Sorted by ${sortMode === 'readiness' ? 'Readiness' : 'Name'}.`
+                  : 'Review people records, management coverage, and staffing signals at a glance.'}
+              </p>
             </div>
             <DataTable
               columns={columns}
@@ -887,16 +1376,27 @@ const Employees = () => {
                   ? 'pet-employee-row--attention'
                   : ''
               )}
-              actions={(item) => (
-                <KebabMenu items={[
+              actions={(item) => {
+                const setupState = setupStateByEmployeeId.get(item.id) || deriveStaffSetupState(item, activeRoleCountByEmployee.get(item.id) || 0, (directReportsCountByManagerId.get(item.id) || 0) > 0);
+                const menuItems: KebabMenuItem[] = [];
+                if (staffSetupJourneyEnabled) {
+                  menuItems.push(
+                    { type: 'action', label: 'Open Setup Journey', onClick: () => openSetupJourney(item, setupState.nextStepKey) },
+                    { type: 'divider' }
+                  );
+                }
+                menuItems.push(
                   { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-                  { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
-                ]} />
-              )}
+                  { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true }
+                );
+                return (
+                  <KebabMenu items={menuItems} />
+                );
+              }}
             />
           </Panel>
 
-          {activeEmployeeId !== null && (
+          {activeEmployeeId !== null && !isJourneyOpen && (
             <Panel className="pet-employees-capacity-panel">
               <h3 style={{ marginTop: 0 }}>Capacity & Utilization</h3>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
@@ -972,7 +1472,7 @@ const Employees = () => {
             </Panel>
           )}
 
-          {activeEmployeeId !== null && (
+          {activeEmployeeId !== null && !isJourneyOpen && (
             <Panel className="pet-employees-leave-panel">
               <h3 style={{ marginTop: 0 }}>Leave Requests</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr 1fr', gap: '10px', alignItems: 'center' }}>

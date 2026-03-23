@@ -142,7 +142,14 @@ class SqlWorkItemRepository implements WorkItemRepository
         $clientTier = isset($row->client_tier) ? (int)$row->client_tier : 1;
         $managerPriorityOverride = isset($row->manager_priority_override) ? (float)$row->manager_priority_override : 0.0;
         $requiredRoleId = isset($row->required_role_id) ? (int)$row->required_role_id : null;
+        $assignedUserId = $row->assigned_user_id !== null ? (string)$row->assigned_user_id : null;
         $assignedTeamId = isset($row->assigned_team_id) ? ($row->assigned_team_id !== null ? (string)$row->assigned_team_id : null) : null;
+        if ($assignedUserId !== null && $assignedUserId !== '' && $assignedTeamId !== null && $assignedTeamId !== '') {
+            // Backward-compatibility hardening:
+            // some historical/seeded rows may contain both fields despite invariant.
+            // Prefer explicit user assignment so reads do not fatally fail.
+            $assignedTeamId = null;
+        }
         $assignmentMode = isset($row->assignment_mode) ? ($row->assignment_mode !== null ? (string)$row->assignment_mode : null) : null;
         $queueKey = isset($row->queue_key) ? ($row->queue_key !== null ? (string)$row->queue_key : null) : null;
         $routingReason = isset($row->routing_reason) ? ($row->routing_reason !== null ? (string)$row->routing_reason : null) : null;
@@ -151,7 +158,7 @@ class SqlWorkItemRepository implements WorkItemRepository
             $row->id,
             $row->source_type,
             $row->source_id,
-            $row->assigned_user_id,
+            $assignedUserId,
             $row->department_id,
             $assignedTeamId,
             $assignmentMode,

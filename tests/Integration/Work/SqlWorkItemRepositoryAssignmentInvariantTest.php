@@ -74,5 +74,42 @@ final class SqlWorkItemRepositoryAssignmentInvariantTest extends TestCase
         $this->expectExceptionMessage('both assigned_team_id and assigned_user_id are set');
         $this->repository->save($workItem);
     }
+
+    public function testFindByAssignedUserNormalizesLegacyDualAssignmentRows(): void
+    {
+        $table = $this->wpdb->prefix . 'pet_work_items';
+        $this->wpdb->insert($table, [
+            'id' => 'wi-legacy-dual',
+            'source_type' => 'ticket',
+            'source_id' => '77',
+            'assigned_user_id' => '1',
+            'department_id' => 'support',
+            'assigned_team_id' => '3',
+            'assignment_mode' => 'TEAM_QUEUE',
+            'queue_key' => 'support:team:3',
+            'routing_reason' => 'seed_staff_time_capture',
+            'sla_snapshot_id' => null,
+            'sla_time_remaining_minutes' => null,
+            'priority_score' => 42.0,
+            'scheduled_start_utc' => null,
+            'scheduled_due_utc' => null,
+            'capacity_allocation_percent' => 0.0,
+            'status' => 'active',
+            'escalation_level' => 0,
+            'created_at' => '2026-03-19 21:00:22',
+            'updated_at' => '2026-03-19 21:00:22',
+            'revenue' => 0.0,
+            'client_tier' => 1,
+            'manager_priority_override' => 0.0,
+            'required_role_id' => null,
+        ]);
+
+        $items = $this->repository->findByAssignedUser('1');
+        self::assertCount(1, $items);
+        self::assertSame('1', $items[0]->getAssignedUserId());
+        self::assertNull($items[0]->getAssignedTeamId());
+        self::assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $items[0]->getAssignmentMode());
+        self::assertSame('support:user:1', $items[0]->getQueueKey());
+    }
 }
 

@@ -102,6 +102,26 @@ const mapQueuePriorityToTicketPriority = (priority: number): string => {
   return 'low';
 };
 
+const formatStatusLabel = (value: string | null): string => {
+  if (!value) return 'Unknown';
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatPriorityLabel = (priority: number): string => {
+  if (priority >= 90) return 'Urgent';
+  if (priority >= 70) return 'High';
+  if (priority >= 40) return 'Medium';
+  return 'Low';
+};
+
+const getEscalationState = (slaState: string | null): { label: string; tone: 'red' | 'amber' } | null => {
+  if (!slaState) return null;
+  const s = slaState.toLowerCase();
+  if (s === 'breached' || s === 'critical') return { label: 'Escalated', tone: 'red' };
+  if (s === 'warning' || s === 'risk' || s === 'at_risk') return { label: 'At Risk', tone: 'amber' };
+  return null;
+};
+
 const relativeTime = (iso: string | null): string => {
   if (!iso) return '\u2014';
   const diff = Date.now() - new Date(iso).getTime();
@@ -142,6 +162,7 @@ const SupportOperational = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailTicket, setDetailTicket] = useState<Ticket | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<string>('');
 
@@ -153,6 +174,15 @@ const SupportOperational = () => {
   const isManagerView = useMemo(
     () => selectedQueue?.visibility_scope === 'MANAGERIAL' || selectedQueue?.visibility_scope === 'ADMIN',
     [selectedQueue],
+  );
+
+  const selectedItem = useMemo(
+    () => items.find((it) => it.id === selectedItemId) || null,
+    [items, selectedItemId],
+  );
+  const selectedEscalationState = useMemo(
+    () => getEscalationState(selectedItem?.sla_state ?? null),
+    [selectedItem?.sla_state],
   );
 
   const employeeMap = useMemo(() => {
@@ -202,7 +232,32 @@ const SupportOperational = () => {
       const res = await fetch(`${getApiUrl()}/work/queues/${encodeURIComponent(queueKey)}/items`, { headers: hdrs() });
       if (!res.ok) throw new Error('Failed to fetch queue items');
       const data: Omit<QueueItem, 'id'>[] = await res.json();
-      setItems(data.map((it) => ({ ...it, id: `${it.source_type}:${it.source_id}` })));
+      const rankBySla = (state: string | null): number => {
+        if (!state) return 0;
+        const s = state.toLowerCase();
+        if (s === 'breached' || s === 'critical') return 3;
+        if (s === 'warning' || s === 'risk' || s === 'at_risk') return 2;
+        if (s === 'ok' || s === 'healthy' || s === 'achieved') return 1;
+        return 0;
+      };
+      const duePenalty = (dueAt: string | null): number => {
+        if (!dueAt) return 0;
+        const delta = new Date(dueAt).getTime() - Date.now();
+        const mins = Math.round(delta / 60000);
+        if (mins < 0) return 200 + Math.min(Math.abs(mins), 180);
+        if (mins <= 60) return 90;
+        if (mins <= 180) return 40;
+        return 10;
+      };
+      const sorted = data
+        .map((it) => ({ ...it, id: `${it.source_type}:${it.source_id}` }))
+        .sort((a, b) => {
+          const aScore = rankBySla(a.sla_state) * 500 + a.priority + duePenalty(a.due_at);
+          const bScore = rankBySla(b.sla_state) * 500 + b.priority + duePenalty(b.due_at);
+          if (bScore !== aScore) return bScore - aScore;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      setItems(sorted);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load items');
     } finally {
@@ -280,6 +335,10 @@ const SupportOperational = () => {
     if (!selectedQueueKey) return;
     fetchQueueItems(selectedQueueKey);
     setSummary(null);
+    setSelectedItemId(null);
+    setDetailTicket(null);
+    setAssigningId(null);
+    setAssignTarget('');
     const parts = selectedQueueKey.split(':');
     if (parts.length === 3 && parts[0] === 'support' && parts[1] === 'team') {
       const teamId = Number(parts[2]);
@@ -288,6 +347,18 @@ const SupportOperational = () => {
       }
     }
   }, [selectedQueueKey]);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      setSelectedItemId(null);
+      setDetailTicket(null);
+      return;
+    }
+    const current = selectedItemId ? items.find((it) => it.id === selectedItemId) : null;
+    if (current) return;
+    const firstTicket = items.find((it) => it.source_type === 'ticket');
+    setSelectedItemId((firstTicket || items[0]).id);
+  }, [items, selectedItemId]);
 
   /* --- Drill-through --- */
   const buildTicketFromQueueItem = (item: QueueItem): Ticket => ({
@@ -305,6 +376,7 @@ const SupportOperational = () => {
   });
 
   const openTicketDetail = async (item: QueueItem) => {
+    setDetailTicket(buildTicketFromQueueItem(item));
     const sourceId = item.source_id;
     try {
       const res = await fetch(`${getApiUrl()}/tickets?status=`, { headers: hdrs() });
@@ -317,21 +389,15 @@ const SupportOperational = () => {
         }
       }
     } catch { /* noop */ }
-    setDetailTicket(buildTicketFromQueueItem(item));
   };
 
-  /* ============================================================
-     Render: detail view
-     ============================================================ */
-  if (detailTicket) {
-    return (
-      <div className="pet-dashboards-fullscreen">
-        <div className="pd-content">
-          <TicketDetails ticket={detailTicket} onBack={() => { setDetailTicket(null); if (selectedQueueKey) fetchQueueItems(selectedQueueKey); }} />
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!selectedItem) {
+      setDetailTicket(null);
+      return;
+    }
+    openTicketDetail(selectedItem);
+  }, [selectedItem?.id]);
 
   /* ============================================================
      Render: loading / error
@@ -477,7 +543,7 @@ const SupportOperational = () => {
           </div>
         </div>
 
-        {/* --- Main panel --- */}
+        {/* --- Workspace panel --- */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Action error toast */}
           {actionError && (
@@ -512,62 +578,177 @@ const SupportOperational = () => {
           {loadingSummary && isManagerView && !summary && (
             <div className="pd-card" style={{ marginBottom: 16, textAlign: 'center', padding: 20, color: '#888' }}>Loading team summary\u2026</div>
           )}
-
-          {/* Queue header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div className="pd-section-title" style={{ margin: 0 }}>
-              {selectedQueue?.label || 'Queue'}
-              <span className="pd-badge" style={{ marginLeft: 8 }}>{items.length}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 34%) minmax(0, 1fr)', gap: 20, alignItems: 'stretch' }}>
+            <div className="pd-card" style={{ padding: 14, background: '#f8fafc', border: '1px solid #e4e7ec', boxShadow: 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div className="pd-section-title" style={{ margin: 0 }}>
+                  {selectedQueue?.label || 'Queue'}
+                  <span className="pd-badge" style={{ marginLeft: 8 }}>{items.length}</span>
+                </div>
+                <button type="button" className="pd-refresh-btn" onClick={() => selectedQueueKey && fetchQueueItems(selectedQueueKey)} disabled={loadingItems} style={{ background: 'rgba(13,110,253,0.1)', color: '#0d6efd', borderColor: '#b6d4fe' }}>
+                  {loadingItems ? 'Loading…' : '↻ Refresh'}
+                </button>
+              </div>
+              {items.length === 0 && !loadingItems && (
+                <div className="pd-empty">No items in this queue.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {items.map((item) => {
+                  const active = item.id === selectedItemId;
+                  const escalationState = getEscalationState(item.sla_state);
+                  const isUrgent = item.priority >= 90;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`pd-card pd-clickable ${slaClass(item.sla_state)}`}
+                      onClick={() => setSelectedItemId(item.id)}
+                      style={{
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        padding: '11px 12px',
+                        border: active ? '2px solid #0d6efd' : '1px solid #e4e7ec',
+                        background: active ? '#eff6ff' : '#ffffff',
+                        boxShadow: active ? '0 0 0 1px rgba(13,110,253,0.12)' : 'none',
+                        borderLeft: escalationState?.tone === 'red'
+                          ? '4px solid #dc3545'
+                          : escalationState?.tone === 'amber'
+                            ? '4px solid #f59e0b'
+                            : isUrgent
+                              ? '4px solid #7f1d1d'
+                              : undefined,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                        <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '0.88rem', lineHeight: 1.35 }}>
+                          <span style={{ color: '#0d6efd', marginRight: 6 }}>{item.reference_code}</span>
+                          {item.title || '(no title)'}
+                        </div>
+                        <span className={`pd-sla-label ${slaClass(item.sla_state)}`} style={{ position: 'static', fontSize: '0.67rem' }}>{slaLabel(item.sla_state)}</span>
+                      </div>
+                      <div className="pd-attention-meta" style={{ marginTop: 6, fontSize: '0.74rem' }}>
+                        {item.customer_id ? `Customer #${item.customer_id}` : 'No customer'}
+                        {' · '}
+                        {formatStatusLabel(item.status)}
+                        {' · '}
+                        {formatPriorityLabel(item.priority)}
+                      </div>
+                      {isUrgent && !escalationState && (
+                        <div style={{ marginTop: 6, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#7f1d1d' }}>
+                          Urgent
+                        </div>
+                      )}
+                      {escalationState && (
+                        <div style={{ marginTop: 8, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: escalationState.tone === 'red' ? '#b42318' : '#b54708' }}>
+                          {escalationState.label}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <button type="button" className="pd-refresh-btn" onClick={() => selectedQueueKey && fetchQueueItems(selectedQueueKey)} disabled={loadingItems} style={{ background: 'rgba(13,110,253,0.1)', color: '#0d6efd', borderColor: '#b6d4fe' }}>
-              {loadingItems ? 'Loading\u2026' : '\u21BB Refresh'}
-            </button>
-          </div>
+            <div style={{ minWidth: 0, background: '#ffffff', border: '1px solid #d0d5dd', borderRadius: 12, padding: 14, boxShadow: '0 8px 24px rgba(16,24,40,0.06)' }}>
+              {!selectedItem && (
+                <div className="pd-card" style={{ padding: 24, border: '1px dashed #d0d5dd', background: '#fcfcfd' }}>
+                  <div className="pd-empty" style={{ textAlign: 'left' }}>
+                    Select a ticket from the queue to begin work.
+                  </div>
+                </div>
+              )}
 
-          {/* Queue items — attention cards */}
-          {items.length === 0 && !loadingItems && (
-            <div className="pd-empty">No items in this queue.</div>
-          )}
-
-          <div className="pd-attention-grid">
-            {items.map((item) => {
-              const isTicket = item.source_type === 'ticket';
-              const showReassign = assigningId === item.id;
-
-              return (
-                <div
-                  key={item.id}
-                  className={`pd-attention-card ${slaClass(item.sla_state)}`}
-                >
-                  {/* SLA label */}
-                  <div className="pd-sla-label">{slaLabel(item.sla_state)}</div>
-
-                  {/* Body — clickable for drill-through */}
-                  <div
-                    className="pd-attention-body"
-                    style={{ cursor: isTicket ? 'pointer' : undefined }}
-                    onClick={() => { if (isTicket) openTicketDetail(item); }}
-                  >
-                    <div className="pd-attention-subject">
-                      <span style={{ color: '#0d6efd', marginRight: 6 }}>{item.reference_code}</span>
-                      {item.title || '(no title)'}
+              {selectedItem && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="pd-card" style={{ padding: 18, border: '1px solid #bfd6ff', background: 'linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%)' }}>
+                    <div style={{ fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#175cd3', marginBottom: 8 }}>
+                      Working on
                     </div>
-                    <div className="pd-attention-meta">
-                      {item.customer_id ? `Customer #${item.customer_id}` : ''}
-                      {item.customer_id && item.status ? ' \u00B7 ' : ''}
-                      {item.status || ''}
-                      {' \u00B7 '}
-                      {modeLabel(item.assignment_mode)}
-                      {item.assigned_user_id ? ` \u2014 ${employeeMap.get(item.assigned_user_id) || item.assigned_user_id}` : ''}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#101828', lineHeight: 1.25 }}>
+                          {selectedItem.title || '(no title)'}
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: '0.84rem', color: '#344054' }}>
+                          {selectedItem.reference_code} · Customer {selectedItem.customer_id ? `#${selectedItem.customer_id}` : 'N/A'} · {modeLabel(selectedItem.assignment_mode)}
+                          {selectedItem.assigned_user_id ? ` — ${employeeMap.get(selectedItem.assigned_user_id) || selectedItem.assigned_user_id}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <span className="pd-badge">{formatStatusLabel(selectedItem.status)}</span>
+                        <span className="pd-badge">{formatPriorityLabel(selectedItem.priority)}</span>
+                        <span className="pd-badge">{slaLabel(selectedItem.sla_state)}</span>
+                        {selectedItem.due_at && <span className={`pd-badge ${slaTimerClass(selectedItem.sla_state)}`}>Due {formatDueAt(selectedItem.due_at)}</span>}
+                      </div>
                     </div>
+                    {selectedEscalationState && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: '8px 10px',
+                          borderRadius: 8,
+                          border: selectedEscalationState.tone === 'red' ? '1px solid #fecdca' : '1px solid #fedf89',
+                          background: selectedEscalationState.tone === 'red' ? '#fef3f2' : '#fffaeb',
+                          color: selectedEscalationState.tone === 'red' ? '#b42318' : '#b54708',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {selectedEscalationState.label}
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Inline reassign form */}
-                    {showReassign && (
-                      <div className="pd-assign-controls" onClick={(e) => e.stopPropagation()}>
+                  <div className="pd-card" style={{ padding: 16, border: '1px solid #9ec5fe', background: '#eff6ff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <div className="pd-section-title" style={{ margin: 0, color: '#1d4ed8' }}>Next Actions</div>
+                      <div style={{ fontSize: '0.78rem', color: '#667085' }}>Created {relativeTime(selectedItem.created_at)}</div>
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: '#1e3a8a', fontWeight: 600, marginBottom: 10 }}>
+                      Primary interaction zone for this ticket.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid #bfdbfe' }}>
+                      {selectedItem.source_type === 'ticket' && (
+                        <>
+                          <button type="button" className="pd-assign-pull-btn" style={{ boxShadow: '0 1px 2px rgba(16,24,40,0.12)' }} onClick={() => pullTicket(selectedItem.source_id)}>
+                            Pull
+                          </button>
+                          <button
+                            type="button"
+                            className="pd-refresh-btn"
+                            style={{ color: '#334155', borderColor: '#94a3b8', background: '#ffffff' }}
+                            onClick={() => {
+                              const teamKey = queues.find((q) => q.queue_key.startsWith('support:team:'))?.queue_key;
+                              if (teamKey) {
+                                const teamQueueId = teamKey.split(':')[2];
+                                returnToQueue(selectedItem.source_id, teamQueueId);
+                              } else {
+                                setActionError('Team queue context unavailable');
+                              }
+                            }}
+                          >
+                            Return
+                          </button>
+                          {isManagerView && (
+                            <button
+                              type="button"
+                              className="pd-refresh-btn"
+                              style={{ color: '#6f42c1', borderColor: '#c4b5fd', background: '#ffffff' }}
+                              onClick={() => { setAssigningId(assigningId === selectedItem.id ? null : selectedItem.id); setAssignTarget(''); }}
+                            >
+                              {assigningId === selectedItem.id ? 'Cancel Reassign' : 'Reassign'}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {assigningId === selectedItem.id && (
+                      <div className="pd-assign-controls" style={{ marginTop: 10 }}>
                         <div className="pd-assign-row">
                           <div className="pd-assign-label">Reassign to</div>
                           <select className="pd-assign-select" value={assignTarget} onChange={(e) => setAssignTarget(e.target.value)}>
-                            <option value="">\u2014 select \u2014</option>
+                            <option value="">— select —</option>
                             {supportEmployees.map((emp) => (
                               <option key={emp.wpUserId} value={String(emp.wpUserId)}>
                                 {emp.firstName} {emp.lastName}
@@ -575,70 +756,33 @@ const SupportOperational = () => {
                             ))}
                           </select>
                         </div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button
-                            type="button"
-                            className="pd-assign-pull-btn"
-                            disabled={!assignTarget}
-                            onClick={() => reassignTicket(item.source_id, assignTarget)}
-                          >
-                            Confirm
-                          </button>
-                          <button type="button" className="pd-refresh-btn" onClick={() => { setAssigningId(null); setAssignTarget(''); }} style={{ color: '#666', borderColor: '#d0d5dd' }}>
-                            Cancel
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          className="pd-assign-pull-btn"
+                          disabled={!assignTarget}
+                          onClick={() => reassignTicket(selectedItem.source_id, assignTarget)}
+                        >
+                          Confirm Reassignment
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  {/* Right column — timer + actions */}
-                  <div className="pd-attention-right" onClick={(e) => e.stopPropagation()}>
-                    {item.due_at && (
-                      <div className={`pd-attention-timer ${slaTimerClass(item.sla_state)}`}>
-                        {formatDueAt(item.due_at)}
-                      </div>
-                    )}
-                    <div className="pd-attention-status">{relativeTime(item.created_at)}</div>
-
-                    {/* Actions */}
-                    {isTicket && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-                        <button type="button" className="pd-assign-pull-btn" style={{ fontSize: '0.72rem', padding: '4px 10px' }} onClick={() => pullTicket(item.source_id)}>
-                          Pull
-                        </button>
-                        <button
-                          type="button"
-                          className="pd-refresh-btn"
-                          style={{ fontSize: '0.72rem', padding: '4px 10px', color: '#666', borderColor: '#d0d5dd' }}
-                          onClick={() => {
-                            const teamKey = queues.find((q) => q.queue_key.startsWith('support:team:'))?.queue_key;
-                            if (teamKey) {
-                              const teamQueueId = teamKey.split(':')[2];
-                              returnToQueue(item.source_id, teamQueueId);
-                            } else {
-                              setActionError('Team queue context unavailable');
-                            }
-                          }}
-                        >
-                          Return
-                        </button>
-                        {isManagerView && (
-                          <button
-                            type="button"
-                            className="pd-refresh-btn"
-                            style={{ fontSize: '0.72rem', padding: '4px 10px', color: '#6f42c1', borderColor: '#d8c4f7' }}
-                            onClick={() => { setAssigningId(showReassign ? null : item.id); setAssignTarget(''); }}
-                          >
-                            {showReassign ? 'Cancel' : 'Reassign'}
-                          </button>
-                        )}
+                  <div className="pd-card" style={{ padding: 12 }}>
+                    {detailTicket ? (
+                      <TicketDetails
+                        ticket={detailTicket}
+                        onBack={() => setSelectedItemId(null)}
+                      />
+                    ) : (
+                      <div className="pd-empty" style={{ textAlign: 'left' }}>
+                        Loading ticket details…
                       </div>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         </div>
       </div>

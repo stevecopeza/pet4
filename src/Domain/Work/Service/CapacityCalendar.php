@@ -81,11 +81,7 @@ class CapacityCalendar
             $cursor = $cursor->modify('+1 day');
         }
 
-        if ($availableMinutes === 0) {
-            // If no time is available in the window, but we want to check utilization...
-            // If load > 0, it's effectively infinite utilization.
-            // But returning 0 avoids division by zero.
-            // Let's check load first to be safe, but for float return, 0.0 is safe fallback.
+        if ($availableMinutes <= 0.0 || !is_finite($availableMinutes)) {
             return 0.0;
         }
 
@@ -127,7 +123,11 @@ class CapacityCalendar
             }
         }
 
-        return ($assignedMinutes / $availableMinutes) * 100.0;
+        $utilization = ($assignedMinutes / $availableMinutes) * 100.0;
+        if (!is_finite($utilization) || $utilization < 0.0) {
+            return 0.0;
+        }
+        return $utilization;
     }
 
     public function getUserDailyUtilization(
@@ -182,7 +182,10 @@ class CapacityCalendar
                     $schedMinutes += ($minutes * $allocation);
                 }
             }
-            $util = ($capMinutes > 0.0) ? (($schedMinutes / $capMinutes) * 100.0) : 0.0;
+            $util = ($capMinutes > 0.0 && is_finite($capMinutes)) ? (($schedMinutes / $capMinutes) * 100.0) : 0.0;
+            if (!is_finite($util) || $util < 0.0) {
+                $util = 0.0;
+            }
             $out[] = [
                 'date' => $cursor->format('Y-m-d'),
                 'effective_capacity_minutes' => round($capMinutes, 2),

@@ -83,77 +83,97 @@ class AdvisoryReportController implements RestController
 
     public function listReports(WP_REST_Request $request): WP_REST_Response
     {
-        $customerId = (int)$request->get_param('customer_id');
-        $reportType = (string)($request->get_param('report_type') ?? 'customer_advisory_summary');
+        $profileToken = $this->beginBenchmarkWorkloadProfile('advisory.reports_list');
+        try {
+            $customerId = (int)$request->get_param('customer_id');
+            $reportType = (string)($request->get_param('report_type') ?? 'customer_advisory_summary');
 
-        if (!$this->canAccessCustomer($customerId)) {
-            return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            if (!$this->canAccessCustomer($customerId)) {
+                return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            }
+
+            $reports = $this->reports->findByScope($reportType, GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER, $customerId, 50);
+            $data = array_map(fn($r) => $this->serializeReportList($r), $reports);
+            return new WP_REST_Response($data, 200);
+        } finally {
+            $this->endBenchmarkWorkloadProfile($profileToken);
         }
-
-        $reports = $this->reports->findByScope($reportType, GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER, $customerId, 50);
-        $data = array_map(fn($r) => $this->serializeReportList($r), $reports);
-        return new WP_REST_Response($data, 200);
     }
 
     public function latestReport(WP_REST_Request $request): WP_REST_Response
     {
-        $customerId = (int)$request->get_param('customer_id');
-        $reportType = (string)($request->get_param('report_type') ?? 'customer_advisory_summary');
+        $profileToken = $this->beginBenchmarkWorkloadProfile('advisory.reports_latest');
+        try {
+            $customerId = (int)$request->get_param('customer_id');
+            $reportType = (string)($request->get_param('report_type') ?? 'customer_advisory_summary');
 
-        if (!$this->canAccessCustomer($customerId)) {
-            return new WP_REST_Response(['message' => 'Forbidden'], 403);
-        }
+            if (!$this->canAccessCustomer($customerId)) {
+                return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            }
 
-        $report = $this->reports->findLatestByScope($reportType, GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER, $customerId);
-        if (!$report) {
-            return new WP_REST_Response(['message' => 'Not Found'], 404);
+            $report = $this->reports->findLatestByScope($reportType, GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER, $customerId);
+            if (!$report) {
+                return new WP_REST_Response(['message' => 'Not Found'], 404);
+            }
+            return new WP_REST_Response($this->serializeReportDetail($report), 200);
+        } finally {
+            $this->endBenchmarkWorkloadProfile($profileToken);
         }
-        return new WP_REST_Response($this->serializeReportDetail($report), 200);
     }
 
     public function getReport(WP_REST_Request $request): WP_REST_Response
     {
-        $id = (string)$request->get_param('id');
-        $report = $this->reports->findById($id);
-        if (!$report) {
-            return new WP_REST_Response(['message' => 'Not Found'], 404);
-        }
+        $profileToken = $this->beginBenchmarkWorkloadProfile('advisory.reports_get');
+        try {
+            $id = (string)$request->get_param('id');
+            $report = $this->reports->findById($id);
+            if (!$report) {
+                return new WP_REST_Response(['message' => 'Not Found'], 404);
+            }
 
-        if ($report->scopeType() !== GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER) {
-            return new WP_REST_Response(['message' => 'Forbidden'], 403);
-        }
+            if ($report->scopeType() !== GenerateAdvisoryReportHandler::SCOPE_TYPE_CUSTOMER) {
+                return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            }
 
-        if (!$this->canAccessCustomer($report->scopeId())) {
-            return new WP_REST_Response(['message' => 'Forbidden'], 403);
-        }
+            if (!$this->canAccessCustomer($report->scopeId())) {
+                return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            }
 
-        return new WP_REST_Response($this->serializeReportDetail($report), 200);
+            return new WP_REST_Response($this->serializeReportDetail($report), 200);
+        } finally {
+            $this->endBenchmarkWorkloadProfile($profileToken);
+        }
     }
 
     public function generateReport(WP_REST_Request $request): WP_REST_Response
     {
-        if (!$this->featureFlags->isAdvisoryReportsEnabled()) {
-            return new WP_REST_Response(['message' => 'Advisory reports disabled'], 403);
-        }
-
-        $params = $request->get_json_params() ?: [];
-        $customerId = (int)($params['customerId'] ?? $request->get_param('customerId'));
-        $reportType = (string)($params['reportType'] ?? $request->get_param('reportType') ?? 'customer_advisory_summary');
-
-        if ($customerId <= 0) {
-            return new WP_REST_Response(['message' => 'Invalid customerId'], 400);
-        }
-
-        if (!$this->canAccessCustomer($customerId)) {
-            return new WP_REST_Response(['message' => 'Forbidden'], 403);
-        }
-
+        $profileToken = $this->beginBenchmarkWorkloadProfile('advisory.reports_generate');
         try {
-            $generatedBy = (int)get_current_user_id();
-            $report = $this->generateHandler->handle(new GenerateAdvisoryReportCommand($customerId, $reportType, $generatedBy));
-            return new WP_REST_Response($this->serializeReportDetail($report), 201);
-        } catch (\Throwable $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+            if (!$this->featureFlags->isAdvisoryReportsEnabled()) {
+                return new WP_REST_Response(['message' => 'Advisory reports disabled'], 403);
+            }
+
+            $params = $request->get_json_params() ?: [];
+            $customerId = (int)($params['customerId'] ?? $request->get_param('customerId'));
+            $reportType = (string)($params['reportType'] ?? $request->get_param('reportType') ?? 'customer_advisory_summary');
+
+            if ($customerId <= 0) {
+                return new WP_REST_Response(['message' => 'Invalid customerId'], 400);
+            }
+
+            if (!$this->canAccessCustomer($customerId)) {
+                return new WP_REST_Response(['message' => 'Forbidden'], 403);
+            }
+
+            try {
+                $generatedBy = (int)get_current_user_id();
+                $report = $this->generateHandler->handle(new GenerateAdvisoryReportCommand($customerId, $reportType, $generatedBy));
+                return new WP_REST_Response($this->serializeReportDetail($report), 201);
+            } catch (\Throwable $e) {
+                return new WP_REST_Response(['message' => $e->getMessage()], 400);
+            }
+        } finally {
+            $this->endBenchmarkWorkloadProfile($profileToken);
         }
     }
 
@@ -186,6 +206,83 @@ class AdvisoryReportController implements RestController
         $data['content'] = $report->content();
         $data['source_snapshot_metadata'] = $report->sourceSnapshotMetadata();
         return $data;
+    }
+
+    /**
+     * @return array{run_id:int, workload_key:string, query_count_start:int, started_at:float}|null
+     */
+    private function beginBenchmarkWorkloadProfile(string $workloadKey): ?array
+    {
+        $activeRunId = $this->activeBenchmarkRunId();
+        if ($activeRunId === null) {
+            return null;
+        }
+
+        global $wpdb;
+        if (!$wpdb instanceof \wpdb) {
+            return null;
+        }
+
+        return [
+            'run_id' => $activeRunId,
+            'workload_key' => $workloadKey,
+            'query_count_start' => $this->queryCount($wpdb),
+            'started_at' => microtime(true),
+        ];
+    }
+
+    /**
+     * @param array{run_id:int, workload_key:string, query_count_start:int, started_at:float}|null $token
+     */
+    private function endBenchmarkWorkloadProfile(?array $token): void
+    {
+        if ($token === null) {
+            return;
+        }
+
+        global $wpdb;
+        if (!$wpdb instanceof \wpdb) {
+            return;
+        }
+
+        $queryDelta = $this->queryCount($wpdb) - (int) $token['query_count_start'];
+        if ($queryDelta < 0) {
+            $queryDelta = 0;
+        }
+
+        $payload = [
+            'workload_key' => (string) $token['workload_key'],
+            'query_count' => $queryDelta,
+            'execution_time_ms' => round((microtime(true) - (float) $token['started_at']) * 1000, 3),
+        ];
+
+        $metricsKey = 'pet_performance_workload_metrics_' . (int) $token['run_id'];
+        $existing = get_transient($metricsKey);
+        $rows = is_array($existing) ? $existing : [];
+        $rows[] = $payload;
+        set_transient($metricsKey, $rows, 10 * MINUTE_IN_SECONDS);
+    }
+
+    private function activeBenchmarkRunId(): ?int
+    {
+        $value = get_transient('pet_performance_active_run_id');
+        if ($value === false || $value === null || !is_numeric($value)) {
+            return null;
+        }
+
+        $runId = (int) $value;
+        return $runId > 0 ? $runId : null;
+    }
+
+    private function queryCount(\wpdb $wpdb): int
+    {
+        if (property_exists($wpdb, 'num_queries') && is_numeric($wpdb->num_queries)) {
+            return (int) $wpdb->num_queries;
+        }
+        if (defined('SAVEQUERIES') && SAVEQUERIES && property_exists($wpdb, 'queries') && is_array($wpdb->queries)) {
+            return count($wpdb->queries);
+        }
+        return 0;
     }
 }
 

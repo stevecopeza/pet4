@@ -13,12 +13,14 @@ class SqlContactRepository implements ContactRepository
     private $wpdb;
     private $tableName;
     private $affiliationsTable;
+    private bool $hasAffiliationsTable;
 
     public function __construct(\wpdb $wpdb)
     {
         $this->wpdb = $wpdb;
         $this->tableName = $wpdb->prefix . 'pet_contacts';
         $this->affiliationsTable = $wpdb->prefix . 'pet_contact_affiliations';
+        $this->hasAffiliationsTable = $wpdb->get_var("SHOW TABLES LIKE '{$this->affiliationsTable}'") === $this->affiliationsTable;
     }
 
     public function save(Contact $contact): void
@@ -148,6 +150,9 @@ class SqlContactRepository implements ContactRepository
 
     private function loadAffiliations(int $contactId): array
     {
+        if (!$this->hasAffiliationsTable) {
+            return [];
+        }
         $sql = $this->wpdb->prepare(
             "SELECT * FROM {$this->affiliationsTable} WHERE contact_id = %d",
             $contactId
@@ -169,6 +174,14 @@ class SqlContactRepository implements ContactRepository
 
     private function hydrate(object $row, array $affiliations = []): Contact
     {
+        if (empty($affiliations) && isset($row->customer_id) && (int) $row->customer_id > 0) {
+            $affiliations[] = new ContactAffiliation(
+                (int) $row->customer_id,
+                isset($row->site_id) && $row->site_id !== null ? (int) $row->site_id : null,
+                null,
+                true
+            );
+        }
         return new Contact(
             $row->first_name,
             $row->last_name,

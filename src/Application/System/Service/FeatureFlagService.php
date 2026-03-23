@@ -93,6 +93,11 @@ class FeatureFlagService
         return $this->isEnabled('pet_staff_time_capture_enabled');
     }
 
+    public function isStaffSetupJourneyEnabled(): bool
+    {
+        return $this->isEnabled('pet_staff_setup_journey_enabled');
+    }
+
     private function isEnabled(string $key): bool
     {
         $setting = $this->settings->findByKey($key);

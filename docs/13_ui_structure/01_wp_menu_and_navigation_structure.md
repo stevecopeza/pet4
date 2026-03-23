@@ -1,191 +1,110 @@
 # PET – WordPress Menu and Navigation Structure
 
 ## Purpose of this Document
-This document defines how **PET is surfaced within the WordPress Admin UI**, including:
+This document defines how PET is surfaced within WordPress Admin, including:
+- top-level menu placement
+- submenu structure
+- navigation flow between functional areas
+- dashboard and operational entry points
 
-- Top-level menu placement
-- Submenu structure
-- Navigation flow between functional areas
-- Dashboard entry points
-
-The goal is **clarity, predictability, and minimal cognitive load**, while respecting WordPress conventions.
+This is the normative navigation contract for PET admin surfaces.
 
 ---
 
 ## Design Principles
-
-- PET is a first-class system, not a scattered plugin
-- One top-level menu entry only
-- Functional grouping over technical grouping
-- Dashboards are entry points, not reports
+- one PET top-level entry only
+- stable route names for predictable navigation
+- functional grouping over technical grouping
+- dashboard and benchmark surfaces are read-focused entry points
 
 ---
 
 ## Top-Level Menu
-
-**PET**
-
-- Icon: neutral, system-oriented (not sales or marketing)
-- Position: below "Dashboard", above "Posts"
-
-This establishes PET as an operational system, not content tooling.
+Menu title: `PET`
+- icon: `dashicons-chart-area`
+- admin menu position: `25`
 
 ---
 
-## Primary Navigation Structure
-
+## Implemented Submenu Structure
 ```
 PET
-├─ Overview (Landing Dashboard)
+├─ Overview
 ├─ Dashboards
-│  ├─ Executive
-│  ├─ Sales
-│  ├─ Delivery
-│  ├─ Support
-│  └─ People
-├─ Staff (Tabbed Interface)
-│  ├─ Org
-│  ├─ Teams
-│  ├─ People (Employees List)
-│  └─ KPIs
+├─ My Work
+├─ My Profile
 ├─ Customers
-│  ├─ Leads
-│  ├─ Qualifications
-│  ├─ Opportunities
-│  └─ Customers
 ├─ Quotes & Sales
-│  ├─ Quotes
-│  ├─ Sales (Won / Lost)
-│  └─ Products & Catalogues
+├─ Finance
 ├─ Delivery
-│  ├─ Projects
-│  ├─ Milestones
-│  └─ Tasks
 ├─ Time
-│  ├─ My Timesheets
-│  ├─ Team Timesheets (Manager only)
-│  └─ Time Reports (Read-only)
 ├─ Support
-│  ├─ Tickets
-│  ├─ SLAs
-│  └─ Support Dashboards
+├─ Conversations
+├─ Advisory
+├─ Performance
+├─ Approvals
 ├─ Knowledge
-│  ├─ Knowledgebase
-│  └─ Article Drafts
+├─ Staff
+├─ Roles & Capabilities
 ├─ Activity
-│  └─ Activity Feed
-└─ Settings
-   ├─ Schemas & Malleable Fields
-   ├─ KPI Definitions
-   ├─ Rates & Cost Models
-   ├─ Integrations
-   └─ System Status
+├─ Settings
+├─ Pulseway RMM
+├─ Shortcodes
+└─ Demo Tools
 ```
+
+Feature-gated submenu:
+- `Escalations` is conditionally added when escalation feature gating is enabled.
+
+Staff internal tabs (inside `Staff` page):
+- Org
+- Teams
+- People
+
+When `pet_staff_setup_journey_enabled` is active, People view includes setup journey guidance and readiness-driven actions.
 
 ---
 
 ## Landing Behaviour
-
 ### PET → Overview
-
-The **Overview** page is role-aware:
-
-- Executives see a condensed Executive Dashboard
-- Managers see Delivery / People emphasis
-- Individual contributors see:
-  - My Tasks
-  - My Time
-  - My Tickets
-
-Overview is **not configurable per user** beyond role.
+Overview is role-aware:
+- executives: high-level operational KPIs
+- managers: delivery/people emphasis
+- individual contributors: personal work context
 
 ---
 
-## Dashboard Flow
+## Dashboard and Benchmark Flow
+- `PET → Dashboards` opens role/persona dashboard surfaces (read-focused)
+- `PET → Performance` opens performance benchmark diagnostics (admin-only, benchmark run capable)
 
-- Dashboards are accessible only via **PET → Dashboards**
-- Each dashboard:
-  - Is read-only
-  - Links to underlying records (subject to permissions)
-
-Dashboards do not allow creation or editing actions.
+Neither route is used for direct domain-record mutation.
 
 ---
 
-## Functional Area Flow
+## Functional Flow Contracts
+### CRM
+`Leads → Qualification → Opportunities → Quotes`
 
-### CRM Flow
+### Customer Setup
+`Customer → Branches → Contacts → Ready`
 
-```
-Leads → Qualification → Opportunities → Quotes
-```
+Context continuity is required across Customer, Branch, and Contact interactions.
 
-Navigation enforces this order; skipping stages is not supported.
+### Quotes & Sales
+`Quotes → Acceptance → Sales → Delivery Projects`
 
----
+### Delivery
+`Projects → Milestones/Tasks → Time`
 
-### Quotes & Sales Flow
-
-```
-Quotes → Acceptance → Sales → Delivery Projects
-```
-
-Quote immutability is reflected in UI (locked states).
-
----
-
-### Delivery Flow
-
-```
-Projects → Milestones → Tasks → Time Entries
-```
-
-Time entry is accessible directly, but always resolves back to Tasks.
-
----
-
-### Support Flow
-
-```
-Tickets → Resolution → Knowledge Articles
-```
-
-Knowledge creation is encouraged post-resolution.
-
----
-
-## Time Entry UX Access
-
-Time entry is intentionally accessible from:
-
-- PET → Time → My Timesheets
-- Project Task views
-- Ticket views
-
-But always lands in the same Timesheet UX.
+### Support
+`Tickets → Resolution → Knowledge`
 
 ---
 
 ## Settings Isolation
-
-Settings are:
-- Accessible only to authorised roles
-- Segregated from operational screens
-
-No operational actions are hidden inside Settings.
-
----
-
-## What This Prevents
-
-- Menu sprawl
-- Feature discovery by accident
-- Bypassing lifecycle stages
-- Dashboards turning into edit screens
+Settings remain isolated from day-to-day operational workflows and are restricted by role/capability.
 
 ---
 
 **Authority**: Normative
-
-This document defines PET’s WordPress admin navigation structure.
-

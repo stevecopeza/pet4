@@ -39,6 +39,8 @@ class AdminPageRegistry
         $submenus = [
             'pet-dashboard' => 'Overview', // Rename first item
             'pet-dashboards' => 'Dashboards',
+            'pet-my-work' => 'My Work',
+            'pet-my-profile' => 'My Profile',
             'pet-crm' => 'Customers',
             'pet-quotes-sales' => 'Quotes & Sales',
             'pet-finance' => 'Finance',
@@ -47,6 +49,7 @@ class AdminPageRegistry
             'pet-support' => 'Support',
             'pet-conversations' => 'Conversations',
             'pet-advisory' => 'Advisory',
+            'pet-performance' => 'Performance',
             'pet-approvals' => 'Approvals',
             'pet-knowledge' => 'Knowledge',
             'pet-people' => 'Staff',
@@ -396,6 +399,7 @@ JS;
                     'dashboards_enabled' => $this->featureFlags ? $this->featureFlags->isDashboardsEnabled() : false,
                     'helpdesk_enabled' => $this->featureFlags ? $this->featureFlags->isHelpdeskEnabled() : false,
                     'support_operational_improvements_enabled' => $this->featureFlags ? $this->featureFlags->isSupportOperationalImprovementsEnabled() : false,
+                    'staff_setup_journey_enabled' => $this->featureFlags ? $this->featureFlags->isStaffSetupJourneyEnabled() : false,
                 ],
             ]);
 

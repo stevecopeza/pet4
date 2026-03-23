@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import { Employee } from '../types';
+import AssignRoleForm from './AssignRoleForm';
 
 interface Assignment {
   id: number;
@@ -25,12 +26,15 @@ interface RoleLookup {
 
 interface EmployeeRolesProps {
   employee: Employee;
+  allowAssignments?: boolean;
+  onAssignmentsChanged?: () => void;
 }
 
-const EmployeeRoles: React.FC<EmployeeRolesProps> = ({ employee }) => {
+const EmployeeRoles: React.FC<EmployeeRolesProps> = ({ employee, allowAssignments = false, onAssignmentsChanged }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [roles, setRoles] = useState<RoleLookup>({});
   const [loading, setLoading] = useState(true);
+  const [showAssignForm, setShowAssignForm] = useState(false);
 
   // @ts-ignore
   const apiUrl = window.petSettings?.apiUrl;
@@ -127,7 +131,34 @@ const EmployeeRoles: React.FC<EmployeeRolesProps> = ({ employee }) => {
 
   return (
     <div className="employee-roles">
-      <h3>Role Assignments</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '10px', flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0 }}>Role Assignments</h3>
+        {allowAssignments && (
+          <button
+            type="button"
+            className="button button-primary button-small"
+            onClick={() => setShowAssignForm((prev) => !prev)}
+          >
+            {showAssignForm ? 'Cancel Role Assignment' : 'Assign Role'}
+          </button>
+        )}
+      </div>
+      {allowAssignments && showAssignForm && (
+        <div style={{ marginBottom: '12px' }}>
+          <AssignRoleForm
+            fixedEmployeeId={employee.id}
+            fixedEmployeeLabel={employee.displayName || `${employee.firstName} ${employee.lastName}`.trim()}
+            onSuccess={() => {
+              setShowAssignForm(false);
+              fetchAssignments();
+              if (onAssignmentsChanged) {
+                onAssignmentsChanged();
+              }
+            }}
+            onCancel={() => setShowAssignForm(false)}
+          />
+        </div>
+      )}
       <DataTable
         data={assignments}
         columns={columns}

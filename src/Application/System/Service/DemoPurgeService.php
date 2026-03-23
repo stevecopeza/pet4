@@ -58,6 +58,10 @@ final class DemoPurgeService
 
         foreach ($tables as $t) {
             $summary[$t] = ['deleted' => 0, 'archived' => 0, 'skipped' => false];
+            if (!$this->tableExists($t)) {
+                $summary[$t]['skipped'] = true;
+                continue;
+            }
             if ($this->tableHasColumn($t, 'metadata_json')) {
                 $res = $this->purgeWithMetadata($t, $seedRunId);
                 $summary[$t]['deleted'] += $res['deleted'];
@@ -142,6 +146,9 @@ final class DemoPurgeService
 
     private function purgeWithRegistry(string $table, string $seedRunId): ?array
     {
+        if (!$this->tableExists($table)) {
+            return ['deleted' => 0, 'archived' => 0];
+        }
         $registry = $this->wpdb->prefix . 'pet_demo_seed_registry';
         if ($this->wpdb->get_var("SHOW TABLES LIKE '$registry'") !== $registry) {
             return null;
@@ -183,12 +190,22 @@ final class DemoPurgeService
 
     private function tableHasColumn(string $table, string $column): bool
     {
+        if (!$this->tableExists($table)) {
+            return false;
+        }
         $cols = $this->wpdb->get_col("DESCRIBE $table", 0);
         return in_array($column, $cols, true);
-        }
+    }
+    private function tableExists(string $table): bool
+    {
+        return $this->wpdb->get_var("SHOW TABLES LIKE '$table'") === $table;
+    }
 
     private function countRows(string $table): int
     {
+        if (!$this->tableExists($table)) {
+            return 0;
+        }
         return (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $table");
     }
 

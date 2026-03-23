@@ -109,6 +109,25 @@ Queues must include:
 
 Derived queue counts must be computed server-side.
 
+## 4.1 Queue-to-ticket operational workspace
+
+Support operations should render as one connected work surface rather than fragmented navigation.
+
+Required structure:
+
+- left panel: queue and ticket list
+- right panel: selected ticket workspace
+
+Interaction requirements:
+
+- selecting a ticket updates the workspace in-place
+- queue remains visible while working the selected ticket
+- ticket context (title, customer, status, priority) remains visible at top of workspace
+- escalation state must be visibly signaled when present
+- operator actions (for example pull, return, reassign, status/action controls already available) must remain discoverable without leaving the screen
+
+This preserves operational continuity and reduces context switching during queue handling.
+
 ---
 
 # 5 Ticket Lifecycle Safety

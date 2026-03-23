@@ -1,49 +1,77 @@
 # PET – People Management
 
 ## Overview
-The People module (accessed via **Staff > People**) manages the internal users (Employees) of the PET system. It links WordPress Users to PET Employee profiles and extends them with domain-specific data.
+People Management is surfaced at `PET → Staff` and governs employee records, org placement, and staff-readiness workflows.
 
-## Capabilities
+Primary surface:
+- `pet-people` (`Employees.tsx`)
 
-### 1. List View
-- Displays all employees with key metadata:
-  - ID
-  - Avatar
-  - Name
-  - Email
-  - Status (Active/Archived)
-- **Features**:
-  - Pagination (standard).
-  - Bulk Selection.
-  - Bulk Archive.
+Internal tabs:
+- Org
+- Teams
+- People
 
-### 2. Add/Edit Employee
-- **Core Fields**:
-  - First Name
-  - Last Name
-  - Email (Work)
-  - WP User Association (Dropdown of unassigned users).
-  - Manager (Dropdown of active employees).
-  - Teams (Multi-select for team membership).
-  - Hire Date
-  - Status
-- **Malleable Fields**:
-  - Dynamically rendered based on the `employee` Schema.
-  - Supports text, number, boolean, date, etc.
-- **Validation**:
-  - Email uniqueness.
-  - WP User uniqueness.
+## Core Capabilities
 
-### 3. Archival Policy
-- Employees are **Archived** (soft delete), not hard deleted, to ensure historical records (Time Entries, Quotes) remain valid.
-- Archived employees:
-  - Cannot log in / access PET.
-  - Do not appear in "Active" assignment lists.
-  - Can be restored.
+### 1) Employee List and Operational Filters
+- employee list with identity, status, org context, and staffing signals
+- status/manager/search filtering
+- bulk selection and archive operations
+- quick presets (active, no manager, archived)
 
-## Technical Implementation
-- **API**: `/pet/v1/employees` (GET, POST)
-- **API**: `/pet/v1/employees/{id}` (PUT, DELETE/Archive)
-- **Frontend**: `Employees.tsx`, `EmployeeForm.tsx` (Unified Add/Edit component).
+### 2) Employee Record Create/Edit
+Editable fields:
+- identity (`firstName`, `lastName`, `email`)
+- org placement (`managerId`, `teamIds`)
+- employment/status fields (including archival behavior)
+- schema-driven malleable fields
+
+### 3) Org and Teams Navigation
+- org tab visualizes team hierarchy and manager/member relationships
+- team/member clicks route into People edit flow
+
+### 4) Archival Model
+- soft archival (not hard delete)
+- historical links remain intact for time/commercial/support references
+
+---
+
+## Staff Setup Journey (Feature-Gated)
+Feature flag:
+- `pet_staff_setup_journey_enabled`
+
+When enabled, the People tab adds readiness-driven setup guidance:
+- setup status (`incomplete`, `partial`, `ready`)
+- next-step hints and `Open Setup Journey` action
+- explicit sort mode selector (`Readiness` or `Name`)
+
+Journey steps:
+1. Identity
+2. Org Placement
+3. Role Assignment
+4. Capabilities (optional)
+5. Management Context (optional)
+
+Readiness is runtime-derived from existing employee/team/assignment state (no persisted setup-status field).
+
+See canonical spec:
+- `06_features/staff_setup_journey.md`
+
+---
+
+## Related Staff Surfaces
+- My Work: `06_features/my_work_staff_surface.md`
+- My Profile: `06_features/my_profile_staff_experience.md`
+
+---
+
+## Technical Implementation References
+- UI: `src/UI/Admin/components/Employees.tsx`
+- Form: `src/UI/Admin/components/EmployeeForm.tsx`
+- API:
+  - `GET/POST /pet/v1/employees`
+  - `PUT/DELETE /pet/v1/employees/{id}`
+  - `GET /pet/v1/assignments` (role readiness derivation support)
+- Flag exposure: `src/UI/Admin/AdminPageRegistry.php`
 
 **Authority**: Informational

@@ -111,6 +111,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddSupportOperationalImprovementsFeatureFlag::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddStaffTimeCaptureFeatureFlag::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\RepairDualAssignedWorkItems::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreatePerformanceBenchmarkTables::class,
         ];
     }
 }

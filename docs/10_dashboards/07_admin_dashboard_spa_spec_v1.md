@@ -7,7 +7,7 @@ Date: 2026-03-02
 
 Documents the React SPA admin dashboard that delivers operational visibility across three persona-driven views. This is the primary operational surface within PET's WordPress admin, rendering at `/wp-admin/admin.php?page=pet-dashboards`.
 
-This document is additive to the high-level dashboard principles in `docs_06_dashboards_and_views_01_dashboard_and_kpi_views.md` and the per-persona focus areas in `docs_06_dashboards_and_views_02` through `06`.
+This document is additive to the high-level dashboard principles in `10_dashboards/01_dashboard_and_kpi_views.md` and the per-persona focus areas in `10_dashboards/02_executive_dashboard.md` through `10_dashboards/06_people_dashboard.md`.
 
 ---
 

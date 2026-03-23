@@ -1,19 +1,35 @@
-import React, { useEffect, useState } from 'react';
-import { Contact, Customer } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Contact, Customer, Site } from '../types';
 import { DataTable, Column } from './DataTable';
 import ContactForm from './ContactForm';
-import KebabMenu, { KebabMenuItem } from './KebabMenu';
+import KebabMenu from './KebabMenu';
 import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
-const Contacts = () => {
+interface ContactsProps {
+  contextCustomerId?: number | null;
+  contextSiteId?: number | null;
+  contextCustomerName?: string | null;
+  onReturnToCustomer?: () => void;
+  onDataUpdated?: () => void;
+}
+
+const Contacts: React.FC<ContactsProps> = ({
+  contextCustomerId = null,
+  contextSiteId = null,
+  contextCustomerName = null,
+  onReturnToCustomer,
+  onDataUpdated,
+}) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [activeSchema, setActiveSchema] = useState<any | null>(null);
+  const [showContactSuccess, setShowContactSuccess] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -23,14 +39,25 @@ const Contacts = () => {
       // @ts-ignore
       const nonce = window.petSettings?.nonce;
 
-      const [contactRes, custRes, schemaRes] = await Promise.all([
+      const [contactRes, custRes, sitesRes, schemaRes] = await Promise.all([
         fetch(`${apiUrl}/contacts`, { headers: { 'X-WP-Nonce': nonce } }),
         fetch(`${apiUrl}/customers`, { headers: { 'X-WP-Nonce': nonce } }),
+        fetch(`${apiUrl}/sites`, { headers: { 'X-WP-Nonce': nonce } }),
         fetch(`${apiUrl}/schemas/contact?status=active`, { headers: { 'X-WP-Nonce': nonce } })
       ]);
 
-      if (contactRes.ok) setContacts(await contactRes.json());
-      if (custRes.ok) setCustomers(await custRes.json());
+      if (contactRes.ok) {
+        const contactPayload = await contactRes.json();
+        setContacts(Array.isArray(contactPayload) ? contactPayload : []);
+      }
+      if (custRes.ok) {
+        const customerPayload = await custRes.json();
+        setCustomers(Array.isArray(customerPayload) ? customerPayload : []);
+      }
+      if (sitesRes.ok) {
+        const sitesPayload = await sitesRes.json();
+        setSites(Array.isArray(sitesPayload) ? sitesPayload : []);
+      }
       if (schemaRes.ok) {
         const schemaData = await schemaRes.json();
         if (Array.isArray(schemaData) && schemaData.length > 0) {
@@ -48,9 +75,22 @@ const Contacts = () => {
     fetchData();
   }, []);
 
+  const filteredContacts = useMemo(() => {
+    if (!contextCustomerId) {
+      return contacts;
+    }
+    return contacts.filter(contact =>
+      (contact.affiliations || []).some(aff =>
+        aff.customerId === contextCustomerId && (contextSiteId ? aff.siteId === contextSiteId : true)
+      )
+      || ((contact as any).customerId === contextCustomerId && !contextSiteId)
+    );
+  }, [contacts, contextCustomerId, contextSiteId]);
+
   const handleEdit = (contact: Contact) => {
     setEditingContact(contact);
     setShowAddForm(true);
+    setShowContactSuccess(false);
   };
 
   const handleArchive = async (id: number) => {
@@ -68,6 +108,7 @@ const Contacts = () => {
 
       if (!response.ok) throw new Error('Failed to archive contact');
       fetchData();
+      onDataUpdated?.();
     } catch (err) {
       legacyAlert(err instanceof Error ? err.message : 'Failed to archive');
     }
@@ -75,7 +116,7 @@ const Contacts = () => {
 
   const handleBulkArchive = async () => {
     if (!legacyConfirm(`Are you sure you want to archive ${selectedIds.length} contacts?`)) return;
-    
+
     // @ts-ignore
     const apiUrl = window.petSettings?.apiUrl;
     // @ts-ignore
@@ -91,27 +132,37 @@ const Contacts = () => {
         console.error(`Failed to archive ${id}`, e);
       }
     }
-    
+
     setSelectedIds([]);
     fetchData();
+    onDataUpdated?.();
   };
 
   const getCustomerName = (customerId: number) => {
     return customers.find(c => c.id === customerId)?.name || `ID: ${customerId}`;
   };
 
+  const getBranchName = (siteId: number | null) => {
+    if (!siteId) return null;
+    const branch = sites.find(site => site.id === siteId);
+    if (branch && branch.name) {
+      return branch.name;
+    }
+    return `Branch #${siteId}`;
+  };
+
   const columns: Column<Contact>[] = [
     { key: 'id', header: 'ID' },
-    { 
-      key: 'firstName', 
-      header: 'Name', 
-      render: (val: any, item: Contact) => <strong>{String(val)} {item.lastName}</strong> 
+    {
+      key: 'firstName',
+      header: 'Name',
+      render: (val: any, item: Contact) => <strong>{String(val)} {item.lastName}</strong>
     },
     { key: 'email', header: 'Email' },
     { key: 'phone', header: 'Mobile', render: (val: any) => String(val) || '-' },
-    { 
-      key: 'affiliations', 
-      header: 'Customers', 
+    {
+      key: 'affiliations',
+      header: 'Assigned Branches',
       render: (val: any) => {
         const affs = val as Contact['affiliations'];
         if (!affs || affs.length === 0) return '-';
@@ -119,14 +170,13 @@ const Contacts = () => {
           <div style={{ fontSize: '12px' }}>
             {affs.map((a, i) => (
               <div key={i} style={{ marginBottom: '2px' }}>
-                {getCustomerName(a.customerId)} {a.role ? `(${a.role})` : ''} {a.isPrimary ? '⭐' : ''}
+                {getCustomerName(a.customerId)}{a.siteId ? ` • ${getBranchName(a.siteId)}` : ''} {a.role ? `(${a.role})` : ''} {a.isPrimary ? '⭐' : ''}
               </div>
             ))}
           </div>
         );
       }
     },
-    // Add malleable fields
     ...(activeSchema?.fields || activeSchema?.schema || []).map((field: any) => ({
       key: field.key as keyof Contact,
       header: field.label,
@@ -136,7 +186,7 @@ const Contacts = () => {
       }
     })),
     { key: 'createdAt', header: 'Created' },
-    { key: 'archivedAt', header: 'Archived', render: (val: any) => val ? <span style={{color: '#999'}}>{String(val)}</span> : '-' },
+    { key: 'archivedAt', header: 'Archived', render: (val: any) => val ? <span style={{ color: '#999' }}>{String(val)}</span> : '-' },
   ];
 
   if (loading && !contacts.length) return <div>Loading contacts...</div>;
@@ -144,20 +194,51 @@ const Contacts = () => {
 
   return (
     <div className="pet-contacts">
+      {showContactSuccess && (
+        <div className="notice notice-success inline" style={{ marginBottom: '15px' }}>
+          <p style={{ marginBottom: '10px' }}>Contact saved successfully.</p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              className="button button-primary"
+              onClick={() => {
+                setShowAddForm(true);
+                setShowContactSuccess(false);
+              }}
+              type="button"
+            >
+              Add Another Contact
+            </button>
+            <button className="button" onClick={onReturnToCustomer} type="button">
+              Return to Customer
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>People (Contacts)</h2>
+        <div>
+          <h2 style={{ margin: 0 }}>Contacts{contextCustomerName ? ` for ${contextCustomerName}` : ''}</h2>
+          {contextCustomerName && <p style={{ margin: '4px 0 0', color: '#666' }}>Assigned Branches and customer relationships</p>}
+        </div>
         {!showAddForm && (
-          <button className="button button-primary" onClick={() => setShowAddForm(true)}>
-            Add New Contact
+          <button className="button button-primary" onClick={() => { setShowAddForm(true); setShowContactSuccess(false); }}>
+            Add Contact
           </button>
         )}
       </div>
 
       {showAddForm && (
-        <ContactForm 
-          onSuccess={() => { setShowAddForm(false); setEditingContact(null); fetchData(); }} 
-          onCancel={() => { setShowAddForm(false); setEditingContact(null); }} 
+        <ContactForm
+          onSuccess={() => {
+            setShowAddForm(false);
+            setEditingContact(null);
+            setShowContactSuccess(true);
+            fetchData();
+            onDataUpdated?.();
+          }}
+          onCancel={() => { setShowAddForm(false); setEditingContact(null); }}
           initialData={editingContact || undefined}
+          contextCustomerId={contextCustomerId}
+          contextSiteId={contextSiteId}
         />
       )}
 
@@ -168,21 +249,33 @@ const Contacts = () => {
         </div>
       )}
 
-      <DataTable 
-        columns={columns} 
-        data={contacts} 
-        emptyMessage="No contacts found." 
-        selection={{
-          selectedIds,
-          onSelectionChange: setSelectedIds
-        }}
-        actions={(item) => (
-          <KebabMenu items={[
-            { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-            { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
-          ]} />
-        )}
-      />
+      {!showAddForm && filteredContacts.length === 0 ? (
+        <div className="notice notice-info inline" style={{ padding: '16px' }}>
+          <h3 style={{ marginTop: 0 }}>No contacts yet</h3>
+          <p style={{ marginBottom: '12px' }}>
+            Add contacts to complete customer setup and operational readiness.
+          </p>
+          <button className="button button-primary" onClick={() => setShowAddForm(true)} type="button">
+            Add contact
+          </button>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filteredContacts}
+          emptyMessage="No contacts found."
+          selection={{
+            selectedIds,
+            onSelectionChange: setSelectedIds
+          }}
+          actions={(item) => (
+            <KebabMenu items={[
+              { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+              { type: 'action', label: 'Archive', onClick: () => handleArchive(item.id), danger: true },
+            ]} />
+          )}
+        />
+      )}
     </div>
   );
 };

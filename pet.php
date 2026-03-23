@@ -249,6 +249,143 @@ if (\defined('WP_CLI') && \constant('WP_CLI')) {
         }
     });
 
+    \call_user_func('WP_CLI::add_command', 'pet performance:run', function () {
+        try {
+            if (!\get_current_user_id()) {
+                $adminUsers = \get_users(['role' => 'administrator', 'number' => 1]);
+                if ($adminUsers) {
+                    \wp_set_current_user($adminUsers[0]->ID);
+                }
+            }
+            $container = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+            /** @var \Pet\Application\Performance\Service\PerformanceRunService $runService */
+            $runService = $container->get(\Pet\Application\Performance\Service\PerformanceRunService::class);
+            /** @var \Pet\Application\Performance\Port\PerformanceResultStore $resultStore */
+            $resultStore = $container->get(\Pet\Application\Performance\Port\PerformanceResultStore::class);
+
+            $snapshot = $runService->runBenchmark();
+            $runId = $snapshot->runId();
+            $metrics = $runId > 0 ? $resultStore->findByRunId($runId) : [];
+            $workloadContractKeys = [
+                'dashboard',
+                'advisory.signals',
+                'advisory.signals_work_item',
+                'advisory.reports_list',
+                'advisory.reports_latest',
+                'advisory.reports_get',
+                'advisory.reports_generate',
+                'ticket.list',
+            ];
+
+            $probe = [];
+            $workload = [];
+            foreach ($workloadContractKeys as $workloadKey) {
+                $workload[$workloadKey] = [
+                    'query_count' => 0,
+                    'execution_time_ms' => 0.0,
+                ];
+            }
+            $workloadOther = [];
+            $recommendations = [];
+            $errors = [];
+
+            foreach ($metrics as $metric) {
+                $metricKey = (string) ($metric['metric_key'] ?? '');
+                $metricValue = $metric['metric_value'] ?? null;
+                $context = isset($metric['context']) && \is_array($metric['context']) ? $metric['context'] : null;
+                if ($metricKey === '') {
+                    continue;
+                }
+
+                if (\str_starts_with($metricKey, 'workload.')) {
+                    if (\preg_match('/^workload\.(.+)\.(query_count|execution_time_ms)$/', $metricKey, $matches) === 1) {
+                        $workloadKey = (string) ($matches[1] ?? '');
+                        $field = (string) ($matches[2] ?? '');
+                        if ($workloadKey !== '' && $field !== '') {
+                            $isContractKey = \in_array($workloadKey, $workloadContractKeys, true);
+                            if ($isContractKey) {
+                                if ($field === 'query_count') {
+                                    $workload[$workloadKey]['query_count'] += \is_numeric($metricValue) ? (int) $metricValue : 0;
+                                } else {
+                                    $workload[$workloadKey]['execution_time_ms'] += \is_numeric($metricValue) ? (float) $metricValue : 0.0;
+                                }
+                            } else {
+                                if (!isset($workloadOther[$workloadKey])) {
+                                    $workloadOther[$workloadKey] = [
+                                        'query_count' => 0,
+                                        'execution_time_ms' => 0.0,
+                                    ];
+                                }
+                                if ($field === 'query_count') {
+                                    $workloadOther[$workloadKey]['query_count'] += \is_numeric($metricValue) ? (int) $metricValue : 0;
+                                } else {
+                                    $workloadOther[$workloadKey]['execution_time_ms'] += \is_numeric($metricValue) ? (float) $metricValue : 0.0;
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                if (\str_starts_with($metricKey, 'recommendation.')) {
+                    $recommendation = $context['recommendation'] ?? null;
+                    if (\is_array($recommendation)) {
+                        $recommendations[] = $recommendation;
+                    } else {
+                        $recommendations[] = [
+                            'issue_key' => \substr($metricKey, \strlen('recommendation.')),
+                            'severity' => \is_string($metricValue) ? $metricValue : null,
+                        ];
+                    }
+                    continue;
+                }
+
+                if (\str_starts_with($metricKey, 'error.')) {
+                    $errors[] = [
+                        'metric_key' => $metricKey,
+                        'message' => \is_string($metricValue) ? $metricValue : \wp_json_encode($metricValue),
+                        'context' => $context,
+                    ];
+                    continue;
+                }
+
+                $probe[$metricKey] = [
+                    'value' => $metricValue,
+                    'context' => $context,
+                ];
+            }
+
+            $payload = [
+                'run' => [
+                    'id' => $snapshot->runId(),
+                    'run_type' => $snapshot->runType(),
+                    'status' => $snapshot->status(),
+                    'started_at' => $snapshot->startedAt()->format('c'),
+                    'completed_at' => $snapshot->completedAt()?->format('c'),
+                    'duration_ms' => $snapshot->durationMs(),
+                ],
+                'metrics' => [
+                    'probe' => $probe,
+                    'workload' => $workload,
+                    'workload_other' => $workloadOther,
+                    'recommendations' => $recommendations,
+                    'errors' => $errors,
+                ],
+                'counts' => [
+                    'probe' => \count($probe),
+                    'recommendations' => \count($recommendations),
+                    'errors' => \count($errors),
+                ],
+                'snapshot' => $snapshot->toArray(),
+            ];
+
+            \call_user_func('WP_CLI::log', \json_encode($payload, JSON_PRETTY_PRINT));
+            \call_user_func('WP_CLI::success', 'Performance benchmark run complete');
+        } catch (\Throwable $e) {
+            \call_user_func('WP_CLI::error', 'Performance benchmark run failed: ' . $e->getMessage());
+        }
+    });
+
     \call_user_func('WP_CLI::add_command', 'pet pulseway:poll', function () {
         try {
             $container = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();

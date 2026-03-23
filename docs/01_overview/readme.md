@@ -149,6 +149,17 @@ Implementation follows the documentation in this repository.
 
 ---
 
+## Recent Implementation Records (March 2026)
+
+- Staff setup journey (People surface): `06_features/staff_setup_journey.md`
+- My Work staff surface: `06_features/my_work_staff_surface.md`
+- My Profile staff experience: `06_features/my_profile_staff_experience.md`
+- Performance benchmark surface: `10_dashboards/performance_benchmark_surface.md`
+- Demo data pack + latest hardening amendment: `16_demo/PET_demo_data_pack_authoritative_v2_complete.md`
+- Implementation status addendum (2026-03-23): `15_implementation_blueprint/PET_Implementation_Status_2026_03_23_Staff_Journey_Seed_Hardening_Addendum.md`
+
+---
+
 ## Ticket Backbone
 
 The Ticket Backbone correction defines how PET enforces the invariant that **all person work activity is tied to a Ticket** and how tasks, time entries, quotes, projects, and SLAs align to that spine.

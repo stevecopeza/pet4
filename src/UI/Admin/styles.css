@@ -75,6 +75,21 @@
   color: #616161;
 }
 
+.pet-status-badge.status-incomplete {
+  background-color: #fde8e8;
+  color: #9f1d1d;
+}
+
+.pet-status-badge.status-partial {
+  background-color: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-status-badge.status-ready {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
 /* Priority Badges */
 .pet-priority-badge.priority-low {
   background-color: #e8f5e9;
@@ -221,6 +236,199 @@
   gap: 14px;
 }
 
+.pet-my-profile .pet-panel {
+  padding: 18px;
+}
+
+.pet-profile-hero {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid #bfd6ff;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%);
+}
+
+.pet-profile-hero-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #175cd3;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.05rem;
+  box-shadow: 0 6px 18px rgba(23, 92, 211, 0.35);
+}
+
+.pet-profile-hero-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pet-profile-hero-name {
+  font-size: 1.24rem;
+  font-weight: 800;
+  color: #101828;
+  line-height: 1.2;
+}
+
+.pet-profile-hero-subtitle {
+  margin-top: 4px;
+  color: #475467;
+  font-size: 0.9rem;
+}
+
+.pet-profile-availability-badge {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.pet-profile-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pet-profile-section-header h3 {
+  margin: 0;
+  font-size: 1.03rem;
+  color: #132033;
+}
+
+.pet-profile-two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pet-profile-edit-mode {
+  background: #f8fbff;
+  border: 1px solid #cfe0f4;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.pet-profile-edit-mode label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #506176;
+  font-weight: 600;
+}
+
+.pet-profile-edit-actions {
+  display: flex;
+  gap: 8px;
+  grid-column: 1 / span 2;
+}
+
+.pet-profile-subheading {
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #1f3550;
+}
+
+.pet-profile-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pet-profile-chip {
+  background: #f2f4f7;
+  border-color: #d0d5dd;
+  color: #344054;
+}
+
+.pet-profile-chip--capability {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.pet-profile-form-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.pet-profile-inline-fields {
+  display: flex;
+  gap: 6px;
+}
+
+.pet-profile-inline-fields input {
+  min-width: 0;
+}
+
+.pet-profile-save-note {
+  margin: -2px 0 10px;
+  font-size: 12px;
+  color: #0c5460;
+  background: #e8f7fb;
+  border: 1px solid #b7e5f1;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.pet-profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pet-profile-stat-card {
+  padding: 12px;
+  border-color: #d7e6f8;
+  background: linear-gradient(180deg, #f9fcff 0%, #f1f7ff 100%);
+}
+
+.pet-profile-stat-card strong {
+  display: block;
+  font-size: 1.22rem;
+  line-height: 1.05;
+  color: #12263d;
+}
+
+.pet-profile-linked-item {
+  display: block;
+  padding: 10px;
+  margin-bottom: 6px;
+}
+
+.pet-profile-linked-item-title {
+  font-weight: 600;
+  color: #16253a;
+}
+
+.pet-profile-linked-item-meta {
+  font-size: 0.8rem;
+  color: #667085;
+}
+
+.pet-profile-activity-row {
+  padding: 10px;
+}
+
+@media (max-width: 980px) {
+  .pet-profile-two-col-grid,
+  .pet-profile-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-profile-edit-actions {
+    grid-column: 1;
+  }
+}
+
 .pet-panel {
   background: #fff;
   border: 1px solid #d5dfec;
@@ -342,6 +550,31 @@
   border-top: 1px solid #deebfa;
   margin-top: 10px;
   padding-top: 10px;
+}
+
+.pet-employees-sort-bar {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #deebfa;
+}
+
+.pet-employees-sort-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.pet-employees-sort-field span {
+  font-size: 12px;
+  color: #506176;
+  font-weight: 600;
+}
+
+.pet-employees-sort-field select {
+  min-height: 34px;
+  border-color: #c9d8ea;
+  border-radius: 6px;
 }
 
 .pet-projects-preset-btn,
@@ -601,6 +834,138 @@
   margin-bottom: 16px;
   border-bottom: 1px solid #e2e7ef;
   padding-bottom: 8px;
+}
+
+.pet-employee-setup-guidance {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.pet-employee-setup-guidance-text {
+  color: #4e637d;
+  font-size: 12px;
+}
+
+.pet-employees-journey-panel {
+  border-color: #cfe0f4;
+  background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+}
+
+.pet-employee-journey-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pet-employee-journey-progress {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pet-employee-journey-progress-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #193958;
+}
+
+.pet-employee-journey-progress-secondary {
+  font-size: 11px;
+  color: #5d6f85;
+}
+
+.pet-employee-journey-progress-track {
+  position: relative;
+  width: min(360px, 100%);
+  height: 8px;
+  border-radius: 999px;
+  background: #e5eef8;
+  overflow: hidden;
+}
+
+.pet-employee-journey-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2271b1 0%, #4f94cf 100%);
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.pet-employee-journey-step-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pet-employee-journey-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: flex-start;
+  border-color: #bed2ea;
+  background: #f8fbff;
+  color: #234462;
+  min-height: 40px;
+}
+
+.pet-employee-journey-step.is-active {
+  background: #dcecff;
+  border-color: #8db8ea;
+  color: #143c62;
+}
+
+.pet-employee-journey-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #edf4ff;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1f4468;
+}
+
+.pet-employee-journey-step-title {
+  font-weight: 600;
+}
+
+.pet-employee-journey-step-status {
+  font-size: 11px;
+  color: #5d6f85;
+}
+
+.pet-employee-journey-step-body {
+  border: 1px solid #dbe7f7;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.pet-employee-journey-step-description {
+  margin: 0 0 10px;
+  color: #4f6178;
+}
+
+.pet-employee-journey-substeps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pet-employee-journey-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .pet-time-entries .pet-page-shell-header {
@@ -1339,6 +1704,9 @@
   .pet-staff-time-capture-summary {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
+  .pet-employee-journey-step-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }
 
 /* Form Card */
@@ -1838,4 +2206,198 @@
 .pet-data-table-row-details-cell {
   padding: 12px 16px;
   background: #f9f9f9;
+}
+
+/* Performance page */
+.pet-performance {
+  gap: 14px;
+}
+
+.pet-performance-loading {
+  margin-top: 12px;
+}
+
+.pet-performance-hero {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  border-color: #cfe0f4;
+  box-shadow: 0 10px 22px rgba(16, 37, 61, 0.08);
+}
+
+.pet-performance-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pet-performance-hero-title h2 {
+  margin: 0;
+  color: #12263d;
+}
+
+.pet-performance-hero-title p {
+  margin: 8px 0 0;
+  color: #4f6178;
+}
+
+.pet-performance-run-button {
+  min-height: 34px;
+  font-weight: 600;
+}
+
+.pet-performance-error {
+  margin: 10px 0 0;
+  color: #9f1d1d;
+  font-weight: 600;
+}
+
+.pet-performance-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pet-performance-kpi-card {
+  border: 1px solid #d7e6f8;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f9fcff 0%, #f1f7ff 100%);
+  padding: 12px;
+}
+
+.pet-performance-kpi-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #5d6f85;
+  margin-bottom: 4px;
+}
+
+.pet-performance-kpi-value {
+  font-size: 18px;
+  line-height: 1.1;
+  color: #12263d;
+}
+
+.pet-performance-kpi-value .pet-status-badge {
+  font-size: 11px;
+  vertical-align: middle;
+}
+
+.pet-status-badge.status-running {
+  background: #e8f4fd;
+  color: #0b4f80;
+}
+
+.pet-status-badge.status-completed_with_errors {
+  background: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-status-badge.status-blocked_by_cooldown {
+  background: #fff6e5;
+  color: #7a5600;
+}
+
+.pet-status-badge.status-pending {
+  background: #edf2f7;
+  color: #4d6179;
+}
+
+.pet-status-badge.status-failed {
+  background: #fde8e8;
+  color: #9f1d1d;
+}
+
+.pet-performance-section {
+  margin: 0;
+}
+
+.pet-performance-section-title {
+  margin: 0 0 10px;
+  color: #16253a;
+}
+
+.pet-performance-table thead th {
+  color: #2a4664;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.pet-performance-table tbody tr:nth-child(even) td {
+  background: #fbfdff;
+}
+
+.pet-performance-table tbody tr:hover td {
+  background: #f1f7ff;
+}
+
+.pet-performance-workload-cell code {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+.pet-performance-note,
+.pet-performance-empty-state {
+  margin: 10px 0 0;
+  color: #5d6f85;
+}
+
+.pet-performance-severity {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  text-transform: uppercase;
+}
+
+.pet-performance-severity--critical {
+  background: #fde8e8;
+  color: #9f1d1d;
+}
+
+.pet-performance-severity--warning {
+  background: #fff1d6;
+  color: #7a5600;
+}
+
+.pet-performance-severity--info {
+  background: #e8f4fd;
+  color: #0b4f80;
+}
+
+.pet-performance-severity--unknown {
+  background: #edf2f7;
+  color: #4d6179;
+}
+
+/* WP admin menu emphasis for PET > Performance */
+body.pet_page_pet-performance #adminmenu #toplevel_page_pet-dashboard > a.menu-top {
+  background: linear-gradient(90deg, #1f3550 0%, #264c73 100%);
+  color: #fff;
+}
+
+body.pet_page_pet-performance #adminmenu #toplevel_page_pet-dashboard > a.menu-top .wp-menu-name,
+body.pet_page_pet-performance #adminmenu #toplevel_page_pet-dashboard > a.menu-top .wp-menu-image:before {
+  color: #fff;
+}
+
+body.pet_page_pet-performance #adminmenu #toplevel_page_pet-dashboard .wp-submenu a[href$='page=pet-performance'] {
+  color: #72aee6;
+  font-weight: 700;
+}
+
+body.pet_page_pet-performance #adminmenu #toplevel_page_pet-dashboard .wp-submenu a[href$='page=pet-performance']:hover {
+  color: #9ecaf2;
+}
+
+@media (max-width: 782px) {
+  .pet-performance-kpi-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }

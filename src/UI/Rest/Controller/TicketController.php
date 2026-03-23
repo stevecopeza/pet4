@@ -209,6 +209,7 @@ class TicketController implements RestController
 
     public function getTickets(WP_REST_Request $request): WP_REST_Response
     {
+        $profileToken = $this->beginBenchmarkWorkloadProfile('ticket.list');
         $customerId = $request->get_param('customer_id');
         $status = $request->get_param('status');
         if (is_string($status)) {
@@ -341,8 +342,86 @@ class TicketController implements RestController
                 'soldValueCents' => $ticket->soldValueCents(),
             ];
         }, $tickets);
+        $this->endBenchmarkWorkloadProfile($profileToken);
 
         return new WP_REST_Response(array_values($data), 200);
+    }
+
+    /**
+     * @return array{run_id:int, workload_key:string, query_count_start:int, started_at:float}|null
+     */
+    private function beginBenchmarkWorkloadProfile(string $workloadKey): ?array
+    {
+        $activeRunId = $this->activeBenchmarkRunId();
+        if ($activeRunId === null) {
+            return null;
+        }
+
+        global $wpdb;
+        if (!$wpdb instanceof \wpdb) {
+            return null;
+        }
+
+        return [
+            'run_id' => $activeRunId,
+            'workload_key' => $workloadKey,
+            'query_count_start' => $this->queryCount($wpdb),
+            'started_at' => microtime(true),
+        ];
+    }
+
+    /**
+     * @param array{run_id:int, workload_key:string, query_count_start:int, started_at:float}|null $token
+     */
+    private function endBenchmarkWorkloadProfile(?array $token): void
+    {
+        if ($token === null) {
+            return;
+        }
+
+        global $wpdb;
+        if (!$wpdb instanceof \wpdb) {
+            return;
+        }
+
+        $queryDelta = $this->queryCount($wpdb) - (int) $token['query_count_start'];
+        if ($queryDelta < 0) {
+            $queryDelta = 0;
+        }
+
+        $payload = [
+            'workload_key' => (string) $token['workload_key'],
+            'query_count' => $queryDelta,
+            'execution_time_ms' => round((microtime(true) - (float) $token['started_at']) * 1000, 3),
+        ];
+
+        $metricsKey = 'pet_performance_workload_metrics_' . (int) $token['run_id'];
+        $existing = get_transient($metricsKey);
+        $rows = is_array($existing) ? $existing : [];
+        $rows[] = $payload;
+        set_transient($metricsKey, $rows, 10 * MINUTE_IN_SECONDS);
+    }
+
+    private function activeBenchmarkRunId(): ?int
+    {
+        $value = get_transient('pet_performance_active_run_id');
+        if ($value === false || $value === null || !is_numeric($value)) {
+            return null;
+        }
+
+        $runId = (int) $value;
+        return $runId > 0 ? $runId : null;
+    }
+
+    private function queryCount(\wpdb $wpdb): int
+    {
+        if (property_exists($wpdb, 'num_queries') && is_numeric($wpdb->num_queries)) {
+            return (int) $wpdb->num_queries;
+        }
+        if (defined('SAVEQUERIES') && SAVEQUERIES && property_exists($wpdb, 'queries') && is_array($wpdb->queries)) {
+            return count($wpdb->queries);
+        }
+        return 0;
     }
 
     /**

@@ -119,6 +119,20 @@ const Projects = () => {
     fetchSchema();
   }, []);
 
+  useEffect(() => {
+    const applyHashSelection = () => {
+      const hash = window.location.hash || '';
+      const match = hash.match(/project=(\d+)/);
+      if (match) {
+        setSelectedProjectId(Number(match[1]));
+      }
+    };
+
+    applyHashSelection();
+    window.addEventListener('hashchange', applyHashSelection);
+    return () => window.removeEventListener('hashchange', applyHashSelection);
+  }, []);
+
   const handleFormSuccess = () => {
     setShowAddForm(false);
     setEditingProject(null);
@@ -245,6 +259,32 @@ const Projects = () => {
     () => filteredRows.map((row) => row.project),
     [filteredRows]
   );
+  const selectedRow = useMemo(
+    () => filteredRows.find((row) => row.project.id === selectedProjectId) ?? null,
+    [filteredRows, selectedProjectId]
+  );
+  const selectedProject = selectedRow?.project ?? null;
+
+  useEffect(() => {
+    if (filteredProjects.length === 0) {
+      if (selectedProjectId !== null) {
+        setSelectedProjectId(null);
+      }
+      return;
+    }
+    if (selectedProjectId === null || !filteredProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(filteredProjects[0].id);
+    }
+  }, [filteredProjects, selectedProjectId]);
+
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    const nextHash = `#project=${selectedProjectId}`;
+    if (window.location.hash === nextHash) return;
+    try {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+    } catch (_) { /* noop */ }
+  }, [selectedProjectId]);
 
   const summary = useMemo(() => {
     const projectCount = filteredRows.length;
@@ -314,6 +354,7 @@ const Projects = () => {
                   e.preventDefault();
                   setSelectedProjectId(item.id);
                 }}
+                style={{ fontWeight: selectedProjectId === item.id ? 700 : 500 }}
               >
                 {item.name}
               </button>
@@ -395,18 +436,6 @@ const Projects = () => {
     })),
     { key: 'archivedAt', header: 'Archived', render: (val: any) => val ? <span style={{ color: '#999' }}>{String(val)}</span> : '-' },
   ];
-
-  if (selectedProjectId) {
-    return (
-      <ProjectDetails 
-        projectId={selectedProjectId} 
-        onBack={() => {
-          setSelectedProjectId(null);
-          fetchProjects(); // Refresh list when returning
-        }} 
-      />
-    );
-  }
 
 
   return (
@@ -555,39 +584,139 @@ const Projects = () => {
         </ActionBar>
       )}
 
-      <Panel className="pet-projects-table-panel" testId="projects-main-panel">
-        <div className="pet-projects-table-header">
-          <h3>Project List</h3>
-          <p>Review delivery scope, monitor project health signals, and manage archives from one place.</p>
-        </div>
-        <DataTable
-          columns={columns}
-          data={filteredProjects}
-          loading={loading}
-          error={error}
-          onRetry={fetchProjects}
-          emptyMessage="No projects found."
-          compatibilityMode="wp"
-          selection={{
-            selectedIds,
-            onSelectionChange: setSelectedIds
-          }}
-          rowClassName={(project) => {
-            const healthClass = computeProjectHealth(project).className;
-            const attentionClass = activePreset === 'attention' && getProjectAttentionSignals(project).length > 0
-              ? 'pet-project-row--attention'
-              : '';
-            return `${healthClass} ${attentionClass}`.trim();
-          }}
-          actions={(item) => (
-            <KebabMenu items={[
-              { type: 'action', label: 'Tasks', onClick: () => setSelectedProjectId(item.id) },
-              { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-              { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
-            ]} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 34%) minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
+        <Panel className="pet-projects-table-panel" testId="projects-main-panel">
+          <div style={{ background: '#f8fafc', border: '1px solid #e4e7ec', borderRadius: 10, padding: 12 }}>
+            <div className="pet-projects-table-header">
+            <h3>Project Queue</h3>
+            <p>Scan projects and select one to work on without navigating away.</p>
+            </div>
+            <DataTable
+              columns={columns}
+              data={filteredProjects}
+              loading={loading}
+              error={error}
+              onRetry={fetchProjects}
+              emptyMessage="No projects found."
+              compatibilityMode="wp"
+              selection={{
+                selectedIds,
+                onSelectionChange: setSelectedIds
+              }}
+              rowClassName={(project) => {
+                const healthClass = computeProjectHealth(project).className;
+                const attentionClass = activePreset === 'attention' && getProjectAttentionSignals(project).length > 0
+                  ? 'pet-project-row--attention'
+                  : '';
+                const selectedClass = selectedProjectId === project.id ? 'pet-project-row--selected' : '';
+                return `${healthClass} ${attentionClass} ${selectedClass}`.trim();
+              }}
+              actions={(item) => (
+                <KebabMenu items={[
+                  { type: 'action', label: 'Select', onClick: () => setSelectedProjectId(item.id) },
+                  { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+                  { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
+                ]} />
+              )}
+            />
+          </div>
+        </Panel>
+        <Panel>
+          <div style={{ background: '#fff', border: '1px solid #d0d5dd', boxShadow: '0 8px 24px rgba(16,24,40,0.06)', borderRadius: 10, padding: 14 }}>
+          {!selectedProject && (
+            <div className="pd-empty" style={{ textAlign: 'left', padding: 20 }}>
+              Select a project from the left panel to begin.
+            </div>
           )}
-        />
-      </Panel>
+          {selectedProject && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="pd-card" style={{ padding: 18, border: '1px solid #bfd6ff', background: 'linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%)' }}>
+                <div style={{ fontSize: '0.73rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#175cd3', marginBottom: 8 }}>
+                  Working on Project
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#101828', lineHeight: 1.25 }}>
+                      {selectedProject.name}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: '0.84rem', color: '#344054' }}>
+                      Project #{selectedProject.id} · Customer #{selectedProject.customerId}
+                      {selectedProject.sourceQuoteId ? ` · Quote #${selectedProject.sourceQuoteId}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <span className={`pet-status-badge status-${String(selectedProject.state).toLowerCase()}`}>{selectedProject.state}</span>
+                    <span className="pd-badge">{`${selectedRow?.completedTaskCount ?? 0}/${selectedRow?.taskCount ?? 0} tasks`}</span>
+                    <span className="pd-badge">{`${selectedRow?.taskCount ? Math.round((selectedRow.completedTaskCount / selectedRow.taskCount) * 100) : 0}% progress`}</span>
+                    <span className="pd-badge">{`${selectedProject.soldHours || 0}h sold`}</span>
+                  </div>
+                </div>
+                {selectedRow && selectedRow.attentionSignals.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {selectedRow.attentionSignals.map((signal) => (
+                      <span
+                        key={`workspace-${selectedProject.id}-${signal.key}`}
+                        className={`pet-project-attention-tag pet-project-attention-tag--${signal.tone}`}
+                        title={signal.title}
+                      >
+                        {signal.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pd-card" style={{ padding: 16, border: '1px solid #9ec5fe', background: '#eff6ff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div className="pd-section-title" style={{ margin: 0, color: '#1d4ed8' }}>Next Actions</div>
+                  <div style={{ fontSize: '0.78rem', color: '#667085' }}>Use existing project controls</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid #bfdbfe' }}>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={() => openConversation({
+                      contextType: 'project',
+                      contextId: String(selectedProject.id),
+                      subject: `Project: ${selectedProject.name}`,
+                      subjectKey: `project:${selectedProject.id}`,
+                    })}
+                  >
+                    Discuss
+                  </button>
+                  <button type="button" className="button" onClick={() => handleEdit(selectedProject)}>
+                    Edit Project
+                  </button>
+                  <button type="button" className="button button-link-delete" onClick={() => setPendingArchiveId(selectedProject.id)}>
+                    Archive
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => document.getElementById(`project-${selectedProject.id}-add-task`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    Add Task
+                  </button>
+                </div>
+              </div>
+
+              <div className="pd-card" style={{ padding: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+                  <div><strong>Progress</strong><div>{`${selectedRow?.taskCount ? Math.round((selectedRow.completedTaskCount / selectedRow.taskCount) * 100) : 0}%`}</div></div>
+                  <div><strong>Tasks</strong><div>{selectedRow?.taskCount ?? 0}</div></div>
+                  <div><strong>Estimated</strong><div>{selectedProject.tasks.reduce((sum, task) => sum + task.estimatedHours, 0).toFixed(1)}h</div></div>
+                  <div><strong>Sold</strong><div>{selectedProject.soldHours || 0}h</div></div>
+                </div>
+              </div>
+
+              <div className="pd-card" style={{ padding: 16 }}>
+                <ProjectDetails projectId={selectedProject.id} embedded />
+              </div>
+            </div>
+          )}
+          </div>
+        </Panel>
+      </div>
 
       <ConfirmationDialog
         open={pendingArchiveId !== null}

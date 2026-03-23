@@ -43,6 +43,22 @@ class ContainerFactory
                 global $wpdb;
                 return $wpdb;
             },
+            \Pet\Application\Performance\Port\PerformanceRunStore::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlPerformanceRunStore($wpdb);
+            },
+            \Pet\Application\Performance\Port\PerformanceResultStore::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlPerformanceResultStore($wpdb);
+            },
+            \Pet\Application\Performance\Port\BenchmarkRunStateStore::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Performance\WpBenchmarkRunStateStore($wpdb);
+            },
+            \Pet\Application\Performance\Service\RecommendationEngine::class => \DI\autowire(\Pet\Application\Performance\Service\RecommendationEngine::class),
+            \Pet\Application\Performance\Service\WorkloadSimulationService::class => \DI\autowire(\Pet\Application\Performance\Service\WorkloadSimulationService::class),
+            \Pet\Application\Performance\Service\PerformanceRunService::class => \DI\autowire(\Pet\Application\Performance\Service\PerformanceRunService::class)
+                ->constructorParameter('workloadSimulationService', \DI\get(\Pet\Application\Performance\Service\WorkloadSimulationService::class)),
             \Pet\Domain\Event\EventBus::class => function (\Psr\Container\ContainerInterface $c) {
                 return new \Pet\Infrastructure\Event\PersistingEventBus(
                     $c->get(\Pet\Infrastructure\Event\InMemoryEventBus::class),
@@ -603,6 +619,7 @@ class ContainerFactory
             \Pet\UI\Rest\Controller\SchemaController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\DashboardController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\DashboardsController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\PerformanceController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\CalendarController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SlaController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\RoleController::class => \DI\autowire(),

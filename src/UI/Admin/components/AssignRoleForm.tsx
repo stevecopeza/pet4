@@ -13,10 +13,12 @@ interface Role {
 interface AssignRoleFormProps {
     onSuccess: () => void;
     onCancel: () => void;
+    fixedEmployeeId?: number;
+    fixedEmployeeLabel?: string;
 }
 
-const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) => {
-    const [employeeId, setEmployeeId] = useState<number | ''>('');
+const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel, fixedEmployeeId, fixedEmployeeLabel }) => {
+    const [employeeId, setEmployeeId] = useState<number | ''>(fixedEmployeeId ?? '');
     const [roleId, setRoleId] = useState<number | ''>('');
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState('');
@@ -26,6 +28,12 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
 
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
+
+    useEffect(() => {
+        if (fixedEmployeeId) {
+            setEmployeeId(fixedEmployeeId);
+        }
+    }, [fixedEmployeeId]);
 
     useEffect(() => {
         const fetchLookups = async () => {
@@ -53,6 +61,10 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
         setError(null);
 
         try {
+            const employeeIdValue = fixedEmployeeId || Number(employeeId);
+            if (!employeeIdValue) {
+                throw new Error('Please select a person');
+            }
             // @ts-ignore
             const response = await fetch(`${window.petSettings.apiUrl}/assignments`, {
                 method: 'POST',
@@ -62,7 +74,7 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
                     'X-WP-Nonce': window.petSettings.nonce,
                 },
                 body: JSON.stringify({
-                    employee_id: employeeId,
+                    employee_id: employeeIdValue,
                     role_id: roleId,
                     start_date: startDate,
                     end_date: endDate || null,
@@ -83,6 +95,8 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
         }
     };
 
+    const resolvedEmployeeName = fixedEmployeeLabel || employees.find((e) => e.id === Number(fixedEmployeeId))?.display_name || `Employee #${fixedEmployeeId}`;
+
     return (
         <form onSubmit={handleSubmit} className="pet-form" style={{ maxWidth: '500px', background: '#fff', padding: '20px', border: '1px solid #ccd0d4', boxShadow: '0 1px 1px rgba(0,0,0,.04)' }}>
             <h3 style={{ marginTop: 0 }}>Assign Role to Person</h3>
@@ -90,23 +104,35 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
             {error && <div className="notice notice-error"><p>{error}</p></div>}
             
             <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Person</label>
-                <select 
-                    value={employeeId} 
-                    onChange={(e) => setEmployeeId(Number(e.target.value))}
-                    required
-                    style={{ width: '100%', maxWidth: '100%' }}
-                >
-                    <option value="">Select Person...</option>
-                    {employees.map(e => (
-                        <option key={e.id} value={e.id}>{e.display_name}</option>
-                    ))}
-                </select>
+                <label htmlFor="pet-assign-role-person" style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Person</label>
+                {fixedEmployeeId ? (
+                    <input
+                        id="pet-assign-role-person"
+                        type="text"
+                        value={resolvedEmployeeName}
+                        disabled
+                        style={{ width: '100%', maxWidth: '100%', background: '#f0f0f1' }}
+                    />
+                ) : (
+                    <select 
+                        id="pet-assign-role-person"
+                        value={employeeId} 
+                        onChange={(e) => setEmployeeId(Number(e.target.value))}
+                        required
+                        style={{ width: '100%', maxWidth: '100%' }}
+                    >
+                        <option value="">Select Person...</option>
+                        {employees.map(e => (
+                            <option key={e.id} value={e.id}>{e.display_name}</option>
+                        ))}
+                    </select>
+                )}
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Role</label>
+                <label htmlFor="pet-assign-role-role" style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Role</label>
                 <select 
+                    id="pet-assign-role-role"
                     value={roleId} 
                     onChange={(e) => setRoleId(Number(e.target.value))}
                     required
@@ -121,8 +147,9 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
 
             <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
                 <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Start Date</label>
+                    <label htmlFor="pet-assign-role-start-date" style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Start Date</label>
                     <input 
+                        id="pet-assign-role-start-date"
                         type="date" 
                         value={startDate} 
                         onChange={(e) => setStartDate(e.target.value)}
@@ -131,8 +158,9 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
                     />
                 </div>
                 <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>End Date (Optional)</label>
+                    <label htmlFor="pet-assign-role-end-date" style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>End Date (Optional)</label>
                     <input 
+                        id="pet-assign-role-end-date"
                         type="date" 
                         value={endDate} 
                         onChange={(e) => setEndDate(e.target.value)}
@@ -142,8 +170,9 @@ const AssignRoleForm: React.FC<AssignRoleFormProps> = ({ onSuccess, onCancel }) 
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Allocation %</label>
+                <label htmlFor="pet-assign-role-allocation-pct" style={{ display: 'block', marginBottom: '5px', fontWeight: 600 }}>Allocation %</label>
                 <input 
+                    id="pet-assign-role-allocation-pct"
                     type="number" 
                     value={allocationPct} 
                     onChange={(e) => setAllocationPct(Number(e.target.value))}

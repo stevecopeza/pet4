@@ -8,10 +8,11 @@ import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface ProjectDetailsProps {
   projectId: number;
-  onBack: () => void;
+  onBack?: () => void;
+  embedded?: boolean;
 }
 
-const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) => {
+const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack, embedded = false }) => {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,43 +111,47 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
 
   return (
     <div className={`pet-project-details ${projHealth?.className || ''}`}>
-      <div style={{ marginBottom: '20px' }}>
-        <button className="button" onClick={onBack}>&larr; Back to Projects</button>
-        {project && (
-          <button 
-            className="button" 
-            onClick={() => openConversation({
-              contextType: 'project',
-              contextId: String(project.id),
-              subject: `Project: ${project.name}`,
-              subjectKey: `project:${project.id}`,
-            })}
-            style={{ marginLeft: '10px' }}
-          >
-            Discuss
-          </button>
-        )}
-      </div>
+      {!embedded && (
+        <div style={{ marginBottom: '20px' }}>
+          <button className="button" onClick={() => onBack?.()}>&larr; Back to Projects</button>
+          {project && (
+            <button 
+              className="button" 
+              onClick={() => openConversation({
+                contextType: 'project',
+                contextId: String(project.id),
+                subject: `Project: ${project.name}`,
+                subjectKey: `project:${project.id}`,
+              })}
+              style={{ marginLeft: '10px' }}
+            >
+              Discuss
+            </button>
+          )}
+        </div>
+      )}
 
-      <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
-        <h2>
-          {project.name}
-          {projHealth && projHealth.reasons.map((r, i) => (
-            <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
-          ))}
-        </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          <div>
-            <p><strong>Customer ID:</strong> {project.customerId}</p>
-            <p><strong>Source Quote:</strong> {project.sourceQuoteId ? `#${project.sourceQuoteId}` : '-'}</p>
-            <p><strong>Total Sold Hours:</strong> {project.soldHours}</p>
-          </div>
-          <div>
-            <p><strong>Total Tasks:</strong> {project.tasks.length}</p>
-            <p><strong>Estimated Hours (Sum):</strong> {project.tasks.reduce((sum, task) => sum + task.estimatedHours, 0).toFixed(2)}</p>
+      {!embedded && (
+        <div className="card" style={{ padding: '20px', marginBottom: '20px', background: '#fff', border: '1px solid #ccd0d4' }}>
+          <h2>
+            {project.name}
+            {projHealth && projHealth.reasons.map((r, i) => (
+              <span key={i} className={`uhb-tag uhb-tag-${r.color}`}>{r.label}</span>
+            ))}
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div>
+              <p><strong>Customer ID:</strong> {project.customerId}</p>
+              <p><strong>Source Quote:</strong> {project.sourceQuoteId ? `#${project.sourceQuoteId}` : '-'}</p>
+              <p><strong>Total Sold Hours:</strong> {project.soldHours}</p>
+            </div>
+            <div>
+              <p><strong>Total Tasks:</strong> {project.tasks.length}</p>
+              <p><strong>Estimated Hours (Sum):</strong> {project.tasks.reduce((sum, task) => sum + task.estimatedHours, 0).toFixed(2)}</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <h3>Tasks</h3>
       <DataTable 
@@ -155,7 +160,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ projectId, onBack }) =>
         emptyMessage="No tasks yet." 
       />
 
-      <div className="card" style={{ marginTop: '20px', padding: '20px', background: '#f0f0f1', border: '1px solid #ccd0d4' }}>
+      <div
+        id={embedded ? `project-${project.id}-add-task` : undefined}
+        className="card"
+        style={{ marginTop: '20px', padding: '20px', background: '#f0f0f1', border: '1px solid #ccd0d4' }}
+      >
         <h4>Add Task</h4>
         <form onSubmit={handleAddTask} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '10px', alignItems: 'end' }}>
           <div>

@@ -1,0 +1,274 @@
+{
+    "my_work": {
+        "count": 133,
+        "top_items": [
+            {
+                "sourceType": "ticket",
+                "sourceId": "83",
+                "priorityScore": 500,
+                "slaTimeRemaining": 240,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "28",
+                "priorityScore": 500,
+                "slaTimeRemaining": 360,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "29",
+                "priorityScore": 500,
+                "slaTimeRemaining": 240,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "9",
+                "priorityScore": 500,
+                "slaTimeRemaining": 240,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "91",
+                "priorityScore": 500,
+                "slaTimeRemaining": -12,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "39",
+                "priorityScore": 500,
+                "slaTimeRemaining": -12,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "104",
+                "priorityScore": 500,
+                "slaTimeRemaining": 360,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "8",
+                "priorityScore": 500,
+                "slaTimeRemaining": 360,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "49",
+                "priorityScore": 500,
+                "slaTimeRemaining": -12,
+                "signalSeverities": [
+                    "warning"
+                ]
+            },
+            {
+                "sourceType": "ticket",
+                "sourceId": "82",
+                "priorityScore": 500,
+                "slaTimeRemaining": 360,
+                "signalSeverities": [
+                    "warning"
+                ]
+            }
+        ]
+    },
+    "support": {
+        "queues": [
+            {
+                "queue_key": "support:team:1",
+                "label": "Support \u2014 Executive",
+                "visibility_scope": "ADMIN",
+                "count": 0
+            },
+            {
+                "queue_key": "support:team:2",
+                "label": "Support \u2014 Delivery",
+                "visibility_scope": "ADMIN",
+                "count": 0
+            },
+            {
+                "queue_key": "support:team:3",
+                "label": "Support \u2014 Support",
+                "visibility_scope": "ADMIN",
+                "count": 14
+            },
+            {
+                "queue_key": "support:team:4",
+                "label": "Support \u2014 On-Call",
+                "visibility_scope": "ADMIN",
+                "count": 0
+            },
+            {
+                "queue_key": "support:unrouted",
+                "label": "Support \u2014 Unrouted",
+                "visibility_scope": "ADMIN",
+                "count": 1
+            },
+            {
+                "queue_key": "support:user:1",
+                "label": "Support \u2014 My Queue",
+                "visibility_scope": "SELF",
+                "count": 133
+            }
+        ],
+        "active_queue": "support:user:1",
+        "top_sorted_items": [
+            {
+                "ref": "TICKET-7",
+                "title": "Policy question",
+                "status": "open",
+                "priority": 100,
+                "sla_state": null,
+                "customer_id": 1
+            },
+            {
+                "ref": "TICKET-1",
+                "title": "Login issue",
+                "status": "open",
+                "priority": 100,
+                "sla_state": null,
+                "customer_id": 1
+            },
+            {
+                "ref": "TICKET-2",
+                "title": "Email not syncing",
+                "status": "open",
+                "priority": 75,
+                "sla_state": null,
+                "customer_id": 1
+            },
+            {
+                "ref": "TICKET-3",
+                "title": "Server alert",
+                "status": "open",
+                "priority": 75,
+                "sla_state": null,
+                "customer_id": 1
+            },
+            {
+                "ref": "TICKET-5",
+                "title": "Printer offline",
+                "status": "pending",
+                "priority": 50,
+                "sla_state": null,
+                "customer_id": 1
+            },
+            {
+                "ref": "TICKET-126",
+                "title": "ERP module crashing on reports",
+                "status": "open",
+                "priority": 100,
+                "sla_state": null,
+                "customer_id": 2
+            },
+            {
+                "ref": "TICKET-128",
+                "title": "License renewal query",
+                "status": "open",
+                "priority": 100,
+                "sla_state": null,
+                "customer_id": 2
+            },
+            {
+                "ref": "TICKET-132",
+                "title": "CI/CD pipeline failure",
+                "status": "open",
+                "priority": 100,
+                "sla_state": null,
+                "customer_id": 3
+            }
+        ]
+    },
+    "projects": {
+        "highlights": [
+            {
+                "id": 1,
+                "name": "Project for Quote #1",
+                "state": "active",
+                "health": "on_track",
+                "hours_used": 24,
+                "customer_id": 1
+            },
+            {
+                "id": 2,
+                "name": "Acme Catalog Services Delivery",
+                "state": "active",
+                "health": "at_risk",
+                "hours_used": 38,
+                "customer_id": 2
+            },
+            {
+                "id": 3,
+                "name": "Project for Quote #5",
+                "state": "active",
+                "health": "on_track",
+                "hours_used": 52,
+                "customer_id": 3
+            },
+            {
+                "id": 4,
+                "name": "Project for Quote #10",
+                "state": "active",
+                "health": "on_track",
+                "hours_used": 8,
+                "customer_id": 2
+            }
+        ]
+    },
+    "advisory": {
+        "top_sorted_signals": [
+            {
+                "signal_type": "support_pressure",
+                "severity": "critical",
+                "status": "ACTIVE",
+                "customer_id": 2,
+                "source_entity_type": "ticket",
+                "source_entity_id": "126",
+                "title": "Support pressure on ticket #126"
+            },
+            {
+                "signal_type": "delivery_risk",
+                "severity": "warning",
+                "status": "ACTIVE",
+                "customer_id": 2,
+                "source_entity_type": "project",
+                "source_entity_id": "2",
+                "title": "Delivery risk on project #2"
+            }
+        ],
+        "source": "derived_fallback"
+    },
+    "my_profile": {
+        "employee": {
+            "id": 1,
+            "name": "Steve Admin"
+        },
+        "assigned_tickets": 133,
+        "related_project_ids_from_tickets": [
+            1
+        ],
+        "open_work_items": 133
+    }
+}

@@ -3,13 +3,21 @@ import { SchemaDefinition, Site, Customer } from '../types';
 import MalleableFieldsRenderer from './MalleableFieldsRenderer';
 
 interface SiteFormProps {
-  onSuccess: () => void;
+  onSuccess: (savedSite?: Site) => void;
   onCancel: () => void;
   initialData?: Site;
+  contextCustomerId?: number | null;
+  lockCustomerSelection?: boolean;
 }
 
-const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData }) => {
-  const [customerId, setCustomerId] = useState<number>(initialData?.customerId || 0);
+const SiteForm: React.FC<SiteFormProps> = ({
+  onSuccess,
+  onCancel,
+  initialData,
+  contextCustomerId,
+  lockCustomerSelection = false,
+}) => {
+  const [customerId, setCustomerId] = useState<number>(initialData?.customerId || contextCustomerId || 0);
   const [name, setName] = useState(initialData?.name || '');
   const [addressLines, setAddressLines] = useState(initialData?.addressLines || '');
   const [city, setCity] = useState(initialData?.city || '');
@@ -18,10 +26,10 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
   const [country, setCountry] = useState(initialData?.country || '');
   const [status, setStatus] = useState(initialData?.status || 'active');
   const [malleableData, setMalleableData] = useState<Record<string, any>>(initialData?.malleableData || {});
-  
+
   const [activeSchema, setActiveSchema] = useState<SchemaDefinition | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +46,12 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
       setMalleableData(initialData.malleableData || {});
     }
   }, [initialData]);
+
+  useEffect(() => {
+    if (!initialData && contextCustomerId) {
+      setCustomerId(contextCustomerId);
+    }
+  }, [contextCustomerId, initialData]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,7 +113,7 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
       const nonce = window.petSettings?.nonce;
 
       const isEditMode = !!initialData;
-      const url = isEditMode 
+      const url = isEditMode
         ? `${apiUrl}/sites/${initialData.id}`
         : `${apiUrl}/sites`;
 
@@ -109,9 +123,9 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
           'Content-Type': 'application/json',
           'X-WP-Nonce': nonce,
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           customerId,
-          name, 
+          name,
           addressLines,
           city,
           state,
@@ -127,7 +141,14 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
         throw new Error(data.message || 'Failed to save site');
       }
 
-      onSuccess();
+      let savedSite: Site | undefined;
+      try {
+        savedSite = await response.json();
+      } catch (_) {
+        savedSite = undefined;
+      }
+
+      onSuccess(savedSite);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -137,8 +158,8 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
 
   return (
     <div className="pet-form-container">
-      <h3>{initialData ? 'Edit Site' : 'Add New Site'}</h3>
-      
+      <h3>{initialData ? 'Edit Branch' : 'Add Branch'}</h3>
+
       {error && (
         <div className="notice notice-error inline">
           <p>{error}</p>
@@ -149,11 +170,12 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
         <div className="pet-form-grid">
           <div className="pet-form-group">
             <label>Customer <span className="required">*</span></label>
-            <select 
-              value={customerId} 
+            <select
+              value={customerId}
               onChange={(e) => setCustomerId(Number(e.target.value))}
               required
               className="regular-text"
+              disabled={lockCustomerSelection && !initialData}
             >
               <option value="">Select Customer</option>
               {customers.map(c => (
@@ -163,21 +185,21 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
           </div>
 
           <div className="pet-form-group">
-            <label>Site Name <span className="required">*</span></label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              required 
+            <label>Branch Name <span className="required">*</span></label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
               className="regular-text"
             />
           </div>
 
           <div className="pet-form-group">
             <label>Address</label>
-            <textarea 
-              value={addressLines} 
-              onChange={(e) => setAddressLines(e.target.value)} 
+            <textarea
+              value={addressLines}
+              onChange={(e) => setAddressLines(e.target.value)}
               className="regular-text"
               rows={3}
             />
@@ -185,48 +207,48 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
 
           <div className="pet-form-group">
             <label>City</label>
-            <input 
-              type="text" 
-              value={city} 
-              onChange={(e) => setCity(e.target.value)} 
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
               className="regular-text"
             />
           </div>
 
           <div className="pet-form-group">
             <label>State/Province</label>
-            <input 
-              type="text" 
-              value={state} 
-              onChange={(e) => setState(e.target.value)} 
+            <input
+              type="text"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
               className="regular-text"
             />
           </div>
 
           <div className="pet-form-group">
             <label>Postal Code</label>
-            <input 
-              type="text" 
-              value={postalCode} 
-              onChange={(e) => setPostalCode(e.target.value)} 
+            <input
+              type="text"
+              value={postalCode}
+              onChange={(e) => setPostalCode(e.target.value)}
               className="regular-text"
             />
           </div>
 
           <div className="pet-form-group">
             <label>Country</label>
-            <input 
-              type="text" 
-              value={country} 
-              onChange={(e) => setCountry(e.target.value)} 
+            <input
+              type="text"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
               className="regular-text"
             />
           </div>
 
           <div className="pet-form-group">
             <label>Status</label>
-            <select 
-              value={status} 
+            <select
+              value={status}
               onChange={(e) => setStatus(e.target.value)}
               className="regular-text"
             >
@@ -246,7 +268,7 @@ const SiteForm: React.FC<SiteFormProps> = ({ onSuccess, onCancel, initialData })
 
         <div className="pet-form-actions">
           <button type="submit" className="button button-primary" disabled={loading}>
-            {loading ? 'Saving...' : 'Save Site'}
+            {loading ? 'Saving...' : 'Save Branch'}
           </button>
           <button type="button" className="button" onClick={onCancel} disabled={loading}>
             Cancel

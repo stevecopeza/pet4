@@ -84,6 +84,16 @@ class ContactController implements RestController
                     'isPrimary' => $aff->isPrimary(),
                 ];
             }, $contact->affiliations());
+            $primaryAffiliation = null;
+            foreach ($affiliations as $affiliation) {
+                if (!empty($affiliation['isPrimary'])) {
+                    $primaryAffiliation = $affiliation;
+                    break;
+                }
+            }
+            if ($primaryAffiliation === null && !empty($affiliations)) {
+                $primaryAffiliation = $affiliations[0];
+            }
 
             return [
                 'id' => $contact->id(),
@@ -91,6 +101,8 @@ class ContactController implements RestController
                 'lastName' => $contact->lastName(),
                 'email' => $contact->email(),
                 'phone' => $contact->phone(),
+                'customerId' => $primaryAffiliation['customerId'] ?? null,
+                'siteId' => $primaryAffiliation['siteId'] ?? null,
                 'affiliations' => $affiliations,
                 'malleableData' => $contact->malleableData(),
                 'createdAt' => $contact->createdAt()->format('Y-m-d H:i:s'),

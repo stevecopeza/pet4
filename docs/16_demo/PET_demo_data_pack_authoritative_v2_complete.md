@@ -420,23 +420,39 @@ Employees (8, was 6):
 7. Ethan DevOps (NEW)
 8. Isabella Analyst (NEW)
 
-Customers (4, was 2):
+Customers (6, was 2):
 1. RPM Resources (Pty) Ltd
 2. Acme Manufacturing SA (Pty) Ltd
 3. Nexus Startup Labs (NEW)
 4. Government Digital Services (NEW)
+5. Atlas Holdings (NEW — incomplete setup)
+6. Bluewave Logistics (NEW — partial setup)
 
-Sites (6, was 3):
+Sites (7, was 3):
 - RPM Cape Town, RPM Johannesburg
 - Acme Stellenbosch
 - Nexus Cape Town (NEW)
 - GDS Pretoria HQ (NEW), GDS Regional Office (NEW)
+- Bluewave Durban Hub (NEW)
 
-Contacts (7, was 4):
+Contacts (9, was 4):
 - Original 4 retained
 - Tariq Hendricks (Nexus, NEW)
 - Lisa van Wyk (Nexus, NEW)
 - Thabo Dlamini (GDS, NEW)
+- Megan Ross (RPM, NEW)
+- Naledi Khoza (GDS, NEW)
+
+Contact Variant Coverage (NEW):
+- Customer-level contacts with no site affiliation
+- Branch-bound contacts with a primary branch affiliation
+- Multi-branch contacts with primary + secondary affiliations
+- Mixed compatibility shape retained (at least one direct customer contact seeded without affiliation rows)
+
+Customer Setup Stage Coverage (NEW):
+- Incomplete: Atlas Holdings (0 branches, 0 contacts)
+- Partially configured: Bluewave Logistics (1 branch, 0 contacts)
+- Ready: RPM, Acme, Nexus, Government Digital Services (≥1 branch and ≥1 contact)
 
 SECTION 7 — CATALOG (Expanded)
 
@@ -493,3 +509,70 @@ New steps added after seed.feed:
 - seed.projectTasks — granular task data for projects
 
 End of Amendment v2.1.
+
+====================================================================
+AMENDMENT v2.2 — Seed/Purge Hardening and Deterministic Rerun Validation (2026-03-23)
+====================================================================
+
+Status: ADDITIVE AMENDMENT (no breaking changes to v2 or v2.1 contracts)
+
+This amendment records operational hardening applied to demo seed/purge mechanics and the validated outcomes from repeated seed runs on 2026-03-23.
+
+SEED/REGISTRY HARDENING
+
+1) Schema-safe guards for optional/migrating tables
+- Added safe table/column checks in seed and purge services.
+- Integration-run registry now detects timestamp column dynamically:
+  - prefer `created_at` when present
+  - fallback to `started_at` when `created_at` is not present
+
+2) Catalog idempotency by SKU
+- Catalog seeding now upserts (`ON DUPLICATE KEY UPDATE`) by SKU.
+- Repeat seed runs no longer emit duplicate-key noise for catalog entries.
+
+3) Support SLA table tolerance
+- Support seeding now guards missing SLA definitions table (`wp_pet_sla_definitions`) and degrades cleanly when absent.
+
+4) Pulseway deterministic reseed
+- Pulseway seeding now:
+  - verifies required Pulseway tables exist before proceeding
+  - reuses/updates a deterministic integration record (`Demo Pulseway Instance`)
+  - clears deterministic prior Pulseway seed rows before reseed
+  - avoids duplicate ticket-link inserts
+  - avoids duplicate pulseway ticket creation by subject re-check
+
+5) Conversation seeding reopen safety
+- Conversation seeding now reopens resolved conversations before posting additional messages, preventing resolved-thread post failures during repeat seed operations.
+
+PURGE HARDENING
+
+1) Missing-table safe purge traversal
+- Purge now checks table existence before attempting metadata/registry operations.
+- Missing tables are marked as skipped rather than emitting avoidable warning paths.
+- Specifically validated for missing `wp_pet_project_tasks`.
+
+CAPACITY UTILIZATION HARDENING
+
+- Utilization calculations now guard division-by-zero/non-finite values and normalize invalid outputs to `0.0`.
+
+STAFF READINESS PERSONA COVERAGE (DETERMINISTIC)
+
+Post-rerun readiness distribution remained stable:
+- `ready=5`
+- `partial=2`
+- `incomplete=1`
+
+VALIDATION EVIDENCE (2026-03-23)
+
+Executed:
+- `wp --path=/Users/stevecope/Sites/pet4 pet purge 9f2ba896-3734-43ff-9fe3-8a269a58eb73`
+- `wp --path=/Users/stevecope/Sites/pet4 pet seed` → run `116eec82-e164-47a0-a320-6b318dd1a407`
+- repeat `wp --path=/Users/stevecope/Sites/pet4 pet seed` → run `d1c74741-731b-4b74-a7a8-3d5921e8721c`
+
+Outcome:
+- targeted warning/error set resolved for non-staff seed paths
+- repeated seeding remained stable and idempotent
+- staff readiness persona distribution preserved
+
+Known environmental noise outside seed logic:
+- duplicate Xdebug load warning may still appear in CLI output depending on local PHP configuration

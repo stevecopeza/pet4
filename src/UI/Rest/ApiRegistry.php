@@ -58,6 +58,7 @@ class ApiRegistry
             \Pet\UI\Rest\Controller\SlaController::class,
             \Pet\UI\Rest\Controller\EscalationRuleController::class,
             \Pet\UI\Rest\Controller\SystemController::class,
+            \Pet\UI\Rest\Controller\PerformanceController::class,
             \Pet\UI\Rest\Controller\WorkController::class,
             \Pet\UI\Rest\Controller\WorkQueueController::class,
             \Pet\UI\Rest\Controller\WorkItemController::class,
