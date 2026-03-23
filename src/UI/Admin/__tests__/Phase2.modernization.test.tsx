@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import Projects from '../components/Projects';
 import TimeEntries from '../components/TimeEntries';
@@ -63,6 +63,19 @@ describe('Phase 2 modernization regression guards - Projects', () => {
           },
         ]), { status: 200 }));
       }
+      if (url.endsWith('/projects/1') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 1,
+          name: 'Project One',
+          customerId: 10,
+          sourceQuoteId: null,
+          soldHours: 8,
+          state: 'active',
+          tasks: [],
+          malleableData: {},
+          archivedAt: null,
+        }), { status: 200 }));
+      }
       if (url.endsWith('/projects/1') && method === 'DELETE') {
         return Promise.resolve(new Response('{}', { status: 200 }));
       }
@@ -73,10 +86,11 @@ describe('Phase 2 modernization regression guards - Projects', () => {
     await screen.findByText('Project One');
 
     fireEvent.click(screen.getByLabelText('Actions'));
-    fireEvent.click(screen.getByText('Archive'));
+    const kebabMenu = document.querySelector('.pet-kebab-menu');
+    expect(kebabMenu).not.toBeNull();
+    fireEvent.click(within(kebabMenu as HTMLElement).getByText('Archive'));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Archive' }));
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(

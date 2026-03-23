@@ -15,15 +15,26 @@ use PHPUnit\Framework\TestCase;
 
 final class BillingControllerInputValidationTest extends TestCase
 {
+    /**
+     * @template T of object
+     * @param class-string<T> $className
+     * @return T
+     */
+    private function instanceWithoutConstructor(string $className): object
+    {
+        $reflector = new \ReflectionClass($className);
+        /** @var T $instance */
+        $instance = $reflector->newInstanceWithoutConstructor();
+        return $instance;
+    }
     public function testCreateExportReturns400ForMalformedDates(): void
     {
         $repository = $this->createMock(BillingExportRepository::class);
-        $create = $this->createMock(CreateBillingExportHandler::class);
-        $create->expects(self::never())->method('handle');
-        $addItem = $this->createMock(AddBillingExportItemHandler::class);
-        $queue = $this->createMock(QueueBillingExportForQuickBooksHandler::class);
-        $confirm = $this->createMock(ConfirmBillingExportHandler::class);
-        $outbox = $this->getMockBuilder(SqlOutboxRepository::class)->disableOriginalConstructor()->getMock();
+        $create = $this->instanceWithoutConstructor(CreateBillingExportHandler::class);
+        $addItem = $this->instanceWithoutConstructor(AddBillingExportItemHandler::class);
+        $queue = $this->instanceWithoutConstructor(QueueBillingExportForQuickBooksHandler::class);
+        $confirm = $this->instanceWithoutConstructor(ConfirmBillingExportHandler::class);
+        $outbox = $this->instanceWithoutConstructor(SqlOutboxRepository::class);
 
         $controller = new BillingController($repository, $create, $addItem, $queue, $confirm, $outbox);
 
@@ -40,12 +51,11 @@ final class BillingControllerInputValidationTest extends TestCase
     public function testAddItemReturns400ForNonNumericFields(): void
     {
         $repository = $this->createMock(BillingExportRepository::class);
-        $create = $this->createMock(CreateBillingExportHandler::class);
-        $addItem = $this->createMock(AddBillingExportItemHandler::class);
-        $addItem->expects(self::never())->method('handle');
-        $queue = $this->createMock(QueueBillingExportForQuickBooksHandler::class);
-        $confirm = $this->createMock(ConfirmBillingExportHandler::class);
-        $outbox = $this->getMockBuilder(SqlOutboxRepository::class)->disableOriginalConstructor()->getMock();
+        $create = $this->instanceWithoutConstructor(CreateBillingExportHandler::class);
+        $addItem = $this->instanceWithoutConstructor(AddBillingExportItemHandler::class);
+        $queue = $this->instanceWithoutConstructor(QueueBillingExportForQuickBooksHandler::class);
+        $confirm = $this->instanceWithoutConstructor(ConfirmBillingExportHandler::class);
+        $outbox = $this->instanceWithoutConstructor(SqlOutboxRepository::class);
 
         $controller = new BillingController($repository, $create, $addItem, $queue, $confirm, $outbox);
 

@@ -13,7 +13,8 @@ describe('Advisory demo signal visibility', () => {
   });
 
   it('defaults to Signals tab and renders a legible insight from recent signals', async () => {
-    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(async (input: RequestInfo | URL) => {
+    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(async (...args: unknown[]) => {
+      const input = args[0] as RequestInfo | URL;
       const url = String(input);
       if (url.includes('/advisory/signals/recent')) {
         return {
@@ -52,7 +53,8 @@ describe('Advisory demo signal visibility', () => {
   });
 
   it('renders deterministic escalation and delivery risk signal categories on signals landing', async () => {
-    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(async (input: RequestInfo | URL) => {
+    vi.spyOn(globalThis, 'fetch' as any).mockImplementation(async (...args: unknown[]) => {
+      const input = args[0] as RequestInfo | URL;
       const url = String(input);
       if (url.includes('/advisory/signals/recent')) {
         return {

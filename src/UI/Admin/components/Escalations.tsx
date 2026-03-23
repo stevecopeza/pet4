@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DataTable, Column } from './DataTable';
 import ConfirmationDialog from './foundation/ConfirmationDialog';
 import Dialog from './foundation/Dialog';
+import PageShell from './foundation/PageShell';
+import Panel from './foundation/Panel';
 import useToast from './foundation/useToast';
 import LoadingState from './foundation/states/LoadingState';
 import ErrorState from './foundation/states/ErrorState';
-import EmptyState from './foundation/states/EmptyState';
 
 interface EscalationItem {
   id: number;
@@ -47,32 +48,28 @@ interface ListResponse {
   per_page: number;
 }
 
-const severityColors: Record<string, string> = {
-  LOW: '#28a745',
-  MEDIUM: '#ffc107',
-  HIGH: '#fd7e14',
-  CRITICAL: '#dc3545',
-};
-
-const statusColors: Record<string, string> = {
-  OPEN: '#dc3545',
-  ACKED: '#ffc107',
-  RESOLVED: '#28a745',
-};
-
 type SeverityFilter = 'ALL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+type StatusFilter = 'all' | 'open';
 
 const fmtDate = (iso: string | null | undefined): string => {
-  if (!iso) return '\u2014';
+  if (!iso) return '—';
   return new Date(iso).toLocaleString();
 };
+
+const normalizeTone = (value: string | null | undefined): string => (
+  String(value || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+);
+
+const toneLabel = (value: string | null | undefined): string => (
+  String(value || 'UNKNOWN').toUpperCase()
+);
 
 const Escalations = () => {
   const toast = useToast();
   const [data, setData] = useState<ListResponse | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<EscalationDetail | null>(null);
-  const [filter, setFilter] = useState<'all' | 'open'>('open');
+  const [filter, setFilter] = useState<StatusFilter>('open');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('ALL');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -107,7 +104,27 @@ const Escalations = () => {
 
   useEffect(() => { fetchData(); }, [filter, page]);
 
-  const filteredItems = data?.items.filter((e) => severityFilter === 'ALL' || e.severity === severityFilter) ?? [];
+  const filteredItems = useMemo(
+    () => data?.items.filter((item) => severityFilter === 'ALL' || item.severity === severityFilter) ?? [],
+    [data?.items, severityFilter]
+  );
+
+  const summary = useMemo(() => {
+    const open = filteredItems.filter((item) => item.status === 'OPEN').length;
+    const acked = filteredItems.filter((item) => item.status === 'ACKED').length;
+    const resolved = filteredItems.filter((item) => item.status === 'RESOLVED').length;
+    return {
+      visible: filteredItems.length,
+      open,
+      acked,
+      resolved,
+    };
+  }, [filteredItems]);
+
+  const totalPages = useMemo(
+    () => (data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1),
+    [data]
+  );
 
   const fetchDetail = async (id: number) => {
     setSelectedId(id);
@@ -128,20 +145,20 @@ const Escalations = () => {
     }
   };
 
-  const doAction = async (id: number, action: 'acknowledge') => {
+  const acknowledgeEscalation = async (id: number) => {
     setActionBusy(true);
     try {
-      const res = await fetch(`${window.petSettings.apiUrl}/escalations/${id}/${action}`, {
+      const res = await fetch(`${window.petSettings.apiUrl}/escalations/${id}/acknowledge`, {
         method: 'POST',
         headers: { 'X-WP-Nonce': window.petSettings.nonce, 'Content-Type': 'application/json' },
       });
       if (!res.ok) {
-        throw new Error(`Failed to ${action} escalation`);
+        throw new Error('Failed to acknowledge escalation');
       }
       toast.success('Escalation acknowledged.');
-      fetchData();
+      await fetchData();
       if (selectedId === id) {
-        fetchDetail(id);
+        await fetchDetail(id);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Escalation action failed');
@@ -167,9 +184,9 @@ const Escalations = () => {
         throw new Error('Failed to resolve escalation');
       }
       toast.success('Escalation resolved.');
-      fetchData();
+      await fetchData();
       if (selectedId === pendingResolveId) {
-        fetchDetail(pendingResolveId);
+        await fetchDetail(pendingResolveId);
       }
       setPendingResolveId(null);
       setResolutionNote('');
@@ -180,11 +197,10 @@ const Escalations = () => {
     }
   };
 
-  const Badge = ({ label, color }: { label: string; color: string }) => (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: 3,
-      background: color, color: '#fff', fontSize: 12, fontWeight: 600,
-    }}>{label}</span>
+  const Badge = ({ label, toneType }: { label: string; toneType: 'severity' | 'status' }) => (
+    <span className={`pet-escalations-badge pet-escalations-badge--${toneType}-${normalizeTone(label)}`}>
+      {toneLabel(label)}
+    </span>
   );
 
   const columns: Column<EscalationItem>[] = [
@@ -194,17 +210,28 @@ const Escalations = () => {
       render: (val, item) => (
         <button
           type="button"
-          className="button-link"
+          className="button-link pet-escalations-id-link"
           onClick={() => fetchDetail(item.id)}
-          style={{ padding: 0 }}
         >
           {String(val)}
         </button>
       )
     },
-    { key: 'source_entity_type', header: 'Source', render: (val, item) => `${String(val)} #${item.source_entity_id}` },
-    { key: 'severity', header: 'Severity', render: (val) => <Badge label={String(val)} color={severityColors[String(val)] || '#999'} /> },
-    { key: 'status', header: 'Status', render: (val) => <Badge label={String(val)} color={statusColors[String(val)] || '#999'} /> },
+    {
+      key: 'source_entity_type',
+      header: 'Source',
+      render: (val, item) => `${String(val)} #${item.source_entity_id}`
+    },
+    {
+      key: 'severity',
+      header: 'Severity',
+      render: (val) => <Badge label={String(val)} toneType="severity" />
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (val) => <Badge label={String(val)} toneType="status" />
+    },
     { key: 'summary', header: 'Summary', render: (val) => String(val || '') },
     { key: 'reason', header: 'Reason', render: (val) => String(val) },
     { key: 'opened_at', header: 'Opened', render: (_val, item) => fmtDate(item.opened_at || item.created_at) },
@@ -212,120 +239,230 @@ const Escalations = () => {
       key: 'escalation_id',
       header: 'Actions',
       render: (_val, item) => (
-        <>
+        <div className="pet-escalations-row-actions">
           {item.status === 'OPEN' && (
-            <button className="button button-small" onClick={() => setPendingAcknowledgeId(item.id)}>Acknowledge</button>
+            <button
+              type="button"
+              className="button button-small"
+              onClick={() => setPendingAcknowledgeId(item.id)}
+              disabled={actionBusy}
+            >
+              Acknowledge
+            </button>
           )}
           {(item.status === 'OPEN' || item.status === 'ACKED') && (
             <button
+              type="button"
               className="button button-small"
-              style={{ marginLeft: 4 }}
               onClick={() => {
                 setPendingResolveId(item.id);
                 setResolutionNote('');
                 setResolveError(null);
               }}
+              disabled={actionBusy}
             >
               Resolve
             </button>
           )}
-        </>
+        </div>
       )
     },
   ];
 
+  const detailTone = detail ? normalizeTone(detail.severity) : 'unknown';
+
   return (
-    <div>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className={`button ${filter === 'open' ? 'button-primary' : ''}`} onClick={() => { setFilter('open'); setPage(1); }}>Open / Acknowledged</button>
-        <button className={`button ${filter === 'all' ? 'button-primary' : ''}`} onClick={() => { setFilter('all'); setPage(1); }}>All</button>
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
-          style={{ height: 30 }}
-        >
-          <option value="ALL">All Severities</option>
-          <option value="LOW">Low</option>
-          <option value="MEDIUM">Medium</option>
-          <option value="HIGH">High</option>
-          <option value="CRITICAL">Critical</option>
-        </select>
-        <button className="button" onClick={fetchData} disabled={loading}>\u21BB Refresh</button>
-      </div>
+    <PageShell
+      className="pet-escalations-page"
+      title="Escalations"
+      subtitle="Monitor, acknowledge, and resolve operational escalations."
+      actions={(
+        <div className="pet-escalations-shell-actions">
+          <a className="button button-secondary" href="/wp-admin/admin.php?page=pet-escalation-rules">
+            Rules
+          </a>
+          <button type="button" className="button button-secondary" onClick={fetchData} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      )}
+    >
+      <Panel className="pet-escalations-toolbar-panel">
+        <div className="pet-escalations-toolbar">
+          <div className="pet-escalations-segmented">
+            <button
+              type="button"
+              className={`button pet-escalations-segmented-btn ${filter === 'open' ? 'button-primary is-active' : ''}`}
+              onClick={() => { setFilter('open'); setPage(1); }}
+            >
+              Open / Acknowledged
+            </button>
+            <button
+              type="button"
+              className={`button pet-escalations-segmented-btn ${filter === 'all' ? 'button-primary is-active' : ''}`}
+              onClick={() => { setFilter('all'); setPage(1); }}
+            >
+              All
+            </button>
+          </div>
+          <label className="pet-escalations-severity-filter">
+            <span>Severity</span>
+            <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as SeverityFilter)}>
+              <option value="ALL">All Severities</option>
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="CRITICAL">Critical</option>
+            </select>
+          </label>
+        </div>
+        <div className="pet-escalations-summary-grid">
+          <div className="pet-escalations-summary-item">
+            <span className="pet-escalations-summary-label">Visible</span>
+            <strong className="pet-escalations-summary-value">{summary.visible}</strong>
+          </div>
+          <div className="pet-escalations-summary-item">
+            <span className="pet-escalations-summary-label">Open</span>
+            <strong className="pet-escalations-summary-value">{summary.open}</strong>
+          </div>
+          <div className="pet-escalations-summary-item">
+            <span className="pet-escalations-summary-label">Acknowledged</span>
+            <strong className="pet-escalations-summary-value">{summary.acked}</strong>
+          </div>
+          <div className="pet-escalations-summary-item">
+            <span className="pet-escalations-summary-label">Resolved</span>
+            <strong className="pet-escalations-summary-value">{summary.resolved}</strong>
+          </div>
+        </div>
+      </Panel>
 
-      {loading && !data && <LoadingState />}
-      {error && !data && <ErrorState message={error} onRetry={fetchData} />}
+      <Panel className="pet-escalations-table-panel">
+        <div className="pet-escalations-section-header">
+          <h3>Escalation queue</h3>
+          {data && (
+            <p>
+              {filteredItems.length} of {data.total} escalation{data.total !== 1 ? 's' : ''}
+              {severityFilter !== 'ALL' ? ` (${severityFilter})` : ''}
+            </p>
+          )}
+        </div>
 
-      {data && !error && (
-        <>
-          <p style={{ color: '#666' }}>{filteredItems.length} of {data.total} escalation{data.total !== 1 ? 's' : ''}{severityFilter !== 'ALL' ? ` (${severityFilter})` : ''}</p>
-          <DataTable
-            columns={columns}
-            data={filteredItems}
-            loading={loading}
-            error={error}
-            onRetry={fetchData}
-            emptyMessage="No escalations found."
-            compatibilityMode="wp"
-          />
+        {loading && !data && <LoadingState />}
+        {error && !data && <ErrorState message={error} onRetry={fetchData} />}
 
-          {data.total > data.per_page && (
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button className="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>
-              <span>Page {data.page} of {Math.ceil(data.total / data.per_page)}</span>
-              <button className="button" disabled={page * data.per_page >= data.total} onClick={() => setPage(page + 1)}>Next →</button>
+        {data && !error && (
+          <>
+            <DataTable
+              columns={columns}
+              data={filteredItems}
+              loading={loading}
+              error={error}
+              onRetry={fetchData}
+              emptyMessage="No escalations found."
+              compatibilityMode="wp"
+              rowClassName={(item) => item.status === 'OPEN' ? 'pet-escalations-row--requires-ack' : ''}
+            />
+
+            {data.total > data.per_page && (
+              <div className="pet-escalations-pagination">
+                <button type="button" className="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                  ← Prev
+                </button>
+                <span>Page {data.page} of {totalPages}</span>
+                <button
+                  type="button"
+                  className="button"
+                  disabled={page * data.per_page >= data.total}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </Panel>
+
+      {(selectedId !== null || detail || detailError || detailLoading) && (
+        <Panel className={`pet-escalations-detail-panel pet-escalations-detail-panel--${detailTone}`}>
+          <div className="pet-escalations-detail-header">
+            <div>
+              <h3>Escalation detail</h3>
+              {selectedId !== null && <p>Escalation #{selectedId}</p>}
             </div>
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setSelectedId(null);
+                setDetail(null);
+                setDetailError(null);
+              }}
+            >
+              Close
+            </button>
+          </div>
+
+          {detailLoading && selectedId !== null && <LoadingState label={`Loading escalation #${selectedId}…`} />}
+          {detailError && !detailLoading && (
+            <ErrorState
+              message={detailError}
+              onRetry={() => {
+                if (selectedId !== null) {
+                  fetchDetail(selectedId);
+                }
+              }}
+            />
           )}
 
-          <div style={{ marginTop: 20 }}>
-            {detailLoading && selectedId !== null && <LoadingState label={`Loading escalation #${selectedId}…`} />}
-            {detailError && !detailLoading && <ErrorState message={detailError} onRetry={() => {
-              if (selectedId !== null) {
-                fetchDetail(selectedId);
-              }
-            }} />}
-            {detail && (
-              <div className="pd-card" style={{ padding: 20, borderTop: `4px solid ${severityColors[detail.severity] || '#e0e0e0'}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div className="pd-card-title" style={{ fontSize: '1.1rem' }}>Escalation #{detail.id}</div>
-                  <button type="button" className="button" onClick={() => { setSelectedId(null); setDetail(null); }}>Close</button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '8px 16px', marginBottom: 16 }}>
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Source</div>
+          {detail && !detailLoading && !detailError && (
+            <>
+              <div className="pet-escalations-detail-grid">
+                <div className="pet-escalations-detail-field">
+                  <span>Source</span>
                   <div>{detail.source_entity_type} #{detail.source_entity_id}</div>
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Severity</div>
-                  <div><Badge label={detail.severity} color={severityColors[detail.severity] || '#999'} /></div>
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</div>
-                  <div><Badge label={detail.status} color={statusColors[detail.status] || '#999'} /></div>
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Opened</div>
-                  <div>{fmtDate(detail.opened_at || detail.created_at)}</div>
-
-                  {detail.acknowledged_at && (
-                    <><div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Acknowledged</div>
-                    <div>{fmtDate(detail.acknowledged_at)}</div></>
-                  )}
-
-                  {detail.resolved_at && (
-                    <><div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Resolved</div>
-                    <div>{fmtDate(detail.resolved_at)}</div></>
-                  )}
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Summary</div>
-                  <div>{detail.summary || '\u2014'}</div>
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reason</div>
-                  <div>{detail.reason}</div>
-
-                  <div style={{ fontSize: '0.78rem', color: '#888', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Resolution Note</div>
-                  <div>{detail.resolution_note || '\u2014'}</div>
                 </div>
+                <div className="pet-escalations-detail-field">
+                  <span>Severity</span>
+                  <div><Badge label={detail.severity} toneType="severity" /></div>
+                </div>
+                <div className="pet-escalations-detail-field">
+                  <span>Status</span>
+                  <div><Badge label={detail.status} toneType="status" /></div>
+                </div>
+                <div className="pet-escalations-detail-field">
+                  <span>Opened</span>
+                  <div>{fmtDate(detail.opened_at || detail.created_at)}</div>
+                </div>
+                {detail.acknowledged_at && (
+                  <div className="pet-escalations-detail-field">
+                    <span>Acknowledged</span>
+                    <div>{fmtDate(detail.acknowledged_at)}</div>
+                  </div>
+                )}
+                {detail.resolved_at && (
+                  <div className="pet-escalations-detail-field">
+                    <span>Resolved</span>
+                    <div>{fmtDate(detail.resolved_at)}</div>
+                  </div>
+                )}
+                <div className="pet-escalations-detail-field pet-escalations-detail-field--wide">
+                  <span>Summary</span>
+                  <div>{detail.summary || '—'}</div>
+                </div>
+                <div className="pet-escalations-detail-field pet-escalations-detail-field--wide">
+                  <span>Reason</span>
+                  <div>{detail.reason}</div>
+                </div>
+                <div className="pet-escalations-detail-field pet-escalations-detail-field--wide">
+                  <span>Resolution Note</span>
+                  <div>{detail.resolution_note || '—'}</div>
+                </div>
+              </div>
 
-                <div className="pd-card-title" style={{ fontSize: '0.9rem', marginBottom: 8 }}>Timeline</div>
-                <table className="widefat striped">
+              <div className="pet-escalations-timeline">
+                <div className="pet-escalations-timeline-title">Timeline</div>
+                <table className="widefat striped pet-escalations-timeline-table">
                   <thead>
                     <tr>
                       <th>From</th>
@@ -336,24 +473,30 @@ const Escalations = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {detail.transitions.map((t) => (
-                      <tr key={t.id}>
-                        <td>{t.from_status || '\u2014'}</td>
-                        <td>{t.to_status}</td>
-                        <td>{t.transitioned_by ?? '\u2014'}</td>
-                        <td>{fmtDate(t.transitioned_at)}</td>
-                        <td>{t.reason || '\u2014'}</td>
+                    {detail.transitions.map((transition) => (
+                      <tr key={transition.id}>
+                        <td>{transition.from_status || '—'}</td>
+                        <td>{transition.to_status}</td>
+                        <td>{transition.transitioned_by ?? '—'}</td>
+                        <td>{fmtDate(transition.transitioned_at)}</td>
+                        <td>{transition.reason || '—'}</td>
                       </tr>
                     ))}
                     {detail.transitions.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 12 }}><EmptyState message="No transitions found." /></td></tr>
+                      <tr>
+                        <td colSpan={5} className="pet-escalations-timeline-empty">No transitions found.</td>
+                      </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
-        </>
+            </>
+          )}
+        </Panel>
+      )}
+
+      {error && data && (
+        <div className="pet-escalations-warning">{error}</div>
       )}
 
       <ConfirmationDialog
@@ -365,7 +508,7 @@ const Escalations = () => {
         onCancel={() => setPendingAcknowledgeId(null)}
         onConfirm={() => {
           if (pendingAcknowledgeId !== null) {
-            doAction(pendingAcknowledgeId, 'acknowledge');
+            acknowledgeEscalation(pendingAcknowledgeId);
           }
         }}
       />
@@ -381,9 +524,9 @@ const Escalations = () => {
           }
         }}
       >
-        <div style={{ display: 'grid', gap: 12 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Resolution note (optional)</span>
+        <div className="pet-escalations-resolve-form">
+          <label className="pet-escalations-resolve-label">
+            <span>Resolution note (optional)</span>
             <textarea
               rows={4}
               value={resolutionNote}
@@ -392,7 +535,7 @@ const Escalations = () => {
               disabled={actionBusy}
             />
           </label>
-          {resolveError && <div style={{ color: '#d63638' }}>{resolveError}</div>}
+          {resolveError && <div className="pet-escalations-resolve-error">{resolveError}</div>}
           <div className="pet-dialog-actions">
             <button
               type="button"
@@ -412,7 +555,7 @@ const Escalations = () => {
           </div>
         </div>
       </Dialog>
-    </div>
+    </PageShell>
   );
 };
 

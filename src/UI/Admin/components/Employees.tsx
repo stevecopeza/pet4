@@ -237,6 +237,9 @@ const Employees = () => {
   const [orgTeams, setOrgTeams] = useState<Team[]>([]);
   const [orgLoading, setOrgLoading] = useState(false);
   const [orgError, setOrgError] = useState<string | null>(null);
+  const [collapsedOrgTeamIds, setCollapsedOrgTeamIds] = useState<number[]>([]);
+  const [expandedOrgTeamLeadershipIds, setExpandedOrgTeamLeadershipIds] = useState<number[]>([]);
+  const [expandedOrgTeamMemberIds, setExpandedOrgTeamMemberIds] = useState<number[]>([]);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [pendingArchiveId, setPendingArchiveId] = useState<number | null>(null);
   const [confirmBulkArchive, setConfirmBulkArchive] = useState(false);
@@ -575,9 +578,180 @@ const Employees = () => {
     setActiveTab('people');
     handleEdit(employee);
   };
+  const flattenOrgTeams = (teams: Team[], seen: Set<number> = new Set()): Team[] => {
+    const flat: Team[] = [];
+    teams.forEach((team) => {
+      if (seen.has(team.id)) {
+        return;
+      }
+      seen.add(team.id);
+      flat.push(team);
+      if (team.children && team.children.length > 0) {
+        flat.push(...flattenOrgTeams(team.children, seen));
+      }
+    });
+    return flat;
+  };
+
+  const flattenedOrgTeams = useMemo(() => flattenOrgTeams(orgTeams), [orgTeams]);
+  const orgSummary = useMemo(() => {
+    let memberRefs = 0;
+    let teamsWithChildren = 0;
+    flattenedOrgTeams.forEach((team) => {
+      memberRefs += (team.member_ids || []).length;
+      if (team.children && team.children.length > 0) {
+        teamsWithChildren += 1;
+      }
+    });
+    return {
+      teamCount: flattenedOrgTeams.length,
+      memberRefs,
+      teamsWithChildren,
+    };
+  }, [flattenedOrgTeams]);
+  const orgTeamNameById = useMemo(() => {
+    const byId = new Map<number, string>();
+    flattenedOrgTeams.forEach((team) => {
+      byId.set(team.id, team.name);
+    });
+    return byId;
+  }, [flattenedOrgTeams]);
+  const orgValidationIssues = useMemo(() => {
+    if (flattenedOrgTeams.length === 0) {
+      return [] as string[];
+    }
+
+    const issues: string[] = [];
+    const canonicalNames = ['Executive', 'Delivery', 'Support', 'Delivery Engineering'];
+    const managedByName = new Map<string, Team>();
+    flattenedOrgTeams.forEach((team) => {
+      if (canonicalNames.includes(team.name)) {
+        managedByName.set(team.name, team);
+      }
+    });
+
+    const missingManaged = canonicalNames.filter((name) => !managedByName.has(name));
+    if (missingManaged.length > 0) {
+      issues.push(`Missing managed teams: ${missingManaged.join(', ')}`);
+      return issues;
+    }
+
+    const managedTeams = canonicalNames.map((name) => managedByName.get(name) as Team);
+    const managedIdSet = new Set<number>(managedTeams.map((team) => team.id));
+    const managedRoots = managedTeams.filter((team) => !team.parent_team_id || !managedIdSet.has(team.parent_team_id));
+    if (managedRoots.length !== 1) {
+      issues.push(`Expected exactly 1 managed root team, found ${managedRoots.length}.`);
+    }
+
+    const executive = managedByName.get('Executive');
+    if (executive && executive.parent_team_id) {
+      issues.push('Executive must be the managed root (no parent).');
+    }
+
+    const deliveryEngineering = managedByName.get('Delivery Engineering');
+    const delivery = managedByName.get('Delivery');
+    if (deliveryEngineering && delivery && deliveryEngineering.parent_team_id !== delivery.id) {
+      issues.push('Delivery Engineering parent must resolve to Delivery.');
+    }
+
+    const managedWithoutManager = managedTeams.filter((team) => !team.manager_id).map((team) => team.name);
+    if (managedWithoutManager.length > 0) {
+      issues.push(`Managed teams without manager: ${managedWithoutManager.join(', ')}`);
+    }
+
+    const visiting = new Set<number>();
+    const visited = new Set<number>();
+    const detectCycle = (team: Team): boolean => {
+      if (visited.has(team.id)) {
+        return false;
+      }
+      if (visiting.has(team.id)) {
+        return true;
+      }
+      visiting.add(team.id);
+      if (team.parent_team_id && managedIdSet.has(team.parent_team_id)) {
+        const parent = managedTeams.find((candidate) => candidate.id === team.parent_team_id);
+        if (parent && detectCycle(parent)) {
+          return true;
+        }
+      }
+      visiting.delete(team.id);
+      visited.add(team.id);
+      return false;
+    };
+    if (managedTeams.some((team) => detectCycle(team))) {
+      issues.push('Cycle detected in managed team hierarchy.');
+    }
+
+    return issues;
+  }, [flattenedOrgTeams]);
+
+  const toggleOrgTeamCollapsed = (teamId: number) => {
+    setCollapsedOrgTeamIds((prev) => (
+      prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId]
+    ));
+  };
+  const toggleOrgTeamMembersExpanded = (teamId: number) => {
+    setExpandedOrgTeamMemberIds((prev) => (
+      prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId]
+    ));
+  };
+  const toggleOrgTeamLeadershipExpanded = (teamId: number) => {
+    setExpandedOrgTeamLeadershipIds((prev) => (
+      prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId]
+    ));
+  };
+  const collapseAllOrgTeams = () => {
+    const withChildren = flattenedOrgTeams
+      .filter((team) => team.children && team.children.length > 0)
+      .map((team) => team.id);
+    setCollapsedOrgTeamIds(withChildren);
+  };
+  const expandAllOrgTeams = () => {
+    setCollapsedOrgTeamIds([]);
+  };
+  const collapseAllOrgTeamMembers = () => {
+    setExpandedOrgTeamMemberIds([]);
+  };
+  const expandAllOrgTeamMembers = () => {
+    const withMembers = flattenedOrgTeams
+      .filter((team) => (team.member_ids || []).length > 0)
+      .map((team) => team.id);
+    setExpandedOrgTeamMemberIds(withMembers);
+  };
+  const collapseAllOrgTeamLeadership = () => {
+    setExpandedOrgTeamLeadershipIds([]);
+  };
+  const expandAllOrgTeamLeadership = () => {
+    const withLeaders = flattenedOrgTeams
+      .filter((team) => Boolean(team.manager_id) || Boolean(team.escalation_manager_id))
+      .map((team) => team.id);
+    setExpandedOrgTeamLeadershipIds(withLeaders);
+  };
+  const collapseAllOrgSections = () => {
+    collapseAllOrgTeams();
+    collapseAllOrgTeamLeadership();
+    collapseAllOrgTeamMembers();
+  };
+  const expandAllOrgSections = () => {
+    expandAllOrgTeams();
+    expandAllOrgTeamLeadership();
+    expandAllOrgTeamMembers();
+  };
 
   const renderTeamNode = (team: Team, depth: number = 0): React.ReactNode => {
     const manager = team.manager_id ? findEmployeeById(team.manager_id) : undefined;
+    const escalationManager = team.escalation_manager_id ? findEmployeeById(team.escalation_manager_id) : undefined;
+    const isCollapsed = collapsedOrgTeamIds.includes(team.id);
+    const isLeadershipExpanded = expandedOrgTeamLeadershipIds.includes(team.id);
+    const hasChildren = Boolean(team.children && team.children.length > 0);
+    const isMembersExpanded = expandedOrgTeamMemberIds.includes(team.id);
     const members = (team.member_ids || [])
       .map(id => findEmployeeById(id))
       .filter((e): e is Employee => !!e);
@@ -586,94 +760,204 @@ const Employees = () => {
       <div
         key={team.id}
         style={{
-          border: '1px solid #ccd0d4',
-          borderRadius: '4px',
-          padding: '12px 16px',
-          marginBottom: '12px',
-          marginLeft: depth * 20,
-          background: '#fff',
+          border: '1px solid #c3c4c7',
+          borderRadius: '6px',
+          padding: '14px 18px',
+          marginBottom: '14px',
+          marginLeft: 0,
+          background: depth === 0 ? '#ffffff' : '#fcfcfc',
+          boxShadow: depth === 0 ? '0 1px 1px rgba(0,0,0,.03)' : 'none',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <div style={{ fontWeight: 600 }}>
-            {team.name}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px', flexWrap: 'wrap' }}>
           <div>
-            <span className={`status-badge status-${String(team.status).toLowerCase()}`}>{team.status}</span>
+            <div style={{ fontWeight: 700, fontSize: depth === 0 ? '18px' : '16px', lineHeight: 1.2 }}>
+              {team.name}
+            </div>
+            <div style={{ color: '#646970', fontSize: '11px', marginTop: '4px', letterSpacing: '0.02em' }}>
+              {(team.member_ids || []).length} member{(team.member_ids || []).length === 1 ? '' : 's'}
+              {' · '}
+              {(team.children || []).length} subteam{(team.children || []).length === 1 ? '' : 's'}
+            </div>
           </div>
-        </div>
-
-        {manager && (
-          <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/*
-              Avatar comes from employees endpoint (avatarUrl field on EmployeeController).
-              Use optional chaining in case shape changes.
-            */}
-            {/* @ts-ignore */}
-            {manager.avatarUrl && (
-              <img
-                src={String((manager as any).avatarUrl)}
-                alt=""
-                style={{ width: '32px', height: '32px', borderRadius: '50%' }}
-              />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {hasChildren && (
+              <button
+                type="button"
+                className="button button-small"
+                onClick={() => toggleOrgTeamCollapsed(team.id)}
+              >
+                {isCollapsed ? 'Expand' : 'Collapse'}
+              </button>
             )}
             <button
               type="button"
-              onClick={() => openEmployeeFromOrg(manager.id)}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                color: '#2271b1',
-                fontWeight: 600,
-              }}
+              className="button button-small"
+              aria-expanded={isLeadershipExpanded}
+              onClick={() => toggleOrgTeamLeadershipExpanded(team.id)}
             >
-              {manager.firstName} {manager.lastName}
+              {isLeadershipExpanded ? 'Hide leadership' : 'Show leadership'}
             </button>
-            <span style={{ color: '#666', fontSize: '12px' }}>Manager</span>
+            {members.length > 0 && (
+              <button
+                type="button"
+                className="button button-small"
+                aria-expanded={isMembersExpanded}
+                onClick={() => toggleOrgTeamMembersExpanded(team.id)}
+              >
+                {isMembersExpanded ? 'Hide members' : 'Show members'}
+              </button>
+            )}
+            <span className={`status-badge status-${String(team.status).toLowerCase()}`}>{team.status}</span>
           </div>
-        )}
-
-        {members.length > 0 && (
-          <div style={{ marginTop: '4px' }}>
-            <div style={{ fontWeight: 600, marginBottom: '6px', fontSize: '13px' }}>Team Members</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              {members.map((member) => (
+        </div>
+        {isLeadershipExpanded && (
+          <div style={{ marginBottom: members.length > 0 && isMembersExpanded ? '8px' : '10px' }}>
+            {manager && (
+              <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* @ts-ignore */}
+                {manager.avatarUrl && (
+                  <img
+                    src={String((manager as any).avatarUrl)}
+                    alt=""
+                    style={{ width: '30px', height: '30px', borderRadius: '50%' }}
+                  />
+                )}
                 <button
-                  key={member.id}
                   type="button"
-                  onClick={() => openEmployeeFromOrg(member.id)}
+                  onClick={() => openEmployeeFromOrg(manager.id)}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 10px',
-                    borderRadius: '20px',
-                    border: '1px solid #dcdcde',
-                    background: '#f6f7f7',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
                     cursor: 'pointer',
+                    color: '#2271b1',
+                    fontWeight: 600,
                   }}
                 >
-                  {/* @ts-ignore */}
-                  {member.avatarUrl && (
-                    <img
-                      src={String((member as any).avatarUrl)}
-                      alt=""
-                      style={{ width: '24px', height: '24px', borderRadius: '50%' }}
-                    />
-                  )}
-                  <span style={{ fontSize: '12px' }}>
-                    {member.firstName} {member.lastName}
-                  </span>
+                  {manager.firstName} {manager.lastName}
                 </button>
-              ))}
-            </div>
+                <span style={{ color: '#50575e', fontSize: '11px', fontWeight: 600 }}>Manager</span>
+              </div>
+            )}
+            {escalationManager ? (
+              <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* @ts-ignore */}
+                {escalationManager.avatarUrl && (
+                  <img
+                    src={String((escalationManager as any).avatarUrl)}
+                    alt=""
+                    style={{ width: '22px', height: '22px', borderRadius: '50%' }}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => openEmployeeFromOrg(escalationManager.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: '#2271b1',
+                    fontWeight: 500,
+                  }}
+                >
+                  {escalationManager.firstName} {escalationManager.lastName}
+                </button>
+                <span style={{ color: '#50575e', fontSize: '11px', fontWeight: 600 }}>Escalation Manager</span>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ color: '#50575e', fontSize: '11px', fontWeight: 600 }}>Escalation Manager</span>
+                <span style={{ color: '#8c8f94', fontSize: '11px' }}>Unassigned</span>
+              </div>
+            )}
           </div>
         )}
-
-        {team.children && team.children.length > 0 && (
-          <div style={{ marginTop: '10px' }}>
+        {members.length > 0 && isMembersExpanded && (
+          <div style={{ marginTop: '8px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {members.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => openEmployeeFromOrg(member.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '20px',
+                      border: '1px solid #dcdcde',
+                      background: '#f6f7f7',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {/* @ts-ignore */}
+                    {member.avatarUrl && (
+                      <img
+                        src={String((member as any).avatarUrl)}
+                        alt=""
+                        style={{ width: '22px', height: '22px', borderRadius: '50%' }}
+                      />
+                    )}
+                    <span style={{ fontSize: '12px' }}>
+                      {member.firstName} {member.lastName}
+                    </span>
+                    {team.manager_id === member.id && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          color: '#1d4ed8',
+                          fontWeight: 600,
+                          background: '#dbeafe',
+                          borderRadius: '999px',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        Manager
+                      </span>
+                    )}
+                    {String(team.member_roles?.[String(member.id)] || '').toLowerCase() === 'lead' && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          color: '#6d28d9',
+                          fontWeight: 600,
+                          background: '#ede9fe',
+                          borderRadius: '999px',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        Lead
+                      </span>
+                    )}
+                    {(member.teamIds || []).filter((id) => id !== team.id).length > 0 && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          color: '#50575e',
+                          maxWidth: '170px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        title={(member.teamIds || [])
+                          .filter((id) => id !== team.id)
+                          .map((id) => orgTeamNameById.get(id) || `Team #${id}`)
+                          .join(', ')}
+                      >
+                        Also in {(member.teamIds || []).filter((id) => id !== team.id).length} other team{(member.teamIds || []).filter((id) => id !== team.id).length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+          </div>
+        )}
+        {!isCollapsed && team.children && team.children.length > 0 && (
+          <div style={{ marginTop: '12px', paddingLeft: '14px' }}>
             {team.children.map(child => renderTeamNode(child, depth + 1))}
           </div>
         )}
@@ -1038,8 +1322,29 @@ const Employees = () => {
       </div>
 
       {activeTab === 'org' && (
-        <div className="pet-org">
+        <div className="pet-org" style={{ maxWidth: '1200px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
           <h2>Organization Structure</h2>
+          {!orgLoading && !orgError && orgTeams.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ color: '#50575e', fontSize: '12px' }}>
+                {orgSummary.teamCount} teams · {orgSummary.memberRefs} member references · {orgSummary.teamsWithChildren} parent teams
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" className="button button-small" onClick={expandAllOrgTeamLeadership}>
+                  Expand leaders
+                </button>
+                <button type="button" className="button button-small" onClick={collapseAllOrgTeamLeadership}>
+                  Collapse leaders
+                </button>
+                <button type="button" className="button button-small" onClick={expandAllOrgSections}>
+                  Expand all
+                </button>
+                <button type="button" className="button button-small" onClick={collapseAllOrgSections}>
+                  Collapse all
+                </button>
+              </div>
+            </div>
+          )}
           {orgLoading && <LoadingState label="Loading organization…" />}
           {orgError && !orgLoading && (
             <ErrorState message={orgError} onRetry={fetchOrgTeams} />
@@ -1049,6 +1354,16 @@ const Employees = () => {
           )}
           {!orgLoading && !orgError && orgTeams.length > 0 && (
             <div>
+              {orgValidationIssues.length > 0 && (
+                <div className="notice notice-warning" style={{ marginBottom: '12px' }}>
+                  <p style={{ marginBottom: '6px', fontWeight: 600 }}>Org validation checks found issues:</p>
+                  <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                    {orgValidationIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {orgTeams.map(team => renderTeamNode(team))}
             </div>
           )}

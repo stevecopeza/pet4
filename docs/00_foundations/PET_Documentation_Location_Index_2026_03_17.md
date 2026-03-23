@@ -21,6 +21,8 @@ Scope: Documentation placement and supersession mapping only. No business rules 
   - Active: `docs/25_advisory_layer/PET_Advisory_Layer_Outputs_And_Report_Generation_v1.md`
 - Dashboard composition and manager summary completion spec:
   - Active: `docs/10_dashboards/PET_Dashboard_Composition_And_Manager_Summary_Surfaces_v1.md`
+- Overview redesign implementation spec:
+  - Active: `docs/10_dashboards/PET_Overview_Redesign_Spec.md`
 - Performance benchmark surface spec:
   - Active: `docs/10_dashboards/performance_benchmark_surface.md`
 - People resilience outputs completion spec:

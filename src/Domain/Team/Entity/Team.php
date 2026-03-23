@@ -17,6 +17,7 @@ class Team
     private int $visualVersion;
     private ?\DateTimeImmutable $visualUpdatedAt;
     private array $memberIds;
+    private array $memberRoles;
     private ?\DateTimeImmutable $createdAt;
     private ?\DateTimeImmutable $archivedAt;
 
@@ -33,7 +34,8 @@ class Team
         ?\DateTimeImmutable $visualUpdatedAt = null,
         array $memberIds = [],
         ?\DateTimeImmutable $createdAt = null,
-        ?\DateTimeImmutable $archivedAt = null
+        ?\DateTimeImmutable $archivedAt = null,
+        array $memberRoles = []
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -46,6 +48,7 @@ class Team
         $this->visualVersion = $visualVersion;
         $this->visualUpdatedAt = $visualUpdatedAt;
         $this->memberIds = $memberIds;
+        $this->memberRoles = $memberRoles;
         $this->createdAt = $createdAt ?? new \DateTimeImmutable();
         $this->archivedAt = $archivedAt;
     }
@@ -58,6 +61,11 @@ class Team
     public function memberIds(): array
     {
         return $this->memberIds;
+    }
+
+    public function memberRoles(): array
+    {
+        return $this->memberRoles;
     }
 
     public function name(): string

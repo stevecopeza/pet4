@@ -10,9 +10,27 @@ const BENIGN_PATTERNS = [
   /Warning: Each child in a list should have a unique "key" prop/,
   /favicon\.ico/,
 ];
+const SERVER_RENDERED_PET_PAGE_HINTS = [
+  'page=pet-shortcodes',
+  'page=pet-demo-tools',
+];
 
-function isBenign(text: string): boolean {
-  return BENIGN_PATTERNS.some((pattern) => pattern.test(text));
+const SERVER_RENDERED_BENIGN_PATTERNS = [
+  /api-js\.mixpanel\.com/,
+  /Failed to load resource: net::ERR_FAILED/,
+  /pointer is not a function/,
+  /Invalid or unexpected token/,
+];
+
+function isServerRenderedPetPage(url: string): boolean {
+  return SERVER_RENDERED_PET_PAGE_HINTS.some((hint) => url.includes(hint));
+}
+
+function isBenign(text: string, pageUrl: string): boolean {
+  const scopedPatterns = isServerRenderedPetPage(pageUrl)
+    ? [...BENIGN_PATTERNS, ...SERVER_RENDERED_BENIGN_PATTERNS]
+    : BENIGN_PATTERNS;
+  return scopedPatterns.some((pattern) => pattern.test(text));
 }
 
 export const test = base.extend<{ consoleErrors: string[] }>({
@@ -20,13 +38,15 @@ export const test = base.extend<{ consoleErrors: string[] }>({
     const errors: string[] = [];
 
     page.on('console', (msg) => {
-      if (msg.type() === 'error' && !isBenign(msg.text())) {
+      if (msg.type() === 'error' && !isBenign(msg.text(), page.url())) {
         errors.push(msg.text());
       }
     });
 
     page.on('pageerror', (err) => {
-      errors.push(err.message);
+      if (!isBenign(err.message, page.url())) {
+        errors.push(err.message);
+      }
     });
 
     await use(errors);

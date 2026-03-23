@@ -1,7 +1,7 @@
-# PET Demo Seed Execution Plan v1.1
+# PET Demo Seed Execution Plan v1.2
 
-Version: 1.1\
-Date: 2026-02-14\
+Version: 1.2\
+Date: 2026-03-23\
 Status: Binding (Seed Pipeline + Determinism)
 
 ## Purpose
@@ -45,6 +45,10 @@ behavior.
 18. `seed.billing` --- exports, QB invoices/payments, integration runs
 19. `seed.eventBackbone` --- domain event expectations
 20. `seed.summary` --- return counts + anchors + step results
+21. `seed.opsVerify` --- operational verification signals:
+    - health endpoint exposes `readiness_status` and `readiness_reasons`
+    - diagnostics exposes `registry_summary.active_runs_count`
+    - active run counts align between health and diagnostics
 
 Note: `seed.featureFlags` MUST run before any other step. Feature flags
 gate controller registration (e.g. TicketController requires

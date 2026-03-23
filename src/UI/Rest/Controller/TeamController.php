@@ -205,6 +205,7 @@ class TeamController implements RestController
                 'version' => $team->visualVersion(),
             ],
             'member_ids' => $team->memberIds(),
+            'member_roles' => $team->memberRoles(),
             'created_at' => $team->createdAt()->format('Y-m-d H:i:s'),
         ];
     }

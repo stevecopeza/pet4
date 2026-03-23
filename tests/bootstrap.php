@@ -129,6 +129,9 @@ if (!defined('OBJECT')) {
 if (!defined('OBJECT_K')) {
     define('OBJECT_K', 'OBJECT_K');
 }
+if (!defined('MINUTE_IN_SECONDS')) {
+    define('MINUTE_IN_SECONDS', 60);
+}
 
 // ── WordPress function stubs used by domain/application code ──
 if (!function_exists('get_current_user_id')) {
@@ -158,5 +161,37 @@ if (!function_exists('wp_generate_uuid4')) {
             mt_rand(0, 0x3fff) | 0x8000,
             mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
         );
+    }
+}
+
+if (!isset($GLOBALS['pet_test_transient_store']) || !is_array($GLOBALS['pet_test_transient_store'])) {
+    $GLOBALS['pet_test_transient_store'] = [];
+}
+
+if (!function_exists('get_transient')) {
+    function get_transient(string $transient)
+    {
+        return array_key_exists($transient, $GLOBALS['pet_test_transient_store'])
+            ? $GLOBALS['pet_test_transient_store'][$transient]
+            : false;
+    }
+}
+
+if (!function_exists('set_transient')) {
+    function set_transient(string $transient, $value, int $expiration = 0): bool
+    {
+        $GLOBALS['pet_test_transient_store'][$transient] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('delete_transient')) {
+    function delete_transient(string $transient): bool
+    {
+        if (!array_key_exists($transient, $GLOBALS['pet_test_transient_store'])) {
+            return false;
+        }
+        unset($GLOBALS['pet_test_transient_store'][$transient]);
+        return true;
     }
 }

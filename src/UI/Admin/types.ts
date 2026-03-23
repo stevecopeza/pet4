@@ -15,6 +15,36 @@ export interface WorkItem {
   signals: WorkItemSignal[];
 }
 
+export interface DemoEnvironmentHealth {
+  readiness_status: 'GREEN' | 'AMBER' | 'RED';
+  seed: {
+    active_seed_run_id: string | null;
+    active_seed_run_created_at: string | null;
+    active_seed_run_last_seen_at: string | null;
+    active_seed_run_registry_rows: number;
+    tracked_runs_count: number;
+    active_runs_count: number;
+    last_clean_baseline_run: string | null;
+    seed_error_in_last_run: boolean;
+  };
+  integrity: {
+    duplicate_employee_emails: number;
+    duplicate_skill_pairs: number;
+    duplicate_certification_pairs: number;
+  };
+  environment: {
+    has_untracked_rows: boolean;
+    untracked_rows_by_table: Record<string, number>;
+    notes: string[];
+  };
+  flags: {
+    no_active_seed_run: boolean;
+    has_duplicate_staff_metadata_pairs: boolean;
+    has_integrity_violation: boolean;
+    has_contamination_risk: boolean;
+  };
+}
+
 export interface WorkItemSignal {
   type: string;
   severity: string;
@@ -380,6 +410,7 @@ export interface Team {
   status: string;
   visual?: TeamVisual;
   member_ids?: number[];
+  member_roles?: Record<string, string>;
   created_at: string;
   children?: Team[];
 }

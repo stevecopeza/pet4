@@ -112,6 +112,19 @@ PET includes a **Demo Pre-Flight Check** system to validate environment health b
 *   **Event Registry:** Confirms all critical events are wired.
 *   **Quote Validation:** Enforces schema invariants (SKU, Role IDs).
 
+### Demo Operations Endpoints
+
+* `POST /wp-json/pet/v1/system/demo/clean-baseline` (alias: `/wp-json/pet/v1/system/clean-demo-baseline`)
+  * Requires `confirm=CLEAN_DEMO_BASELINE`
+  * Returns `contract.violations` (must be empty on PASS)
+* `GET /wp-json/pet/v1/system/demo/health`
+  * Returns `readiness_status` + machine-readable `readiness_reasons`
+  * Returns integrity counters including `duplicate_employee_emails`, `duplicate_skill_pairs`, `duplicate_certification_pairs`
+* `GET /wp-json/pet/v1/system/demo/diagnostics`
+  * Returns run summaries, integrity issues, and `registry_summary.active_runs_count`
+
+Operational invariant: health `seed.active_runs_count` and diagnostics `registry_summary.active_runs_count` should stay aligned.
+
 ## 🧪 Testing
 
 ### Unit & Integration (PHPUnit)
@@ -123,6 +136,19 @@ PET includes a **Demo Pre-Flight Check** system to validate environment health b
 ```bash
 npx playwright test
 ```
+
+### Quality Gate (Local + CI Baseline)
+Run the enforced baseline in deterministic order:
+1. PHPUnit
+2. Vitest frontend unit tests
+3. Playwright admin smoke subset (`tests/e2e/admin/smoke.spec.ts`, chromium)
+
+```bash
+npm run quality:gate
+```
+
+CI executes the same command via `.github/workflows/quality-gate.yml` on `push` and `pull_request`.
+Playwright asset prerequisites are enforced by test setup (builds or fails fast when frontend artifacts are missing).
 
 ## 📚 Documentation
 

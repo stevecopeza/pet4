@@ -1,7 +1,7 @@
-# PET Demo Seed Readiness Gates v1.1
+# PET Demo Seed Readiness Gates v1.2
 
-Version: 1.1\
-Date: 2026-02-14\
+Version: 1.2\
+Date: 2026-03-23\
 Status: Binding (Domain Preconditions for Demo Transitions)
 
 ## Purpose
@@ -117,3 +117,43 @@ it
 
 Advisory outputs must be derived from events; no readiness gates
 beyond: - required projections exist - events exist for anchor artifacts
+
+------------------------------------------------------------------------
+
+## Demo Operations (Operational)
+
+### Gate: Clean Demo Baseline Contract Pass
+
+**Transition:** `POST /pet/v1/system/demo/clean-baseline` (or alias)
+
+**Required:**  
+- `confirm=CLEAN_DEMO_BASELINE` provided  
+- Purge phase succeeds (`all_purges_succeeded=true`)  
+- Baseline post-contract invariants pass (`contract.violations=[]`)
+
+**Validate via:**  
+- Response status `201`  
+- `overall=PASS`  
+- `registry.active_seed_runs=1`  
+- `contract.violations=[]`
+
+**Autofill allowed:** No
+
+### Gate: Health/Diagnostics Semantic Alignment
+
+**Transition:** `GET /pet/v1/system/demo/health` + `GET /pet/v1/system/demo/diagnostics`
+
+**Required:**  
+- Active run counts are semantically aligned:  
+  - health `seed.active_runs_count`  
+  - diagnostics `registry_summary.active_runs_count`  
+- Shared duplicate integrity classes are coherent across surfaces:
+  - duplicate employee emails
+  - duplicate skill pairs
+  - duplicate certification pairs
+
+**Validate via:**  
+- Compare both endpoint responses in same operator cycle  
+- Confirm no contradictory state between readiness reasons and diagnostics issues
+
+**Autofill allowed:** No

@@ -6,9 +6,15 @@ import CustomerForm from './CustomerForm';
 import Sites from './Sites';
 import Contacts from './Contacts';
 import ConfirmationDialog from './foundation/ConfirmationDialog';
+import PageShell from './foundation/PageShell';
+import Panel from './foundation/Panel';
 import useToast from './foundation/useToast';
 
 type CustomerSetupStatus = 'incomplete' | 'partial' | 'ready';
+
+const setupStatusBadgeClass = (status: CustomerSetupStatus): string => (
+  `pet-status-badge status-${status === 'ready' ? 'active' : status === 'partial' ? 'inactive' : 'churned'}`
+);
 
 const Customers = () => {
   const toast = useToast();
@@ -94,6 +100,7 @@ const Customers = () => {
         const contactsPayload = await contactsRes.json();
         setContacts(Array.isArray(contactsPayload) ? contactsPayload : []);
       }
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
@@ -107,16 +114,16 @@ const Customers = () => {
   }, []);
 
   const selectedCustomer = useMemo(
-    () => customers.find(customer => customer.id === selectedCustomerId) || null,
+    () => customers.find((customer) => customer.id === selectedCustomerId) || null,
     [customers, selectedCustomerId]
   );
 
   const customerSetupById = useMemo(() => {
     const byCustomerId = new Map<number, { branchCount: number; contactCount: number; status: CustomerSetupStatus }>();
-    customers.forEach(customer => {
-      const branchCount = sites.filter(site => site.customerId === customer.id).length;
-      const contactCount = contacts.filter(contact =>
-        (contact.affiliations || []).some(aff => aff.customerId === customer.id)
+    customers.forEach((customer) => {
+      const branchCount = sites.filter((site) => site.customerId === customer.id).length;
+      const contactCount = contacts.filter((contact) =>
+        (contact.affiliations || []).some((aff) => aff.customerId === customer.id)
         || (contact as any).customerId === customer.id
       ).length;
       const status: CustomerSetupStatus = branchCount === 0 ? 'incomplete' : (contactCount === 0 ? 'partial' : 'ready');
@@ -127,13 +134,13 @@ const Customers = () => {
 
   const selectedCustomerBranchCount = useMemo(() => {
     if (!selectedCustomerId) return 0;
-    return sites.filter(site => site.customerId === selectedCustomerId).length;
+    return sites.filter((site) => site.customerId === selectedCustomerId).length;
   }, [selectedCustomerId, sites]);
 
   const selectedCustomerContactCount = useMemo(() => {
     if (!selectedCustomerId) return 0;
-    return contacts.filter(contact =>
-      (contact.affiliations || []).some(aff => aff.customerId === selectedCustomerId)
+    return contacts.filter((contact) =>
+      (contact.affiliations || []).some((aff) => aff.customerId === selectedCustomerId)
       || (contact as any).customerId === selectedCustomerId
     ).length;
   }, [contacts, selectedCustomerId]);
@@ -202,7 +209,7 @@ const Customers = () => {
       if (selectedCustomerId === id) {
         setSelectedCustomerId(null);
       }
-      setSelectedIds(prev => prev.filter(sid => sid !== id));
+      setSelectedIds((prev) => prev.filter((sid) => sid !== id));
       toast.success('Customer archived');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to archive');
@@ -221,7 +228,7 @@ const Customers = () => {
     const nonce = window.petSettings?.nonce;
 
     try {
-      const results = await Promise.allSettled(selectedIds.map(id =>
+      const results = await Promise.allSettled(selectedIds.map((id) =>
         fetch(`${apiUrl}/customers/${id}`, {
           method: 'DELETE',
           headers: { 'X-WP-Nonce': nonce },
@@ -263,17 +270,8 @@ const Customers = () => {
       render: (val: any, item: Customer) => (
         <button
           type="button"
+          className="button-link pet-customers-name-link"
           onClick={() => openCustomerJourney(item)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#2271b1',
-            cursor: 'pointer',
-            padding: 0,
-            textAlign: 'left',
-            fontWeight: 'bold',
-            fontSize: 'inherit'
-          }}
         >
           {String(val)}
         </button>
@@ -288,11 +286,11 @@ const Customers = () => {
         const setup = customerSetupById.get(item.id) || { branchCount: 0, contactCount: 0, status: 'incomplete' as const };
         const statusText = setup.status === 'ready' ? 'Ready' : setup.status === 'partial' ? 'Partially configured' : 'Incomplete';
         return (
-          <div>
-            <span className={`pet-status-badge status-${setup.status === 'ready' ? 'active' : setup.status === 'partial' ? 'inactive' : 'churned'}`}>
+          <div className="pet-customers-setup-cell">
+            <span className={setupStatusBadgeClass(setup.status)}>
               {statusText}
             </span>
-            <div style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
+            <div className="pet-customers-setup-meta">
               {setup.branchCount} {setup.branchCount === 1 ? 'branch' : 'branches'} · {setup.contactCount} {setup.contactCount === 1 ? 'contact' : 'contacts'}
             </div>
           </div>
@@ -324,7 +322,7 @@ const Customers = () => {
     {
       key: 'archivedAt',
       header: 'Archived',
-      render: (val: any) => val ? <span style={{ color: '#999' }}>Yes</span> : '-'
+      render: (val: any) => val ? <span className="pet-customers-archived-flag">Yes</span> : '-'
     },
   ];
 
@@ -337,91 +335,94 @@ const Customers = () => {
   };
 
   const inCustomerContext = selectedCustomer !== null;
+  const setupCalloutTitle = setupStatus === 'ready'
+    ? 'Customer setup complete'
+    : setupStatus === 'partial'
+    ? 'Setup in progress'
+    : 'Setup not started';
+  const setupCalloutBody = setupStatus === 'ready'
+    ? 'Ready for operations.'
+    : setupStatus === 'partial'
+    ? 'Branches are configured. Add contacts to complete setup.'
+    : 'Start by adding the first branch.';
 
   return (
-    <div className="pet-crm-container">
-      <div className="pet-customers">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2>{inCustomerContext ? 'Customer Setup' : 'Customers'}</h2>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {inCustomerContext && (
-              <button className="button" type="button" onClick={() => setSelectedCustomerId(null)}>
-                Back to Customer List
-              </button>
-            )}
-            {!showAddForm && !inCustomerContext && (
-              <button className="button button-primary" onClick={() => setShowAddForm(true)}>
-                Add New Customer
-              </button>
-            )}
-          </div>
+    <PageShell
+      className="pet-customers-page"
+      title={inCustomerContext ? 'Customer Setup' : 'Customers'}
+      subtitle={inCustomerContext && selectedCustomer
+        ? `Guided onboarding for ${selectedCustomer.name}.`
+        : 'Manage customers and complete operational readiness setup.'}
+      actions={(
+        <div className="pet-customers-shell-actions">
+          {inCustomerContext && (
+            <button className="button" type="button" onClick={() => setSelectedCustomerId(null)}>
+              Back to Customer List
+            </button>
+          )}
+          {!showAddForm && !inCustomerContext && (
+            <button className="button button-primary" onClick={() => setShowAddForm(true)}>
+              Add New Customer
+            </button>
+          )}
         </div>
-
-        {showAddForm && !inCustomerContext && (
+      )}
+    >
+      {showAddForm && !inCustomerContext && (
+        <Panel className="pet-customers-form-panel">
           <CustomerForm
             onSuccess={handleFormSuccess}
             onCancel={() => { setShowAddForm(false); setEditingCustomer(null); }}
             initialData={editingCustomer || undefined}
           />
-        )}
+        </Panel>
+      )}
 
-        {inCustomerContext && selectedCustomer && (
-          <>
-            <div style={{ marginBottom: '22px', background: '#fff', border: '1px solid #dcdcde', borderRadius: '8px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+      {inCustomerContext && selectedCustomer && (
+        <>
+          <Panel className="pet-customers-hero-panel">
+            <div className="pet-customers-hero-header">
+              <div>
+                <h3>{selectedCustomer.name}</h3>
+                <p>CUSTOMER SETUP</p>
+              </div>
+              <span className={setupStatusBadgeClass(setupStatus)}>{setupStatusLabel}</span>
+            </div>
+
+            <div className="pet-customers-summary-grid">
+              <div className="pet-customers-summary-item">
+                <span className="pet-customers-summary-label">Branches</span>
+                <strong className="pet-customers-summary-value">{selectedCustomerBranchCount}</strong>
+              </div>
+              <div className="pet-customers-summary-item">
+                <span className="pet-customers-summary-label">Contacts</span>
+                <strong className="pet-customers-summary-value">{selectedCustomerContactCount}</strong>
+              </div>
+              <div className="pet-customers-summary-item">
+                <span className="pet-customers-summary-label">Setup state</span>
+                <strong className="pet-customers-summary-value">{setupStatusLabel}</strong>
+              </div>
+            </div>
+
+            <div className={`pet-customers-setup-callout pet-customers-setup-callout--${setupStatus}`}>
+              <strong>{setupCalloutTitle}</strong>
+              <span>{setupCalloutBody}</span>
+            </div>
+          </Panel>
+
+          <Panel className="pet-customers-jump-panel">
+            <button className="button" type="button" onClick={scrollToBranches}>Go to Step 1 — Branches</button>
+            <button className="button" type="button" onClick={scrollToContacts}>Go to Step 2 — Contacts</button>
+          </Panel>
+
+          <section ref={branchSectionRef}>
+            <Panel className="pet-customers-step-panel pet-customers-step-panel--branches">
+              <div className="pet-customers-step-header">
+                <div className="pet-customers-step-index">1</div>
                 <div>
-                  <h1 style={{ margin: 0, fontSize: '30px', lineHeight: 1.2 }}>{selectedCustomer.name}</h1>
-                  <p style={{ margin: '6px 0 0', color: '#666', fontSize: '13px', fontWeight: 700, letterSpacing: '0.03em' }}>CUSTOMER SETUP</p>
+                  <h3>Step 1 — Branches</h3>
+                  <p>Branches are required before contact assignment.</p>
                 </div>
-                <span className={`pet-status-badge status-${setupStatus === 'ready' ? 'active' : setupStatus === 'partial' ? 'inactive' : 'churned'}`}>
-                  {setupStatusLabel}
-                </span>
-              </div>
-
-              <div style={{ borderTop: '1px solid #f0f0f1', paddingTop: '14px' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '10px', fontSize: '18px' }}>Setup Summary</h3>
-                <p style={{ margin: 0, fontSize: '15px' }}>
-                  <strong>{selectedCustomerBranchCount}</strong> {selectedCustomerBranchCount === 1 ? 'branch' : 'branches'} · <strong>{selectedCustomerContactCount}</strong> {selectedCustomerContactCount === 1 ? 'contact' : 'contacts'}
-                </p>
-                <p style={{ margin: '8px 0 0', color: '#555', fontSize: '14px' }}>
-                  {setupStatus === 'ready' && 'Customer ready for operations.'}
-                  {setupStatus === 'incomplete' && 'Add at least one branch to continue setup.'}
-                  {setupStatus === 'partial' && 'Add at least one contact to complete setup.'}
-                </p>
-              </div>
-              <div
-                style={{
-                  marginTop: '14px',
-                  background: setupStatus === 'ready' ? '#ecf8ef' : setupStatus === 'partial' ? '#fff8e8' : '#f6f7f7',
-                  border: `1px solid ${setupStatus === 'ready' ? '#b7e4c1' : setupStatus === 'partial' ? '#f0d29f' : '#dcdcde'}`,
-                  borderRadius: '6px',
-                  padding: '12px',
-                }}
-              >
-                <strong style={{ display: 'block', marginBottom: '4px' }}>
-                  {setupStatus === 'ready' ? '✅ Customer setup complete' : setupStatus === 'partial' ? '🟠 Setup in progress' : '⚪ Setup not started'}
-                </strong>
-                <span style={{ fontSize: '13px', color: '#444' }}>
-                  {setupStatus === 'ready' && 'Ready for operations.'}
-                  {setupStatus === 'partial' && 'Branches are configured. Add contacts to complete setup.'}
-                  {setupStatus === 'incomplete' && 'Start by adding the first branch.'}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
-              <button className="button" type="button" onClick={scrollToBranches}>Go to Step 1 — Branches</button>
-              <button className="button" type="button" onClick={scrollToContacts}>Go to Step 2 — Contacts</button>
-            </div>
-
-            <section
-              ref={branchSectionRef}
-              style={{ marginBottom: '26px', background: '#fff', border: '1px solid #dcdcde', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderLeft: '5px solid #2271b1' }}
-            >
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '28px', height: '28px', borderRadius: '14px', background: '#e8f3ff', color: '#135e96', fontWeight: 700, marginBottom: '8px' }}>1</div>
-                <h2 style={{ margin: 0, fontSize: '24px' }}>Step 1 — Branches</h2>
-                <p style={{ margin: '6px 0 0', color: '#555', fontSize: '14px' }}>Branches are required before contact assignment.</p>
               </div>
               <Sites
                 contextCustomerId={selectedCustomerId}
@@ -434,16 +435,17 @@ const Customers = () => {
                 onReturnToCustomer={scrollToBranches}
                 onDataUpdated={fetchData}
               />
-            </section>
+            </Panel>
+          </section>
 
-            <section
-              ref={contactSectionRef}
-              style={{ marginBottom: '26px', background: '#fff', border: '1px solid #dcdcde', borderRadius: '8px', padding: '18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', borderLeft: '5px solid #4f94d4' }}
-            >
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '28px', height: '28px', borderRadius: '14px', background: '#edf6ff', color: '#135e96', fontWeight: 700, marginBottom: '8px' }}>2</div>
-                <h2 style={{ margin: 0, fontSize: '24px' }}>Step 2 — Contacts</h2>
-                <p style={{ margin: '6px 0 0', color: '#555', fontSize: '14px' }}>Assign contacts to customer branches for operational readiness.</p>
+          <section ref={contactSectionRef}>
+            <Panel className="pet-customers-step-panel pet-customers-step-panel--contacts">
+              <div className="pet-customers-step-header">
+                <div className="pet-customers-step-index">2</div>
+                <div>
+                  <h3>Step 2 — Contacts</h3>
+                  <p>Assign contacts to customer branches for operational readiness.</p>
+                </div>
               </div>
               <Contacts
                 contextCustomerId={selectedCustomerId}
@@ -452,72 +454,69 @@ const Customers = () => {
                 onReturnToCustomer={scrollToContacts}
                 onDataUpdated={fetchData}
               />
-            </section>
-          </>
-        )}
+            </Panel>
+          </section>
+        </>
+      )}
 
-        {!inCustomerContext && (
-          <>
-            <div className="pet-actions-bar" style={{ marginBottom: '15px' }}>
-              {selectedIds.length > 0 && (
-                <button
-                  className="button"
-                  onClick={() => setConfirmBulkArchive(true)}
-                  style={{ color: '#b32d2e', borderColor: '#b32d2e' }}
-                >
-                  Archive Selected ({selectedIds.length})
-                </button>
-              )}
-            </div>
+      {!inCustomerContext && !showAddForm && (
+        <Panel className="pet-customers-table-panel">
+          <div className="pet-customers-table-toolbar">
+            {selectedIds.length > 0 && (
+              <button className="button pet-customers-archive-selected-btn" onClick={() => setConfirmBulkArchive(true)}>
+                Archive Selected ({selectedIds.length})
+              </button>
+            )}
+          </div>
 
-            <DataTable
-              columns={columns}
-              data={orderedCustomers}
-              loading={loading}
-              error={error}
-              onRetry={fetchData}
-              emptyMessage="No customers found."
-              compatibilityMode="wp"
-              selection={{
-                selectedIds,
-                onSelectionChange: setSelectedIds
-              }}
-              actions={(item) => (
-                <KebabMenu items={[
-                  { type: 'action', label: 'Open Setup', onClick: () => openCustomerJourney(item) },
-                  { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
-                  { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
-                ]} />
-              )}
-            />
-          </>
-        )}
+          <DataTable
+            columns={columns}
+            data={orderedCustomers}
+            loading={loading}
+            error={error}
+            onRetry={fetchData}
+            emptyMessage="No customers found."
+            compatibilityMode="wp"
+            selection={{
+              selectedIds,
+              onSelectionChange: setSelectedIds
+            }}
+            rowClassName={(item) => `pet-customers-row pet-customers-row--${customerSetupById.get(item.id)?.status || 'incomplete'}`}
+            actions={(item) => (
+              <KebabMenu items={[
+                { type: 'action', label: 'Open Setup', onClick: () => openCustomerJourney(item) },
+                { type: 'action', label: 'Edit', onClick: () => handleEdit(item) },
+                { type: 'action', label: 'Archive', onClick: () => setPendingArchiveId(item.id), danger: true },
+              ]} />
+            )}
+          />
+        </Panel>
+      )}
 
-        <ConfirmationDialog
-          open={pendingArchiveId !== null}
-          title="Archive customer?"
-          description="This action will archive the selected customer."
-          confirmLabel="Archive"
-          busy={archiveBusy}
-          onCancel={() => setPendingArchiveId(null)}
-          onConfirm={() => {
-            if (pendingArchiveId !== null) {
-              handleArchive(pendingArchiveId);
-            }
-          }}
-        />
+      <ConfirmationDialog
+        open={pendingArchiveId !== null}
+        title="Archive customer?"
+        description="This action will archive the selected customer."
+        confirmLabel="Archive"
+        busy={archiveBusy}
+        onCancel={() => setPendingArchiveId(null)}
+        onConfirm={() => {
+          if (pendingArchiveId !== null) {
+            handleArchive(pendingArchiveId);
+          }
+        }}
+      />
 
-        <ConfirmationDialog
-          open={confirmBulkArchive}
-          title="Archive selected customers?"
-          description={`This action will archive ${selectedIds.length} selected customers.`}
-          confirmLabel="Archive selected"
-          busy={archiveBusy}
-          onCancel={() => setConfirmBulkArchive(false)}
-          onConfirm={handleBulkArchive}
-        />
-      </div>
-    </div>
+      <ConfirmationDialog
+        open={confirmBulkArchive}
+        title="Archive selected customers?"
+        description={`This action will archive ${selectedIds.length} selected customers.`}
+        confirmLabel="Archive selected"
+        busy={archiveBusy}
+        onCancel={() => setConfirmBulkArchive(false)}
+        onConfirm={handleBulkArchive}
+      />
+    </PageShell>
   );
 };
 

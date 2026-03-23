@@ -1,10 +1,30 @@
 import { chromium, FullConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 const authFile = path.resolve('.auth/admin.json');
+const manifestFile = path.resolve('dist/.vite/manifest.json');
+
+function ensureFrontendBuildArtifacts(): void {
+  const hasManifest = fs.existsSync(manifestFile);
+  if (hasManifest) {
+    return;
+  }
+
+  console.log('[playwright:global-setup] Frontend build artifacts missing. Running npm run build...');
+  execSync('npm run build', { stdio: 'inherit' });
+
+  if (!fs.existsSync(manifestFile)) {
+    throw new Error(
+      'Missing frontend build artifact: dist/.vite/manifest.json. ' +
+      'Playwright requires built PET admin assets. Build failed or produced no manifest.'
+    );
+  }
+}
 
 async function globalSetup(config: FullConfig) {
+  ensureFrontendBuildArtifacts();
   const baseURL = config.projects[0].use.baseURL!;
   const username = process.env.E2E_WP_USERNAME;
   const password = process.env.E2E_WP_PASSWORD;

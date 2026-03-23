@@ -1,7 +1,7 @@
-# PET Demo Success Criteria v1.1
+# PET Demo Success Criteria v1.2
 
-Version: 1.1\
-Date: 2026-02-14\
+Version: 1.2\
+Date: 2026-03-23\
 Status: Binding (Demo System)
 
 ## Purpose
@@ -27,15 +27,21 @@ achievable in the current environment
 All conditions must be true: 1. **Seed**: `POST /system/seed_full`
 returns **201** with a valid `seed_run_id`. 2. **Purge**:
 `POST /system/purge` returns **200** and removes all purgeable
-demo-owned entities without touching user-owned data. 3. **Readiness**:
+demo-owned entities without touching user-owned data. 3. **Clean Baseline Contract**:
+`POST /system/demo/clean-baseline` (or alias) returns **201** with
+`contract.violations=[]` and `registry.active_seed_runs=1`. 4. **Readiness**:
 Preflight `GET /system/pre-demo-check` returns `overall=PASS` and all
-required checks are PASS. 4. **Breadth**: Every "Must Show" capability
+required checks are PASS. 5. **Breadth**: Every "Must Show" capability
 listed in `PET_Demo_Capability_Matrix_v1_1.md` has at least one coherent
-instance seeded and visible via API/UI. 5. **Depth**: Every "Must
+instance seeded and visible via API/UI. 6. **Depth**: Every "Must
 Transition" workflow listed in the Capability Matrix completes
-successfully **without domain exceptions**. 6. **Determinism**: Two
+successfully **without domain exceptions**. 7. **Determinism**: Two
 consecutive seed runs (seed→purge→seed) produce the same capability
-counts and the same named "anchor artifacts" (see Anchor Artifacts). 7.
+counts and the same named "anchor artifacts" (see Anchor Artifacts). 8.
+**Operational Consistency**: health and diagnostics remain semantically
+aligned for active run count
+(`health.seed.active_runs_count == diagnostics.registry_summary.active_runs_count`),
+and health exposes machine-readable `readiness_reasons`. 9.
 **Safety**: No step uses domain exceptions as control flow; all
 transitions are preceded by readiness validation.
 

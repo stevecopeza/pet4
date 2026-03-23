@@ -1,7 +1,7 @@
-# PET Demo Seed Ledger and Purge Policy v1.1
+# PET Demo Seed Ledger and Purge Policy v1.2
 
-Version: 1.1\
-Date: 2026-02-14\
+Version: 1.2\
+Date: 2026-03-23\
 Status: Binding (Safety + Governance)
 
 ## Purpose
@@ -12,6 +12,10 @@ Ensure purge is surgical, safe, and never affects non-demo data.
 
 **Name:** `wp_pet_demo_seed_ledger` (prefix applies)\
 **Ownership:** Infrastructure (custom table)
+
+Implementation note (v1.2): current runtime seed tracking is persisted in
+`{prefix}pet_demo_seed_registry`. Contract semantics remain the same
+(tracked rows keyed by `seed_run_id`, purge status lifecycle, and auditable purge outcomes).
 
 ### Columns
 

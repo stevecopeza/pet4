@@ -109,6 +109,7 @@ class SqlTeamRepository implements TeamRepository
     private function hydrate(object $row): Team
     {
         $memberIds = $this->getMemberIds((int) $row->id);
+        $memberRoles = $this->getMemberRoles((int) $row->id);
 
         return new Team(
             $row->name,
@@ -123,7 +124,8 @@ class SqlTeamRepository implements TeamRepository
             !empty($row->visual_updated_at) ? new \DateTimeImmutable($row->visual_updated_at) : null,
             $memberIds,
             !empty($row->created_at) ? new \DateTimeImmutable($row->created_at) : null,
-            !empty($row->archived_at) ? new \DateTimeImmutable($row->archived_at) : null
+            !empty($row->archived_at) ? new \DateTimeImmutable($row->archived_at) : null,
+            $memberRoles
         );
     }
 
@@ -133,6 +135,23 @@ class SqlTeamRepository implements TeamRepository
             "SELECT employee_id FROM {$this->membersTable} WHERE team_id = %d AND removed_at IS NULL",
             $teamId
         )));
+    }
+
+    private function getMemberRoles(int $teamId): array
+    {
+        $rows = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT employee_id, role FROM {$this->membersTable} WHERE team_id = %d AND removed_at IS NULL",
+            $teamId
+        ), ARRAY_A);
+        $roles = [];
+        foreach ($rows as $row) {
+            $employeeId = (int)($row['employee_id'] ?? 0);
+            if ($employeeId <= 0) {
+                continue;
+            }
+            $roles[(string)$employeeId] = (string)($row['role'] ?? '');
+        }
+        return $roles;
     }
 
     private function updateMembers(int $teamId, array $memberIds): void

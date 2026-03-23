@@ -8,7 +8,12 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pretest:e2e": "npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/e2e/admin/smoke.spec.ts --project=chromium",
+    "quality:gate": "./vendor/bin/phpunit && npm test && npm run test:e2e:smoke",
+    "test:ci": "npm run quality:gate"
   },
   "dependencies": {
     "react": "^18.2.0",

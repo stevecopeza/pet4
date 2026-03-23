@@ -88,6 +88,13 @@ Teams:
 1. Executive (Steve)
 2. Delivery (Mia)
 3. Support (Noah)
+4. Delivery Engineering (Liam, child of Delivery)
+
+Hierarchy:
+- Executive (root)
+- Delivery (child of Executive)
+- Support (child of Executive)
+- Delivery Engineering (child of Delivery)
 
 Team memberships assigned realistically.
 
@@ -454,6 +461,16 @@ Customer Setup Stage Coverage (NEW):
 - Partially configured: Bluewave Logistics (1 branch, 0 contacts)
 - Ready: RPM, Acme, Nexus, Government Digital Services (≥1 branch and ≥1 contact)
 
+SECTION 3 — TEAMS (Expanded)
+
+Teams (4, was 3):
+- Executive (manager: Steve)
+- Delivery (manager: Mia, parent: Executive)
+- Support (manager: Noah, parent: Executive)
+- Delivery Engineering (NEW; manager: Liam, parent: Delivery)
+
+Membership coverage includes a manager and at least one member in Delivery Engineering for hierarchy/cascading demos.
+
 SECTION 7 — CATALOG (Expanded)
 
 14 catalog items (was 6). Original 6 retained, plus:
@@ -517,6 +534,119 @@ AMENDMENT v2.2 — Seed/Purge Hardening and Deterministic Rerun Validation (2026
 Status: ADDITIVE AMENDMENT (no breaking changes to v2 or v2.1 contracts)
 
 This amendment records operational hardening applied to demo seed/purge mechanics and the validated outcomes from repeated seed runs on 2026-03-23.
+TEAM TOPOLOGY HARDENING (IMPLEMENTED 2026-03-23)
+
+1) Deterministic team structure reconciliation
+- Team seeding now reconciles a managed topology on every run:
+  - Executive (root)
+  - Delivery (parent: Executive)
+  - Support (parent: Executive)
+  - Delivery Engineering (parent: Delivery)
+- Existing rows are reused when present; missing managed teams are created.
+
+2) Manager and escalation chain reconciliation
+- Managed teams are now deterministically updated with:
+  - `manager_id`
+  - `escalation_manager_id`
+  - `parent_team_id`
+  - `archived_at = null`
+- Escalation chain coverage now includes:
+  - Delivery → escalation manager Steve
+  - Support → escalation manager Mia
+  - Delivery Engineering → escalation manager Mia
+
+3) Membership coverage for hierarchy demos
+- Team membership seeding now explicitly includes Delivery Engineering membership:
+  - Liam = lead
+  - Ethan = member
+- This guarantees parent-child hierarchy and cascade behavior can be demonstrated consistently after repeated reseeds.
+
+ORG UX AND VALIDATION CHECKLIST (IMPLEMENTATION CONTRACT)
+
+The Org surface and seed validation are expected to enforce the following:
+
+1) Canonical demo topology
+- Executive (root)
+- Delivery (child of Executive)
+- Support (child of Executive)
+- Delivery Engineering (child of Delivery)
+
+2) Escalation visibility
+- Org cards show both `Manager` and `Escalation Manager` when available.
+
+3) Manager/member clarity
+- Team member chips for the current team visually tag the manager, so manager presence in the member list is explicit instead of appearing as duplicate data.
+
+4) Multi-team membership clarity
+- Org member chips indicate additional team memberships (excluding the current team) to make matrix staffing explicit in demos.
+
+5) Hierarchy readability affordances
+- Team nodes provide collapse/expand behavior for child teams to keep deep hierarchies readable.
+
+6) Deterministic reseed expectations
+- Managed teams are reconciled on each seed run.
+- Parent/manager/escalation links are rewritten deterministically for managed teams.
+
+7) Post-seed org invariants
+- Validation checks must evaluate at least:
+  - exactly one root among managed teams (`Executive`)
+  - managed teams not orphaned
+  - no cycles in managed parent hierarchy
+  - each managed team has a manager
+  - `Delivery Engineering` parent resolves to `Delivery`
+
+ORG VISUAL CLARITY PASS (IMPLEMENTED 2026-03-23)
+
+The Staff → Org tab now implements a visual clarity pass for hierarchy legibility and role scanning.
+
+1) Team header scan metadata
+- Team cards show compact summary metadata (member count, child team count) in the header.
+
+2) Stronger hierarchy cues
+- Child trees render with a persistent left rail and depth spacing for clearer parent/child recognition.
+
+3) Expand/collapse navigation controls
+- Team-level expand/collapse controls remain available on nodes with children.
+- Org-level quick actions are provided for expand-all / collapse-all workflows.
+
+4) Role chip clarity in member list
+- Member chips show explicit role badges where available:
+  - `Manager` (if member is the team manager)
+  - `Lead` (if member role resolves to `lead` from team membership data)
+
+5) Multi-team membership hinting
+- Member chips show additional-team context (`Also in: ...`) when a person is in multiple teams, to make matrix staffing obvious.
+
+Acceptance expectation:
+- A manager scanning the Org tab should identify hierarchy depth, accountable roles, and cross-team staffing without opening team edit screens.
+
+ORG INTERACTION MODEL UPDATE (IMPLEMENTED 2026-03-23)
+
+To support single-page business scanning, team cards follow a layered reveal model:
+
+1) Default compact layer (always visible)
+- Team name
+- Member count
+- Subteam count
+- Team status
+
+2) Leadership layer (collapsed by default)
+- Manager
+- Escalation Manager
+- Explicit leadership visibility toggle per team
+
+3) Team members layer (collapsed by default)
+- Team member list with role badges (`Manager`, `Lead`)
+- Additional-team context where relevant
+- Explicit member visibility toggle per team
+
+Global controls are expected to support quick reveal/collapse for:
+- hierarchy expansion
+- leadership layer
+- member layer
+
+Business overview objective:
+- A user should be able to understand organizational shape, accountability, and immediate gaps from one screen before drilling into individual teams.
 
 SEED/REGISTRY HARDENING
 

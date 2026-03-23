@@ -10,6 +10,9 @@ use Pet\Application\System\Service\DemoPreFlightCheck;
 use Pet\Application\System\Service\DemoInstaller;
 use Pet\Application\System\Service\DemoSeedService;
 use Pet\Application\System\Service\DemoPurgeService;
+use Pet\Application\System\Service\CleanDemoBaselineService;
+use Pet\Application\System\Service\DemoEnvironmentHealthService;
+use Pet\Application\System\Service\SeedRegistryDiagnosticsService;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -35,6 +38,20 @@ class SystemController implements RestController
         register_rest_route('pet/v1', '/system/pre-demo-check', [
             'methods' => 'GET',
             'callback' => [$this, 'runPreFlightCheck'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
+        ]);
+        register_rest_route('pet/v1', '/system/demo/health', [
+            'methods' => 'GET',
+            'callback' => [$this, 'demoEnvironmentHealth'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
+        ]);
+        register_rest_route('pet/v1', '/system/demo/diagnostics', [
+            'methods' => 'GET',
+            'callback' => [$this, 'demoDiagnostics'],
             'permission_callback' => function () {
                 return current_user_can('manage_options');
             },
@@ -101,6 +118,32 @@ class SystemController implements RestController
             },
             'args' => [
                 'seed_run_id' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+            ],
+        ]);
+        register_rest_route('pet/v1', '/system/demo/clean-baseline', [
+            'methods' => 'POST',
+            'callback' => [$this, 'cleanDemoBaseline'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
+            'args' => [
+                'confirm' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+            ],
+        ]);
+        register_rest_route('pet/v1', '/system/clean-demo-baseline', [
+            'methods' => 'POST',
+            'callback' => [$this, 'cleanDemoBaseline'],
+            'permission_callback' => function () {
+                return current_user_can('manage_options');
+            },
+            'args' => [
+                'confirm' => [
                     'required' => true,
                     'type' => 'string',
                 ],
@@ -210,6 +253,36 @@ class SystemController implements RestController
         }
     }
 
+    public function demoDiagnostics(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+        try {
+            $service = new SeedRegistryDiagnosticsService($this->demoPurgeService, $wpdb);
+            return new WP_REST_Response($service->diagnostics(), 200);
+        } catch (\Throwable $e) {
+            error_log('PET Seed Registry Diagnostics failed: ' . $e->getMessage());
+            return new WP_REST_Response([
+                'error' => 'internal_error',
+                'message' => 'Failed to compute seed registry diagnostics',
+            ], 500);
+        }
+    }
+
+    public function demoEnvironmentHealth(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+        try {
+            $service = new DemoEnvironmentHealthService($this->demoPurgeService, $wpdb);
+            return new WP_REST_Response($service->getHealth(), 200);
+        } catch (\Throwable $e) {
+            error_log('PET Demo Environment Health failed: ' . $e->getMessage());
+            return new WP_REST_Response([
+                'error' => 'internal_error',
+                'message' => 'Failed to compute demo environment health',
+            ], 500);
+        }
+    }
+
     public function acceptQuoteDev(WP_REST_Request $request): WP_REST_Response
     {
         $envType = function_exists('wp_get_environment_type') ? wp_get_environment_type() : 'production';
@@ -240,6 +313,39 @@ class SystemController implements RestController
         $seedRunId = (string)$request->get_param('seed_run_id');
         $summary = $this->demoPurgeService->purgeBySeedRunId($seedRunId);
         return new WP_REST_Response(['seed_run_id' => $seedRunId, 'summary' => $summary], 200);
+    }
+
+    public function cleanDemoBaseline(WP_REST_Request $request): WP_REST_Response
+    {
+        $confirm = strtoupper(trim((string)$request->get_param('confirm')));
+        if ($confirm !== 'CLEAN_DEMO_BASELINE') {
+            return new WP_REST_Response([
+                'operation' => 'clean_demo_baseline',
+                'error' => 'confirm_required',
+                'message' => 'Pass confirm=CLEAN_DEMO_BASELINE to run this operation.',
+            ], 400);
+        }
+
+        global $wpdb;
+        $service = new CleanDemoBaselineService($this->demoPurgeService, [$this->demoSeedService, 'seedFull'], $wpdb);
+        try {
+            $result = $service->run('demo_full');
+            $status = ($result['overall'] ?? 'FAIL') === 'PASS' ? 201 : 422;
+            return new WP_REST_Response($result, $status);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response([
+                'operation' => 'clean_demo_baseline',
+                'error' => 'domain_exception',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            error_log('PET Clean Demo Baseline failed: ' . $e->getMessage());
+            return new WP_REST_Response([
+                'operation' => 'clean_demo_baseline',
+                'error' => 'internal_error',
+                'message' => 'Clean demo baseline failed',
+            ], 500);
+        }
     }
 
     private function classify(): array

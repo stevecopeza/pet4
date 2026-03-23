@@ -15,9 +15,24 @@ final class DemoPurgeService
 
     public function purgeBySeedRunId(string $seedRunId): array
     {
+        return $this->purgeBySeedRunIdInternal($seedRunId, true);
+    }
+
+    public function purgeBySeedRunIdForCleanBaseline(string $seedRunId): array
+    {
+        return $this->purgeBySeedRunIdInternal($seedRunId, false);
+    }
+
+    private function purgeBySeedRunIdInternal(string $seedRunId, bool $respectImmutableGuards): array
+    {
         $summary = [];
         $tables = [
             // children first (schema-aligned)
+            $this->wpdb->prefix . 'pet_person_skills',
+            $this->wpdb->prefix . 'pet_person_certifications',
+            $this->wpdb->prefix . 'pet_person_role_assignments',
+            $this->wpdb->prefix . 'pet_person_kpis',
+            $this->wpdb->prefix . 'pet_team_members',
             $this->wpdb->prefix . 'pet_conversation_events',
             $this->wpdb->prefix . 'pet_conversation_participants',
             $this->wpdb->prefix . 'pet_conversation_read_state',
@@ -72,7 +87,7 @@ final class DemoPurgeService
                 $summary[$t]['deleted'] += $res['deleted'];
                 $summary[$t]['archived'] += $res['archived'];
             }
-            $res = $this->purgeWithRegistry($t, $seedRunId);
+            $res = $this->purgeWithRegistry($t, $seedRunId, $respectImmutableGuards);
             if ($res !== null) {
                 $summary[$t]['deleted'] += $res['deleted'];
                 $summary[$t]['archived'] += $res['archived'];
@@ -93,8 +108,122 @@ final class DemoPurgeService
         } else {
             $summary['registry_marked'] = 0;
         }
+        if ($this->tableExists($registry)) {
+            $summary['registry_deleted'] = (int)$this->wpdb->query($this->wpdb->prepare(
+                "DELETE FROM $registry WHERE seed_run_id = %s",
+                [$seedRunId]
+            ));
+        } else {
+            $summary['registry_deleted'] = 0;
+        }
 
         return $summary;
+    }
+
+    /**
+     * @return array<int, array{seed_run_id:string, registry_rows:int, first_seen_at:?string, last_seen_at:?string}>
+     */
+    public function listTrackedSeedRuns(bool $activeOnly = true): array
+    {
+        $registry = $this->wpdb->prefix . 'pet_demo_seed_registry';
+        if (!$this->tableExists($registry)) {
+            return [];
+        }
+
+        $where = [];
+        if ($activeOnly && $this->tableHasColumn($registry, 'purge_status')) {
+            $where[] = "purge_status = 'ACTIVE'";
+        }
+        $whereSql = empty($where) ? '' : ('WHERE ' . implode(' AND ', $where));
+
+        $rows = $this->wpdb->get_results(
+            "SELECT seed_run_id, COUNT(*) AS registry_rows, MIN(created_at) AS first_seen_at, MAX(created_at) AS last_seen_at
+             FROM $registry
+             $whereSql
+             GROUP BY seed_run_id
+             ORDER BY last_seen_at DESC, seed_run_id DESC",
+            defined('ARRAY_A') ? ARRAY_A : 'ARRAY_A'
+        );
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        return array_map(static function (array $row): array {
+            return [
+                'seed_run_id' => (string)($row['seed_run_id'] ?? ''),
+                'registry_rows' => (int)($row['registry_rows'] ?? 0),
+                'first_seen_at' => isset($row['first_seen_at']) ? (string)$row['first_seen_at'] : null,
+                'last_seen_at' => isset($row['last_seen_at']) ? (string)$row['last_seen_at'] : null,
+            ];
+        }, $rows);
+    }
+
+    /**
+     * Purges all currently tracked ACTIVE runs in deterministic, newest-first order.
+     */
+    public function purgeAllActiveTrackedRuns(): array
+    {
+        $runs = $this->listTrackedSeedRuns(true);
+        $runIds = array_values(array_filter(array_map(static function (array $run): string {
+            return (string)($run['seed_run_id'] ?? '');
+        }, $runs), static function (string $runId): bool {
+            return $runId !== '';
+        }));
+
+        $purgedRuns = [];
+        $failedRuns = [];
+        $totals = [
+            'deleted' => 0,
+            'archived' => 0,
+            'registry_deleted' => 0,
+            'registry_marked' => 0,
+        ];
+
+        foreach ($runIds as $seedRunId) {
+            try {
+                $summary = $this->purgeBySeedRunIdForCleanBaseline($seedRunId);
+                $runDeleted = 0;
+                $runArchived = 0;
+                foreach ($summary as $tableSummary) {
+                    if (!is_array($tableSummary)) {
+                        continue;
+                    }
+                    $runDeleted += (int)($tableSummary['deleted'] ?? 0);
+                    $runArchived += (int)($tableSummary['archived'] ?? 0);
+                }
+                $registryDeleted = (int)($summary['registry_deleted'] ?? 0);
+                $registryMarked = (int)($summary['registry_marked'] ?? 0);
+                $totals['deleted'] += $runDeleted;
+                $totals['archived'] += $runArchived;
+                $totals['registry_deleted'] += $registryDeleted;
+                $totals['registry_marked'] += $registryMarked;
+
+                $remainingRows = $this->countRegistryRowsForRun($seedRunId);
+                $purgedRuns[] = [
+                    'seed_run_id' => $seedRunId,
+                    'summary' => $summary,
+                    'deleted' => $runDeleted,
+                    'archived' => $runArchived,
+                    'registry_deleted' => $registryDeleted,
+                    'registry_marked' => $registryMarked,
+                    'registry_rows_remaining' => $remainingRows,
+                ];
+            } catch (\Throwable $e) {
+                $failedRuns[] = [
+                    'seed_run_id' => $seedRunId,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'active_runs_discovered' => count($runIds),
+            'runs_considered' => $runs,
+            'purged_runs' => $purgedRuns,
+            'failed_runs' => $failedRuns,
+            'totals' => $totals,
+            'all_purges_succeeded' => empty($failedRuns),
+        ];
     }
 
     private function purgeWithMetadata(string $table, string $seedRunId): array
@@ -144,7 +273,7 @@ final class DemoPurgeService
         return ['deleted' => (int)$deleted, 'archived' => (int)$archived];
     }
 
-    private function purgeWithRegistry(string $table, string $seedRunId): ?array
+    private function purgeWithRegistry(string $table, string $seedRunId, bool $respectImmutableGuards = true): ?array
     {
         if (!$this->tableExists($table)) {
             return ['deleted' => 0, 'archived' => 0];
@@ -153,25 +282,38 @@ final class DemoPurgeService
         if ($this->wpdb->get_var("SHOW TABLES LIKE '$registry'") !== $registry) {
             return null;
         }
-        $ids = $this->wpdb->get_col($this->wpdb->prepare("SELECT row_id FROM $registry WHERE seed_run_id = %s AND table_name = %s", [$seedRunId, $table]));
+        $hasPurgeStatus = $this->tableHasColumn($registry, 'purge_status');
+        if ($hasPurgeStatus) {
+            $ids = $this->wpdb->get_col($this->wpdb->prepare(
+                "SELECT row_id FROM $registry WHERE seed_run_id = %s AND table_name = %s AND purge_status = 'ACTIVE'",
+                [$seedRunId, $table]
+            ));
+        } else {
+            $ids = $this->wpdb->get_col($this->wpdb->prepare(
+                "SELECT row_id FROM $registry WHERE seed_run_id = %s AND table_name = %s",
+                [$seedRunId, $table]
+            ));
+        }
         if (!$ids) {
             return ['deleted' => 0, 'archived' => 0];
         }
         $deleted = 0;
         $archived = 0;
         foreach ($ids as $id) {
-            // Immutable guards
-            if (str_ends_with($table, 'pet_quotes')) {
-                $accepted = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND accepted_at IS NOT NULL", [(int)$id]));
-                if ($accepted > 0) continue;
-            }
-            if (str_ends_with($table, 'pet_time_entries')) {
-                $isImmutable = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND (status IN ('submitted','approved') OR submitted_at IS NOT NULL)", [(int)$id]));
-                if ($isImmutable > 0) continue;
-            }
-            if (str_ends_with($table, 'pet_billing_exports')) {
-                $isQueued = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND status IN ('queued','sent','confirmed')", [(int)$id]));
-                if ($isQueued > 0) continue;
+            if ($respectImmutableGuards) {
+                // Immutable guards
+                if (str_ends_with($table, 'pet_quotes')) {
+                    $accepted = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND accepted_at IS NOT NULL", [(int)$id]));
+                    if ($accepted > 0) continue;
+                }
+                if (str_ends_with($table, 'pet_time_entries')) {
+                    $isImmutable = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND (status IN ('submitted','approved') OR submitted_at IS NOT NULL)", [(int)$id]));
+                    if ($isImmutable > 0) continue;
+                }
+                if (str_ends_with($table, 'pet_billing_exports')) {
+                    $isQueued = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT COUNT(*) FROM $table WHERE id = %d AND status IN ('queued','sent','confirmed')", [(int)$id]));
+                    if ($isQueued > 0) continue;
+                }
             }
             // Archive when supported and touched flag present in JSON columns (best-effort)
             if ($this->tableHasColumn($table, 'archived_at') && $this->tableHasColumn($table, 'metadata_json')) {
@@ -207,6 +349,19 @@ final class DemoPurgeService
             return 0;
         }
         return (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $table");
+    }
+
+    private function countRegistryRowsForRun(string $seedRunId): int
+    {
+        $registry = $this->wpdb->prefix . 'pet_demo_seed_registry';
+        if (!$this->tableExists($registry)) {
+            return 0;
+        }
+
+        return (int)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM $registry WHERE seed_run_id = %s",
+            [$seedRunId]
+        ));
     }
 
     private function markRegistry(string $seedRunId, string $table, string $rowId, string $status): void

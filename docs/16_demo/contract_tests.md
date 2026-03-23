@@ -1,7 +1,7 @@
-# PET Demo Contract Tests v1.1
+# PET Demo Contract Tests v1.2
 
-Version: 1.1\
-Date: 2026-02-14\
+Version: 1.2\
+Date: 2026-03-23\
 Status: Binding (Automated Proof of Demo Viability)
 
 ## Purpose
@@ -17,6 +17,10 @@ and stable.
 2.  Seed full returns 201 and overall PASS
 3.  Seed response includes anchors for required artifacts
 4.  Purge returns 200 and reports purged/skipped/archived
+5.  Clean baseline returns 201 with `contract.violations=[]`
+6.  Health response includes `readiness_status` and `readiness_reasons`
+7.  Diagnostics response includes `registry_summary.active_runs_count`
+8.  Health `seed.active_runs_count` equals diagnostics `registry_summary.active_runs_count`
 
 ### B) Workflow Depth Tests (Must Transition)
 
@@ -58,6 +62,12 @@ and stable.
     -   call seed_full
     -   assert 201 and anchors exist
     -   call purge and assert 200
+-   `tests/e2e/api-demo-ops-closed-loop.spec.ts`
+    -   call clean baseline with `confirm=CLEAN_DEMO_BASELINE`
+    -   assert 201 and empty `contract.violations`
+    -   call health and diagnostics; assert active-run count alignment
+    -   call seed_full again; assert health AMBER with reason `multiple_active_seed_runs`
+    -   inject duplicate integrity pair(s); assert health RED and diagnostics integrity issue visibility
 
 ## Mermaid: Test Flow
 
