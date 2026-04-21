@@ -362,35 +362,23 @@ class AcceptQuoteHandler
             return;
         }
 
-        // Single item — one ticket, anchored to the component id for idempotency.
+        // Single item — one ticket (or rollup+WBS children for service items with a WBS snapshot).
         if (count($items) === 1) {
             $item = $items[0];
             $itemId = (int)$item->id();
             if ($itemId <= 0) {
                 throw new \RuntimeException('Quote acceptance failed: catalog item missing persistent id.');
             }
-            $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
-                $quote->customerId(),
-                $projectId,
-                (int)$quote->id(),
-                $this->catalogItemSubject($item),
-                $item->description(),
-                0,
-                (int) round($item->sellValue() * 100),
-                0,
-                null,
-                $item->roleId(),
-                null,
-                null,
-                'quote_component',
-                $componentId,
-                null,
-                false
-            ));
+            $this->provisionSingleCatalogItem(
+                $quote, $projectId, $item, $itemId,
+                /*parentTicketId*/ null,
+                /*sourceComponentId*/ $componentId
+            );
             return;
         }
 
-        // Multiple items — rollup ticket + one child per item.
+        // Multiple items — component-level rollup ticket + one child per item.
+        // Items that carry a WBS snapshot get their own item-level rollup + WBS children.
         $rollupSubject = trim((string)$component->description()) !== ''
             ? (string)$component->description()
             : ('Catalog Component #' . $componentId);
@@ -400,7 +388,7 @@ class AcceptQuoteHandler
             $rollupSoldValue += (int) round($item->sellValue() * 100);
         }
 
-        $rollupId = $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
+        $componentRollupId = $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
             $quote->customerId(),
             $projectId,
             (int)$quote->id(),
@@ -418,7 +406,7 @@ class AcceptQuoteHandler
             null,
             true
         ));
-        if ($rollupId <= 0) {
+        if ($componentRollupId <= 0) {
             throw new \RuntimeException('Quote acceptance failed: unable to create catalog rollup ticket.');
         }
 
@@ -427,7 +415,38 @@ class AcceptQuoteHandler
             if ($itemId <= 0) {
                 throw new \RuntimeException('Quote acceptance failed: catalog item missing persistent id at index ' . $index . '.');
             }
-            $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
+            $this->provisionSingleCatalogItem(
+                $quote, $projectId, $item, $itemId,
+                /*parentTicketId*/ (int)$componentRollupId,
+                /*sourceComponentId*/ $itemId
+            );
+        }
+    }
+
+    /**
+     * Provision tickets for a single QuoteCatalogItem.
+     *
+     * - Service items with a non-empty WBS snapshot: creates an item-level rollup ticket
+     *   plus one child ticket per WBS task (subject, estimatedMinutes derived from snapshot).
+     *   Child tickets use a synthetic source_component_id = itemId * 10_000 + taskIndex
+     *   to satisfy the per-ticket idempotency constraint without a schema change.
+     *
+     * - All other items (products, services without WBS): creates a single flat ticket.
+     */
+    private function provisionSingleCatalogItem(
+        Quote $quote,
+        int $projectId,
+        QuoteCatalogItem $item,
+        int $itemId,
+        ?int $parentTicketId,
+        int $sourceComponentId
+    ): void {
+        $wbs = $item->wbsSnapshot();
+
+        // WBS splitting: service items only (products are just physical fulfilment).
+        if ($item->type() === 'service' && !empty($wbs)) {
+            // Item-level rollup ticket.
+            $itemRollupId = $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
                 $quote->customerId(),
                 $projectId,
                 (int)$quote->id(),
@@ -441,11 +460,68 @@ class AcceptQuoteHandler
                 null,
                 null,
                 'quote_component',
-                $itemId,
-                (int)$rollupId,
-                false
+                $sourceComponentId,
+                $parentTicketId,
+                true
             ));
+            if ($itemRollupId <= 0) {
+                throw new \RuntimeException('Quote acceptance failed: unable to create item rollup ticket for catalog item #' . $itemId . '.');
+            }
+
+            // One child ticket per WBS task entry.
+            foreach ($wbs as $taskIndex => $task) {
+                $taskSubject      = trim((string)($task['description'] ?? ''));
+                $taskHours        = (float)($task['hours'] ?? 0);
+                $taskEstMinutes   = (int) round($taskHours * 60);
+
+                if ($taskSubject === '') {
+                    $taskSubject = 'Task ' . ($taskIndex + 1);
+                }
+
+                // Synthetic source id: encodes item identity + task position for idempotency.
+                $taskSourceId = $itemId * 10000 + $taskIndex;
+
+                $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
+                    $quote->customerId(),
+                    $projectId,
+                    (int)$quote->id(),
+                    $taskSubject,
+                    '',
+                    0,
+                    0,
+                    $taskEstMinutes,
+                    null,
+                    $item->roleId(),
+                    null,
+                    null,
+                    'quote_component',
+                    $taskSourceId,
+                    (int)$itemRollupId,
+                    false
+                ));
+            }
+            return;
         }
+
+        // Flat ticket (product or service without WBS snapshot).
+        $this->createProjectTicketHandler->handle(new CreateProjectTicketCommand(
+            $quote->customerId(),
+            $projectId,
+            (int)$quote->id(),
+            $this->catalogItemSubject($item),
+            $item->description(),
+            0,
+            (int) round($item->sellValue() * 100),
+            0,
+            null,
+            $item->roleId(),
+            null,
+            null,
+            'quote_component',
+            $sourceComponentId,
+            $parentTicketId,
+            false
+        ));
     }
 
     /**

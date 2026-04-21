@@ -210,6 +210,148 @@ final class AcceptQuoteHandlerCatalogTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
+    // WBS splitting — service item with wbsSnapshot
+    // -----------------------------------------------------------------------
+
+    public function testSingleServiceItemWithWbsSnapshotCreatesRollupAndChildren(): void
+    {
+        $wbs = [
+            ['description' => 'Discovery workshop', 'hours' => 4.0],
+            ['description' => 'Development',        'hours' => 16.0],
+            ['description' => 'UAT & sign-off',     'hours' => 2.0],
+        ];
+        $item = $this->makeItem(id: 551, type: 'service', sku: 'IMPL-PKG', qty: 1.0, unitPrice: 5000.0, roleId: 9, wbsSnapshot: $wbs);
+        $component = new CatalogComponent([$item], 'Implementation Package', 311);
+
+        $persistedQuote = $this->buildQuoteWithCatalog(QuoteState::ACCEPTED, $component);
+
+        $capturedCommands = [];
+        $this->buildHandlerCapturing($persistedQuote, $capturedCommands, [2001, 2002, 2003, 2004])
+             ->handle(new AcceptQuoteCommand(321));
+
+        // 1 rollup + 3 WBS children = 4 tickets total.
+        self::assertCount(4, $capturedCommands);
+
+        /** @var CreateProjectTicketCommand $rollup */
+        $rollup = $capturedCommands[0];
+        self::assertTrue($rollup->isRollup());
+        self::assertSame('Deliver service: 1× IMPL-PKG', $rollup->subject());
+        self::assertSame(311, $rollup->sourceComponentId()); // component id for single item
+        self::assertNull($rollup->parentTicketId());
+        self::assertSame(500000, $rollup->soldValueCents()); // 1 × 5000 × 100
+
+        /** @var CreateProjectTicketCommand $task1 */
+        $task1 = $capturedCommands[1];
+        self::assertFalse($task1->isRollup());
+        self::assertSame('Discovery workshop', $task1->subject());
+        self::assertSame(240, $task1->estimatedMinutes()); // 4h × 60
+        self::assertSame(2001, $task1->parentTicketId());
+        self::assertSame(551 * 10000 + 0, $task1->sourceComponentId()); // itemId*10000+taskIndex
+        self::assertSame(9, $task1->requiredRoleId());
+
+        /** @var CreateProjectTicketCommand $task2 */
+        $task2 = $capturedCommands[2];
+        self::assertSame('Development', $task2->subject());
+        self::assertSame(960, $task2->estimatedMinutes()); // 16h × 60
+        self::assertSame(551 * 10000 + 1, $task2->sourceComponentId());
+
+        /** @var CreateProjectTicketCommand $task3 */
+        $task3 = $capturedCommands[3];
+        self::assertSame('UAT & sign-off', $task3->subject());
+        self::assertSame(120, $task3->estimatedMinutes()); // 2h × 60
+        self::assertSame(551 * 10000 + 2, $task3->sourceComponentId());
+    }
+
+    public function testWbsTaskWithEmptyDescriptionFallsBackToTaskN(): void
+    {
+        $wbs = [['description' => '', 'hours' => 3.0]];
+        $item = $this->makeItem(id: 552, type: 'service', sku: 'SVC-X', qty: 1.0, unitPrice: 300.0, roleId: 11, wbsSnapshot: $wbs);
+        $component = new CatalogComponent([$item], 'X Service', 312);
+
+        $persistedQuote = $this->buildQuoteWithCatalog(QuoteState::ACCEPTED, $component);
+
+        $capturedCommands = [];
+        $this->buildHandlerCapturing($persistedQuote, $capturedCommands, [3001, 3002])
+             ->handle(new AcceptQuoteCommand(321));
+
+        self::assertCount(2, $capturedCommands);
+        self::assertSame('Task 1', $capturedCommands[1]->subject());
+    }
+
+    /**
+     * Product items with a WBS snapshot are rejected at the Quote domain level
+     * (Quote::validateInvariantsForCurrentState throws DomainException).
+     * Therefore no AcceptQuoteHandler test is needed for this case — the domain
+     * invariant ensures it never reaches the handler.
+     *
+     * @see Quote::validateInvariantsForCurrentState (line ~304)
+     */
+    public function testProductItemWithoutWbsCreatesFlatTicket(): void
+    {
+        // Products have no WBS — they create one flat fulfilment ticket.
+        $item = $this->makeItem(id: 553, type: 'product', sku: 'SWITCH-24', qty: 1.0, unitPrice: 600.0, roleId: null);
+        $component = new CatalogComponent([$item], 'Switch', 313);
+
+        $persistedQuote = $this->buildQuoteWithCatalog(QuoteState::ACCEPTED, $component);
+
+        $capturedCommands = [];
+        $this->buildHandlerCapturing($persistedQuote, $capturedCommands, [4001])
+             ->handle(new AcceptQuoteCommand(321));
+
+        self::assertCount(1, $capturedCommands);
+        self::assertFalse($capturedCommands[0]->isRollup());
+        self::assertSame('Fulfil: 1× SWITCH-24', $capturedCommands[0]->subject());
+        self::assertSame(0, $capturedCommands[0]->estimatedMinutes()); // products have no WBS estimate
+    }
+
+    public function testMultiItemComponentWhereOneHasWbs(): void
+    {
+        $wbs = [
+            ['description' => 'Setup',  'hours' => 2.0],
+            ['description' => 'Config', 'hours' => 1.5],
+        ];
+        $serviceItem  = $this->makeItem(id: 561, type: 'service', sku: 'SETUP-SVC', qty: 1.0, unitPrice: 400.0, roleId: 5, wbsSnapshot: $wbs);
+        $productItem  = $this->makeItem(id: 562, type: 'product', sku: 'CABLE-CAT6', qty: 4.0, unitPrice: 20.0, roleId: null);
+        $component    = new CatalogComponent([$serviceItem, $productItem], 'Network Setup Bundle', 321);
+
+        $persistedQuote = $this->buildQuoteWithCatalog(QuoteState::ACCEPTED, $component);
+
+        $capturedCommands = [];
+        // component rollup (1) + service rollup (1) + 2 WBS children (2) + product flat (1) = 5 total
+        $this->buildHandlerCapturing($persistedQuote, $capturedCommands, [5001, 5002, 5003, 5004, 5005])
+             ->handle(new AcceptQuoteCommand(321));
+
+        self::assertCount(5, $capturedCommands);
+
+        $componentRollup = $capturedCommands[0];
+        self::assertTrue($componentRollup->isRollup());
+        self::assertSame('Network Setup Bundle', $componentRollup->subject());
+        self::assertSame(321, $componentRollup->sourceComponentId());
+        self::assertNull($componentRollup->parentTicketId());
+
+        $serviceRollup = $capturedCommands[1];
+        self::assertTrue($serviceRollup->isRollup());
+        self::assertSame('Deliver service: 1× SETUP-SVC', $serviceRollup->subject());
+        self::assertSame(5001, $serviceRollup->parentTicketId());
+        self::assertSame(561, $serviceRollup->sourceComponentId()); // item id
+
+        $wbsTask1 = $capturedCommands[2];
+        self::assertFalse($wbsTask1->isRollup());
+        self::assertSame('Setup', $wbsTask1->subject());
+        self::assertSame(5002, $wbsTask1->parentTicketId()); // parent = service rollup
+
+        $wbsTask2 = $capturedCommands[3];
+        self::assertSame('Config', $wbsTask2->subject());
+        self::assertSame(5002, $wbsTask2->parentTicketId());
+
+        $productFlat = $capturedCommands[4];
+        self::assertFalse($productFlat->isRollup());
+        self::assertSame('Fulfil: 4× CABLE-CAT6', $productFlat->subject());
+        self::assertSame(562, $productFlat->sourceComponentId());
+        self::assertSame(5001, $productFlat->parentTicketId()); // parent = component rollup
+    }
+
+    // -----------------------------------------------------------------------
     // Guard: missing item id in multi-item path
     // -----------------------------------------------------------------------
 
@@ -242,7 +384,8 @@ final class AcceptQuoteHandlerCatalogTest extends TestCase
         ?string $sku,
         float $qty,
         float $unitPrice,
-        ?int $roleId = null
+        ?int $roleId = null,
+        array $wbsSnapshot = []
     ): QuoteCatalogItem {
         $description = $sku !== null ? $sku . ' item' : 'Widget item';
         return new QuoteCatalogItem(
@@ -252,7 +395,7 @@ final class AcceptQuoteHandlerCatalogTest extends TestCase
             $unitPrice * 0.6,
             $id,
             null,
-            [],
+            $wbsSnapshot,
             $type,
             $sku,
             $roleId
