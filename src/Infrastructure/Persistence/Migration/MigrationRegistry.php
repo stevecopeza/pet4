@@ -122,6 +122,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddQuoteApprovalStates::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddBaselinePricesToQuoteComponents::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddQuoteApprovalSettings::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateOpportunitiesTable::class,
         ];
     }
 }

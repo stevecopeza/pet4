@@ -10,9 +10,10 @@ import { legacyAlert, legacyConfirm } from './legacyDialogs';
 
 interface LeadsProps {
   onNavigateToQuote?: (quoteId: number) => void;
+  onNavigateToPipeline?: () => void;
 }
 
-const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
+const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote, onNavigateToPipeline }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +87,40 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
       fetchLeads();
     } catch (err) {
       legacyAlert(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  };
+
+  const handleCreateOpportunity = async (lead: Lead) => {
+    if (!legacyConfirm(`Create an opportunity from lead "${lead.subject}"?`)) return;
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+
+      const r = await fetch(`${apiUrl}/opportunities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+        body: JSON.stringify({
+          customerId: lead.customerId ?? 0,
+          name: lead.subject,
+          stage: 'discovery',
+          estimatedValue: lead.estimatedValue ?? 0,
+          currency: 'ZAR',
+          leadId: lead.id,
+        }),
+      });
+      if (!r.ok) {
+        const data = await r.json();
+        throw new Error(data.message || 'Failed to create opportunity');
+      }
+      if (onNavigateToPipeline) {
+        onNavigateToPipeline();
+      } else {
+        fetchLeads();
+      }
+    } catch (err) {
+      legacyAlert(err instanceof Error ? err.message : 'Failed to create opportunity');
     }
   };
 
@@ -210,6 +245,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
         actions={(lead) => {
           const items: KebabMenuItem[] = [];
           if (lead.status === 'new' || lead.status === 'qualified') {
+            items.push({ type: 'action', label: 'Create Opportunity', onClick: () => handleCreateOpportunity(lead) });
             items.push({ type: 'action', label: 'Convert to Quote', onClick: () => handleConvertToQuote(lead) });
           }
           items.push({ type: 'action', label: 'Discuss', onClick: () => openConversation({ contextType: 'lead', contextId: String(lead.id), subject: `Lead: ${lead.subject}`, subjectKey: `lead:${lead.id}` }) });

@@ -55,6 +55,7 @@ class SqlQuoteRepository implements QuoteRepository
         $data = [
             'customer_id'              => $quote->customerId(),
             'lead_id'                  => $quote->leadId(),
+            'opportunity_id'           => $quote->opportunityId(),
             'contract_id'              => $quote->contractId(),
             'title'                    => $quote->title(),
             'description'              => $quote->description(),
@@ -567,6 +568,7 @@ class SqlQuoteRepository implements QuoteRepository
             $costAdjustments,
             $paymentSchedule,
             isset($row->lead_id) && $row->lead_id ? (int)$row->lead_id : null,
+            $row->opportunity_id ?? null,
             isset($row->contract_id) && $row->contract_id ? (int)$row->contract_id : null,
             // Approval fields
             $row->rejection_note ?? null,

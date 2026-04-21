@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Leads from './Leads';
+import Opportunities from './Opportunities';
 import Quotes from './Quotes';
 import Catalog from './Catalog';
 import ServiceTypes from './ServiceTypes';
@@ -8,6 +9,7 @@ import CatalogProducts from './CatalogProducts';
 
 const tabs = [
   { key: 'leads', label: 'Leads' },
+  { key: 'opportunities', label: 'Pipeline' },
   { key: 'quotes', label: 'Quotes' },
   { key: 'catalog', label: 'Catalog' },
   { key: 'products', label: 'Products' },
@@ -20,6 +22,11 @@ type TabKey = typeof tabs[number]['key'];
 const Commercial = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('quotes');
   const [pendingQuoteId, setPendingQuoteId] = useState<number | null>(null);
+
+  const goToQuote = (quoteId: number) => {
+    setPendingQuoteId(quoteId);
+    setActiveTab('quotes');
+  };
 
   return (
     <div>
@@ -36,7 +43,10 @@ const Commercial = () => {
       </div>
 
       {activeTab === 'leads' && (
-        <Leads onNavigateToQuote={(quoteId) => { setPendingQuoteId(quoteId); setActiveTab('quotes'); }} />
+        <Leads onNavigateToQuote={goToQuote} onNavigateToPipeline={() => setActiveTab('opportunities')} />
+      )}
+      {activeTab === 'opportunities' && (
+        <Opportunities onNavigateToQuote={goToQuote} />
       )}
       {activeTab === 'quotes' && (
         <Quotes initialQuoteId={pendingQuoteId} onInitialQuoteConsumed={() => setPendingQuoteId(null)} />

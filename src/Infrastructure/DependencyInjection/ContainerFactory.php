@@ -201,6 +201,10 @@ class ContainerFactory
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlLeadRepository($wpdb);
             },
+            \Pet\Domain\Commercial\Repository\OpportunityRepository::class => function () {
+                global $wpdb;
+                return new \Pet\Infrastructure\Persistence\Repository\SqlOpportunityRepository($wpdb);
+            },
             \Pet\Domain\Commercial\Repository\QuoteSectionRepository::class => function () {
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlQuoteSectionRepository($wpdb);
@@ -482,6 +486,10 @@ class ContainerFactory
             \Pet\Application\Commercial\Command\UpdateLeadHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateLeadHandler::class),
             \Pet\Application\Commercial\Command\DeleteLeadHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\DeleteLeadHandler::class),
             \Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ConvertLeadToQuoteHandler::class),
+            \Pet\Application\Commercial\Command\CreateOpportunityHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateOpportunityHandler::class),
+            \Pet\Application\Commercial\Command\UpdateOpportunityHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateOpportunityHandler::class),
+            \Pet\Application\Commercial\Command\CloseOpportunityHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CloseOpportunityHandler::class),
+            \Pet\Application\Commercial\Command\ConvertOpportunityToQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ConvertOpportunityToQuoteHandler::class),
             \Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddCostAdjustmentHandler::class),
             \Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\RemoveCostAdjustmentHandler::class),
             \Pet\Application\Commercial\Command\CreateServiceTypeHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateServiceTypeHandler::class),

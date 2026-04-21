@@ -660,3 +660,23 @@ export interface Role {
   name: string;
   description?: string;
 }
+
+export interface Opportunity {
+  id: string;
+  customerId: number;
+  customerName: string | null;
+  leadId: number | null;
+  name: string;
+  stage: 'discovery' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
+  estimatedValue: number;
+  currency: string;
+  expectedCloseDate: string | null;
+  ownerId: number;
+  qualification: Record<string, any>;
+  notes: string | null;
+  quoteId: number | null;
+  isOpen: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  closedAt: string | null;
+}

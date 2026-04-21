@@ -15,6 +15,7 @@ class Quote
     private ?int $id;
     private int $customerId;
     private ?int $leadId;
+    private ?string $opportunityId;
     private ?int $contractId;
     private string $title;
     private ?string $description;
@@ -70,6 +71,7 @@ class Quote
         array $costAdjustments = [],
         array $paymentSchedule = [],
         ?int $leadId = null,
+        ?string $opportunityId = null,
         ?int $contractId = null,
         ?string $rejectionNote = null,
         ?\DateTimeImmutable $submittedForApprovalAt = null,
@@ -79,6 +81,7 @@ class Quote
         $this->id = $id;
         $this->customerId = $customerId;
         $this->leadId = $leadId;
+        $this->opportunityId = $opportunityId;
         $this->contractId = $contractId;
         $this->title = $title;
         $this->description = $description;
@@ -144,6 +147,11 @@ class Quote
     public function leadId(): ?int
     {
         return $this->leadId;
+    }
+
+    public function opportunityId(): ?string
+    {
+        return $this->opportunityId;
     }
 
     public function contractId(): ?int

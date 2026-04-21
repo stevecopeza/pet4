@@ -8,6 +8,7 @@ const CustomersPage      = lazy(() => import('./pages/CustomersPage'));
 const CatalogPage        = lazy(() => import('./pages/CatalogPage'));
 const EmployeesPage      = lazy(() => import('./pages/EmployeesPage'));
 const LeadsPage          = lazy(() => import('./pages/LeadsPage'));
+const PipelinePage       = lazy(() => import('./pages/PipelinePage'));
 const QuotesPage         = lazy(() => import('./pages/QuotesPage'));
 const ApprovalsPage      = lazy(() => import('./pages/ApprovalsPage'));
 const QuoteBuilderPage   = lazy(() => import('./pages/QuoteBuilderPage'));
@@ -170,6 +171,11 @@ const PortalApp: React.FC = () => {
       case '#leads':
         return (user.isSales || user.isManager || user.isAdmin)
           ? <LeadsPage />
+          : <AccessDenied />;
+
+      case '#pipeline':
+        return (user.isSales || user.isManager || user.isAdmin)
+          ? <PipelinePage />
           : <AccessDenied />;
 
       case '#quotes':
