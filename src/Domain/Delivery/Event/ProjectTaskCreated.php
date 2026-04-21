@@ -42,6 +42,11 @@ class ProjectTaskCreated implements DomainEvent, SourcedEvent
         return (int)$this->project->id();
     }
 
+    public function name(): string
+    {
+        return 'project.task_created';
+    }
+
     public function aggregateType(): string
     {
         return 'project';

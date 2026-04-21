@@ -45,6 +45,12 @@ class Quote
     private ?\DateTimeImmutable $archivedAt;
     private array $malleableData;
 
+    // --- Approval workflow fields ---
+    private ?string $rejectionNote;
+    private ?\DateTimeImmutable $submittedForApprovalAt;
+    private ?\DateTimeImmutable $approvedAt;
+    private ?int $approvedByUserId;
+
     public function __construct(
         int $customerId,
         string $title,
@@ -64,7 +70,11 @@ class Quote
         array $costAdjustments = [],
         array $paymentSchedule = [],
         ?int $leadId = null,
-        ?int $contractId = null
+        ?int $contractId = null,
+        ?string $rejectionNote = null,
+        ?\DateTimeImmutable $submittedForApprovalAt = null,
+        ?\DateTimeImmutable $approvedAt = null,
+        ?int $approvedByUserId = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -85,6 +95,10 @@ class Quote
         $this->malleableData = $malleableData;
         $this->costAdjustments = $costAdjustments;
         $this->paymentSchedule = $paymentSchedule;
+        $this->rejectionNote = $rejectionNote;
+        $this->submittedForApprovalAt = $submittedForApprovalAt;
+        $this->approvedAt = $approvedAt;
+        $this->approvedByUserId = $approvedByUserId;
     }
     
     public function costAdjustments(): array
@@ -268,8 +282,11 @@ class Quote
 
     public function validateReadiness(): void
     {
+        // Block-based quotes (no legacy components) are considered ready if they pass
+        // the frontend readiness gate (priced blocks, payment schedule, etc.).
+        // The legacy component checks below apply only to the old component system.
         if (empty($this->components)) {
-            throw new \DomainException('Quote must have at least one component before it can be sent.');
+            return;
         }
 
         foreach ($this->components as $component) {
@@ -328,6 +345,40 @@ class Quote
         $this->validateReadiness();
         $this->transitionTo(QuoteState::sent());
     }
+
+    public function submitForApproval(): void
+    {
+        // Block-based quotes have components managed externally — readiness
+        // is enforced by the frontend isReady gate before this call is made.
+        $this->transitionTo(QuoteState::pendingApproval());
+        $this->submittedForApprovalAt = new \DateTimeImmutable();
+        $this->rejectionNote = null; // clear any previous rejection note
+    }
+
+    public function approve(int $approverUserId): void
+    {
+        $this->transitionTo(QuoteState::approved());
+        $this->approvedAt = new \DateTimeImmutable();
+        $this->approvedByUserId = $approverUserId;
+        $this->rejectionNote = null;
+    }
+
+    public function rejectApproval(int $reviewerUserId, string $note): void
+    {
+        if (empty(trim($note))) {
+            throw new \DomainException('A rejection note is required so the sales person knows what to fix.');
+        }
+        $this->transitionTo(QuoteState::draft());
+        $this->rejectionNote = $note;
+        $this->approvedAt = null;
+        $this->approvedByUserId = null;
+    }
+
+    // --- Approval accessors ---
+    public function rejectionNote(): ?string            { return $this->rejectionNote; }
+    public function submittedForApprovalAt(): ?\DateTimeImmutable { return $this->submittedForApprovalAt; }
+    public function approvedAt(): ?\DateTimeImmutable   { return $this->approvedAt; }
+    public function approvedByUserId(): ?int            { return $this->approvedByUserId; }
 
     public function update(
         int $customerId,

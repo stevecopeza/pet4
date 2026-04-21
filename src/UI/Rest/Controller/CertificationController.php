@@ -38,7 +38,7 @@ class CertificationController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getCertifications'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
@@ -92,7 +92,7 @@ class CertificationController
             $this->createCertificationHandler->handle($command);
             return new WP_REST_Response(['message' => 'Certification created successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -116,14 +116,19 @@ class CertificationController
             $this->updateCertificationHandler->handle($command);
             return new WP_REST_Response(['message' => 'Certification updated successfully'], 200);
         } catch (\RuntimeException $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 404);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 404);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 }

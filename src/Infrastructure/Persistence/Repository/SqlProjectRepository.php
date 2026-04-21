@@ -50,19 +50,15 @@ class SqlProjectRepository implements ProjectRepository
                 $format,
                 ['%d']
             );
-            $projectId = $project->id();
         } else {
             $this->wpdb->insert(
                 $this->projectsTable,
                 $data,
                 $format
             );
-            $projectId = $this->wpdb->insert_id;
         }
 
-        if ($projectId) {
-            $this->saveTasks((int)$projectId, $project->tasks());
-        }
+        // Ticket-only delivery execution: project task rows are legacy/read-only and are not written.
     }
 
     public function findById(int $id): ?Project

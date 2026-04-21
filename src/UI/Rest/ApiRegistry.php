@@ -78,6 +78,7 @@ class ApiRegistry
             \Pet\UI\Rest\Controller\RateCardController::class,
             \Pet\UI\Rest\Controller\CatalogProductController::class,
             \Pet\UI\Rest\Controller\EscalationController::class,
+            \Pet\UI\Rest\Controller\QuotePdfController::class,
         ];
 
         foreach ($controllers as $controllerClass) {

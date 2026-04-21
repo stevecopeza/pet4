@@ -48,6 +48,11 @@ class SLATierTransitionedEvent implements DomainEvent, SourcedEvent
         return $this->ticketId;
     }
 
+    public function name(): string
+    {
+        return 'ticket.sla_tier_transitioned';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

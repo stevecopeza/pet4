@@ -6,13 +6,11 @@ use Pet\Domain\Work\Entity\WorkItem;
 use Pet\Domain\Work\Entity\DepartmentQueue;
 use Pet\Domain\Work\Repository\WorkItemRepository;
 use Pet\Domain\Work\Repository\DepartmentQueueRepository;
-use Pet\Domain\Work\Repository\RoleTeamRepository;
 use Pet\Domain\Work\Service\DepartmentResolver;
 use Pet\Domain\Work\Service\SlaClockCalculator;
 use Pet\Domain\Identity\Repository\CustomerRepository;
 use Pet\Domain\Support\Event\TicketCreated;
 use Pet\Domain\Support\Event\TicketAssigned;
-use Pet\Domain\Delivery\Event\ProjectTaskCreated;
 use Pet\Application\System\Service\FeatureFlagService;
 
 /**
@@ -29,7 +27,6 @@ class WorkItemProjector
         private DepartmentResolver $departmentResolver,
         private SlaClockCalculator $slaClockCalculator,
         private CustomerRepository $customerRepository,
-        private RoleTeamRepository $roleTeamRepository,
         private FeatureFlagService $featureFlags
     ) {
     }
@@ -189,61 +186,4 @@ class WorkItemProjector
         }
     }
 
-    public function onProjectTaskCreated(ProjectTaskCreated $event): void
-    {
-        if (!$this->featureFlags->isWorkProjectionEnabled()) {
-            return;
-        }
-
-        $project = $event->project();
-        $task = $event->task();
-
-        $existing = $this->workItemRepository->findBySource('project_task', (string)$task->id());
-        if ($existing) {
-            return;
-        }
-
-        $mappings = $task->roleId() ? $this->roleTeamRepository->findByRoleId((int)$task->roleId()) : [];
-        $primary = null;
-        foreach ($mappings as $m) {
-            if (!empty($m['is_primary'])) {
-                $primary = $m;
-                break;
-            }
-        }
-        if ($primary === null && !empty($mappings)) {
-            $primary = $mappings[0];
-        }
-
-        if ($primary === null) {
-            return;
-        }
-
-        $departmentId = $this->departmentResolver->resolveForProjectTask($project, $task);
-        $workItemId = wp_generate_uuid4();
-
-        $workItem = WorkItem::create(
-            $workItemId,
-            'project_task',
-            (string)$task->id(),
-            $departmentId,
-            0.0,
-            $task->isCompleted() ? 'completed' : 'active',
-            $event->occurredAt(),
-            $task->roleId() ? (int)$task->roleId() : null,
-            (string)$primary['team_id'],
-            null,
-            'delivery_role_primary_team'
-        );
-
-        $this->workItemRepository->save($workItem);
-
-        $queueItem = DepartmentQueue::enter(
-            wp_generate_uuid4(),
-            $departmentId,
-            $workItemId,
-            $workItem->getAssignedTeamId()
-        );
-        $this->departmentQueueRepository->save($queueItem);
-    }
 }

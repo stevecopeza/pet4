@@ -12,6 +12,7 @@ use Pet\Application\Work\Command\UpdateRoleCommand;
 use Pet\Application\Work\Command\UpdateRoleHandler;
 use Pet\Domain\Work\Repository\RoleRepository;
 use Pet\Domain\Work\Repository\RoleTeamRepository;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -47,12 +48,12 @@ class RoleController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getRoles'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createRole'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -60,7 +61,7 @@ class RoleController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE, // Using POST for update
                 'callback' => [$this, 'updateRole'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -68,7 +69,7 @@ class RoleController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'publishRole'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -76,12 +77,12 @@ class RoleController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getRoleTeams'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'setRoleTeams'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -89,7 +90,7 @@ class RoleController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getOwnerOptions'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
         ]);
     }
@@ -97,6 +98,16 @@ class RoleController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getRoles(WP_REST_Request $request): WP_REST_Response
@@ -151,7 +162,7 @@ class RoleController implements RestController
             $this->createRoleHandler->handle($command);
             return new WP_REST_Response(['message' => 'Role created successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -179,7 +190,7 @@ class RoleController implements RestController
             $this->updateRoleHandler->handle($command);
             return new WP_REST_Response(['message' => 'Role updated successfully'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -192,7 +203,7 @@ class RoleController implements RestController
             $this->publishRoleHandler->handle($command);
             return new WP_REST_Response(['message' => 'Role published'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -218,9 +229,9 @@ class RoleController implements RestController
             $teams = $this->roleTeamRepository->findByRoleId($roleId);
             return new WP_REST_Response($teams, 200);
         } catch (\InvalidArgumentException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 

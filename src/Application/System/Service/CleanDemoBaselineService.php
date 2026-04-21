@@ -6,6 +6,7 @@ namespace Pet\Application\System\Service;
 
 final class CleanDemoBaselineService
 {
+    private const ACTION_GATING_BYPASS_TRANSIENT = 'pet_clean_baseline_quote_action_gating_bypass';
     private DemoPurgeService $demoPurgeService;
     /** @var callable(string,string):array */
     private $seedRunner;
@@ -40,7 +41,12 @@ final class CleanDemoBaselineService
         }
 
         $seedRunId = function_exists('wp_generate_uuid4') ? wp_generate_uuid4() : uniqid('seed_', true);
-        $seedSummary = ($this->seedRunner)($seedRunId, $seedProfile);
+        $this->enableQuoteActionGatingBypassForSeed();
+        try {
+            $seedSummary = ($this->seedRunner)($seedRunId, $seedProfile);
+        } finally {
+            $this->disableQuoteActionGatingBypassForSeed();
+        }
         $counts = $this->keyCounts();
         $registry = $this->trackingSummary();
         $contractViolations = $this->postBaselineContractViolations($seedRunId, $counts, $registry);
@@ -185,6 +191,23 @@ final class CleanDemoBaselineService
     private function tableExists(string $table): bool
     {
         return $this->wpdb->get_var("SHOW TABLES LIKE '$table'") === $table;
+    }
+
+    private function enableQuoteActionGatingBypassForSeed(): void
+    {
+        if (!function_exists('set_transient')) {
+            return;
+        }
+        $ttl = defined('MINUTE_IN_SECONDS') ? (int)(5 * MINUTE_IN_SECONDS) : 300;
+        set_transient(self::ACTION_GATING_BYPASS_TRANSIENT, '1', $ttl);
+    }
+
+    private function disableQuoteActionGatingBypassForSeed(): void
+    {
+        if (!function_exists('delete_transient')) {
+            return;
+        }
+        delete_transient(self::ACTION_GATING_BYPASS_TRANSIENT);
     }
 }
 

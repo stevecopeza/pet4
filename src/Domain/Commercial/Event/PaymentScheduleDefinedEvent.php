@@ -50,6 +50,11 @@ final class PaymentScheduleDefinedEvent implements DomainEvent, SourcedEvent
         return $this->quoteId;
     }
 
+    public function name(): string
+    {
+        return 'quote.payment_schedule_defined';
+    }
+
     public function aggregateType(): string
     {
         return 'quote';

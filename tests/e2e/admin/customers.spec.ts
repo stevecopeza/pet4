@@ -37,8 +37,10 @@ test.describe.serial('Admin > Customers CRUD', () => {
   });
 
   test('can edit a customer', async ({ page, consoleErrors }) => {
-    // Find the customer row and click its name to open edit form
-    await page.getByRole('button', { name: customerName }).click();
+    const row = page.locator('tr', { hasText: customerName });
+    await expect(row).toBeVisible();
+    await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
+    await page.getByText('Edit', { exact: true }).click();
 
     // Update the name
     const nameInput = page.getByLabel('Name:', { exact: true });
@@ -57,8 +59,6 @@ test.describe.serial('Admin > Customers CRUD', () => {
   });
 
   test('can archive a customer via kebab menu', async ({ page, consoleErrors }) => {
-    // Accept the confirmation dialog before triggering it
-    page.on('dialog', (dialog) => dialog.accept());
 
     // Find the row with our test customer
     const row = page.locator('tr', { hasText: updatedName });
@@ -67,6 +67,7 @@ test.describe.serial('Admin > Customers CRUD', () => {
     // Open the kebab menu for this row and click Archive
     await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
     await page.getByText('Archive', { exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
 
     // Wait for the DELETE API call
     const archiveResponse = await page.waitForResponse(

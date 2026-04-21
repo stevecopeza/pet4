@@ -1,8 +1,9 @@
-STATUS: AUTHORITATIVE — IMPLEMENTATION REQUIRED
+STATUS: AUTHORITATIVE — PARTIALLY COMPLETE (see phase statuses below)
 SCOPE: Ticket Backbone Correction
-VERSION: v2
-SUPERSEDES: v1
+VERSION: v3
+SUPERSEDES: v2
 DATE: 2026-03-06
+UPDATED: 2026-04-20 — Phases 0, 1, 3, 4, 5 complete. Phases 6, 7, 8 remain.
 
 # PET Ticket Backbone — Sequenced Implementation Roadmap (v2)
 
@@ -14,7 +15,7 @@ This roadmap translates the Ticket Backbone Master Specification into an ordered
 
 ---
 
-# Phase 0 — Pre-Implementation Guardrails (Mandatory)
+# Phase 0 — Pre-Implementation Guardrails ✅ COMPLETE
 
 ## Objectives
 - Freeze documentation baseline.
@@ -31,7 +32,7 @@ Organisational alignment risk only.
 
 ---
 
-# Phase 1 — Additive Schema Foundation
+# Phase 1 — Additive Schema Foundation ✅ COMPLETE
 
 ## Scope
 - Extend `wp_pet_tickets` with cross-context fields.
@@ -55,84 +56,68 @@ Schema drift risk if migrations not fully idempotent.
 
 ---
 
-# Phase 2 — Safe Backfill & Bridging
+# Phase 2 — Safe Backfill & Bridging ⚠️ PARTIAL
+
+## Status (2026-04-20)
+New Task creation is disabled (`AddTaskHandler` throws). Historical `wp_pet_tasks` rows
+have not been backfilled to `ticket_id`. Since no new tasks are written, this is low priority
+unless historical delivery data needs to be surfaced in ticket-based views.
 
 ## Scope
-- Create tickets for all existing tasks.
-- Backfill tasks.ticket_id.
-- Backfill time_entries.ticket_id via task mapping.
-- Implement CLI command for re-runnable backfill.
+- ~~Create tickets for all existing tasks.~~ Superseded — `AddTaskHandler` is now disabled.
+- Backfill `tasks.ticket_id` for any historical rows (optional / low priority).
+- Backfill `time_entries.ticket_id` for any legacy task-linked time entries (optional).
+- Implement CLI command for re-runnable backfill if historical data migration is required.
 
 ## Hard Rules
 - Never mutate historical time values.
-- No deletion of legacy tasks.
+- No deletion of legacy task rows.
 - Flag ambiguous records only; do not guess.
 
-## Verification
-- Row counts match expected mappings.
-- Re-running backfill produces zero changes (idempotent).
-- Time submission still works for legacy entries.
-
-## Risk Level: Medium–High
-Data integrity risk if backfill mapping incorrect.
+## Risk Level: Low (reduced — no active task writes)
 
 ---
 
-# Phase 3 — Time Enforcement Gate
+# Phase 3 — Time Enforcement Gate ✅ COMPLETE
 
-## Scope
-- Enforce ticket_id requirement at submission boundary.
-- Prevent submission against roll-up tickets.
-- Preserve draft timers with NULL ticket_id.
-
-## Tests Required
-- Cannot submit without ticket.
-- Cannot submit to parent ticket.
-- Legacy task-only entries auto-resolve.
-
-## Risk Level: High
-Directly affects operational workflows.
-
-Mitigation:
-- Feature flag for enforcement (temporary).
-- Clear error messaging.
+## What was implemented
+- `LogTimeHandler` fetches the Ticket by `ticketId` and calls `$ticket->canAcceptTimeEntries()`.
+- Throws `DomainException` if the ticket cannot accept time (closed, rollup, unassigned support ticket, non-in_progress project ticket).
+- Time entries store `ticket_id` directly — no task intermediary.
 
 ---
 
-# Phase 4 — Quote Acceptance Ticket Creation
+# Phase 4 — Quote Acceptance Ticket Creation ✅ COMPLETE (2026-04-20)
 
-> **Note:** Phase 4 (Quote Draft Ticket Creation) from v1 has been REMOVED per architecture decisions. No tickets are created during quoting. The quote builder manages its own task records.
+> **Note:** Phase 4 (Quote Draft Ticket Creation) from v1 has been REMOVED per architecture decisions. No tickets are created during quoting. The quote builder manages its own QuoteTask records.
 
-## Scope
-- On QuoteAccepted:
-  - For each labour QuoteTask, create one ticket with `sold_minutes` locked and `is_baseline_locked = 1`.
-  - Set `root_ticket_id` = self on each created ticket.
-  - Store `ticket_id` on the QuoteTask record.
-  - Link tickets to the project being created.
-  - Link tasks.ticket_id to the created tickets (backward compat).
+## What was implemented
+- `AcceptQuoteHandler::createTicketsFromQuote()` iterates quote components:
+  - `ImplementationComponent`: each milestone task row becomes a Ticket. Multi-task components get a rollup Ticket (`isRollup=true`) with child Tickets referencing it via `parentTicketId`.
+  - `OnceOffServiceComponent`: each unit becomes a Ticket. Multi-unit components get a rollup + children.
+- `CreateProjectTicketHandler` handles deduplication via `findByProvisioningKey(projectId, sourceComponentId, parentTicketId)` — idempotent on re-acceptance attempts.
+- All created Tickets have: `soldMinutes` and `soldValueCents` set, `isBaselineLocked=true`, `lifecycleOwner='project'`, `primaryContainer='project'`, `quoteId` set, `projectId` set.
+- `TicketCreated` event dispatched for each ticket — WorkItem projection fires.
 
-## What does NOT happen
-- No "baseline ticket" is created as a separate record.
-- No "execution ticket clone" is created.
-- No `ticket_mode` is set.
-
-## Hard Invariants
-- `sold_minutes` and `sold_value_cents` immutable once set.
-- `is_baseline_locked = 1` on all tickets created from accepted quotes.
-
-## Verification
-- Accepting quote results in:
-  - One ticket per sold labour item with locked `sold_minutes`.
-  - Tickets linked to project.
-  - Tasks mapped to tickets.
-  - No duplicate tickets on re-acceptance attempts.
-
-## Risk Level: High
-Core commercial transition logic.
+## Verification status
+- ✅ Rollup + child pattern working.
+- ✅ Duplicate-safe.
+- ✅ Project linked.
+- ⚠️ `tasks.ticket_id` NOT backfilled (Phase 2 deferred).
+- ⚠️ WBS post-acceptance splitting not yet implemented.
 
 ---
 
-# Phase 6 — SLA Agreement & Entitlement (If in scope)
+# Phase 5 — WorkItem Projection Alignment ✅ COMPLETE
+
+## What was implemented
+- `WorkItemProjector::onTicketCreated()` handles project tickets (lifecycle_owner='project')
+  as well as support tickets.
+- No `onProjectTaskCreated` handler remains — Tasks are dead code.
+
+---
+
+# Phase 6 — SLA Agreement & Entitlement ❌ NOT STARTED
 
 ## Scope
 - Introduce Agreement entity.
@@ -140,26 +125,33 @@ Core commercial transition logic.
 - Consumption tracking per time entry.
 
 ## Risk Level: Medium
-Isolated but financially sensitive.
+Isolated but financially sensitive. Not blocking any current workflows.
 
 ---
 
-# Phase 7 — UI Cutover (Gradual)
+# Phase 7 — Admin UI Cutover ❌ NOT STARTED
 
 ## Scope
-- Make Ticket primary selection in time logging.
-- Keep Task as compatibility selection resolving to ticket.
+- Update `types.ts` `Project` interface: replace `tasks: Task[]` with delivery tickets.
+- Update admin project view to show delivery Tickets (with lifecycle status, sold minutes, time logged).
+- Remove legacy Task UI components from admin where no longer needed.
 
 ## Risk Level: Low–Medium
-Primarily UX adjustments.
+Admin panel only. Portal already uses Tickets natively.
 
 ---
 
-# Phase 8 — Decommission Legacy Task-Only Mode (Optional Future)
+# Phase 8 — Legacy Code Decommission ❌ NOT STARTED (Optional)
 
 ## Scope
-- Prevent new task creation without ticket.
-- Move toward ticket-first UI everywhere.
+- Remove `Domain\Delivery\Entity\Task` (dead code).
+- Remove `Application\Delivery\Command\AddTaskHandler` and `AddTaskCommand`.
+- Remove `Application\Delivery\Command\AddTaskCommand`.
+- Write a forward migration to drop `wp_pet_tasks` (or archive it).
+- Remove `project_task` source type from `WorkItem` if no longer needed.
+
+## Gate
+Complete Phase 7 and confirm no production data depends on `wp_pet_tasks` before running.
 
 ---
 

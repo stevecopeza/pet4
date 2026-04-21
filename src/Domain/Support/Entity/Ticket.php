@@ -60,6 +60,8 @@ class Ticket
     private bool $isBaselineLocked = false;
     private ?int $changeOrderSourceTicketId = null;
     private ?int $soldValueCents = null;
+    private ?string $sourceType = null;
+    private ?int $sourceComponentId = null;
 
     public function __construct(
         int $customerId,
@@ -108,7 +110,9 @@ class Ticket
         string $lifecycleOwner = 'support',
         bool $isBaselineLocked = false,
         ?int $changeOrderSourceTicketId = null,
-        ?int $soldValueCents = null
+        ?int $soldValueCents = null,
+        ?string $sourceType = null,
+        ?int $sourceComponentId = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -157,6 +161,8 @@ class Ticket
         $this->isBaselineLocked = $isBaselineLocked;
         $this->changeOrderSourceTicketId = $changeOrderSourceTicketId;
         $this->soldValueCents = $soldValueCents;
+        $this->sourceType = $sourceType;
+        $this->sourceComponentId = $sourceComponentId;
     }
 
     public function id(): ?int
@@ -363,6 +369,8 @@ class Ticket
     public function isBaselineLocked(): bool { return $this->isBaselineLocked; }
     public function changeOrderSourceTicketId(): ?int { return $this->changeOrderSourceTicketId; }
     public function soldValueCents(): ?int { return $this->soldValueCents; }
+    public function sourceType(): ?string { return $this->sourceType; }
+    public function sourceComponentId(): ?int { return $this->sourceComponentId; }
 
     /**
      * Whether this ticket can accept time entries.

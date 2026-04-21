@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pet\Application\Commercial\Command;
 
 /**
- * Command to create a project ticket from an accepted quote task.
+ * Command to create a project ticket from accepted quote delivery components.
  * All sold/baseline fields are set at construction and are immutable once persisted.
  */
 class CreateProjectTicketCommand
@@ -22,6 +22,10 @@ class CreateProjectTicketCommand
     private ?int $requiredRoleId;
     private ?int $departmentIdExt;
     private ?int $changeOrderSourceTicketId;
+    private string $sourceType;
+    private int $sourceComponentId;
+    private ?int $parentTicketId;
+    private bool $isRollup;
 
     public function __construct(
         int $customerId,
@@ -35,7 +39,11 @@ class CreateProjectTicketCommand
         ?int $phaseId = null,
         ?int $requiredRoleId = null,
         ?int $departmentIdExt = null,
-        ?int $changeOrderSourceTicketId = null
+        ?int $changeOrderSourceTicketId = null,
+        string $sourceType = 'quote_component',
+        int $sourceComponentId = 0,
+        ?int $parentTicketId = null,
+        bool $isRollup = false
     ) {
         $this->customerId = $customerId;
         $this->projectId = $projectId;
@@ -49,6 +57,10 @@ class CreateProjectTicketCommand
         $this->requiredRoleId = $requiredRoleId;
         $this->departmentIdExt = $departmentIdExt;
         $this->changeOrderSourceTicketId = $changeOrderSourceTicketId;
+        $this->sourceType = $sourceType;
+        $this->sourceComponentId = $sourceComponentId;
+        $this->parentTicketId = $parentTicketId;
+        $this->isRollup = $isRollup;
     }
 
     public function customerId(): int { return $this->customerId; }
@@ -63,4 +75,8 @@ class CreateProjectTicketCommand
     public function requiredRoleId(): ?int { return $this->requiredRoleId; }
     public function departmentIdExt(): ?int { return $this->departmentIdExt; }
     public function changeOrderSourceTicketId(): ?int { return $this->changeOrderSourceTicketId; }
+    public function sourceType(): string { return $this->sourceType; }
+    public function sourceComponentId(): int { return $this->sourceComponentId; }
+    public function parentTicketId(): ?int { return $this->parentTicketId; }
+    public function isRollup(): bool { return $this->isRollup; }
 }

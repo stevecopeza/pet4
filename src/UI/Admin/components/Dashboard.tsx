@@ -687,16 +687,14 @@ const Dashboard = () => {
   const overview = dashboardData?.overview;
   const readinessTone = String(demoHealth?.readiness_status || 'AMBER').toLowerCase();
   const readinessLabel = demoHealth?.readiness_status || 'AMBER';
-  const readinessWarnings = useMemo(() => {
-    if (!demoHealth) return [];
-    const warnings: string[] = [];
-    if (demoHealth.flags.no_active_seed_run) warnings.push('No active seed run');
-    if (demoHealth.flags.has_duplicate_staff_metadata_pairs) warnings.push('Duplicate staff metadata pairs');
-    if (demoHealth.integrity.duplicate_employee_emails > 0) warnings.push('Duplicate employee emails');
-    if (demoHealth.environment.has_untracked_rows) warnings.push('Untracked legacy rows detected');
-    if (demoHealth.seed.seed_error_in_last_run) warnings.push('Seed error in last run detected');
-    return warnings;
-  }, [demoHealth]);
+  const readinessWarnings: string[] = [];
+  if (demoHealth) {
+    if (demoHealth.flags.no_active_seed_run) readinessWarnings.push('No active seed run');
+    if (demoHealth.flags.has_duplicate_staff_metadata_pairs) readinessWarnings.push('Duplicate staff metadata pairs');
+    if (demoHealth.integrity.duplicate_employee_emails > 0) readinessWarnings.push('Duplicate employee emails');
+    if (demoHealth.environment.has_untracked_rows) readinessWarnings.push('Untracked legacy rows detected');
+    if (demoHealth.seed.seed_error_in_last_run) readinessWarnings.push('Seed error in last run detected');
+  }
   const capacityTone = peopleCapacity.ratio > 90 ? 'tight' : peopleCapacity.ratio > 70 ? 'busy' : 'healthy';
   const varianceTone = weeklyEntrySummary.varianceHours >= 0 ? 'positive' : 'negative';
 
@@ -741,33 +739,33 @@ const Dashboard = () => {
         </Panel>
       )}
 
-      <Panel className=\"pet-overview-panel pet-overview-demo-health-panel\">
-        <div className=\"pet-overview-section-header\">
+      <Panel className="pet-overview-panel pet-overview-demo-health-panel">
+        <div className="pet-overview-section-header">
           <div>
             <h3>Demo Readiness</h3>
             <p>Read-only environment health signal for demo safety.</p>
           </div>
         </div>
         {!demoHealth ? (
-          <p className=\"pet-overview-empty\">Demo readiness health is currently unavailable.</p>
+          <p className="pet-overview-empty">Demo readiness health is currently unavailable.</p>
         ) : (
-          <div className=\"pet-overview-demo-health-grid\">
-            <div className=\"pet-overview-demo-health-status\">
+          <div className="pet-overview-demo-health-grid">
+            <div className="pet-overview-demo-health-status">
               <span className={`pet-overview-demo-health-badge pet-overview-demo-health-badge--${readinessTone}`}>
                 {readinessLabel}
               </span>
             </div>
-            <div className=\"pet-overview-demo-health-metrics\">
+            <div className="pet-overview-demo-health-metrics">
               <div><strong>Last clean baseline run:</strong> {demoHealth.seed.last_clean_baseline_run || 'Unknown'}</div>
               <div><strong>Active seed run ID:</strong> {demoHealth.seed.active_seed_run_id || 'None'}</div>
               <div><strong>Tracked runs count:</strong> {demoHealth.seed.tracked_runs_count}</div>
               <div><strong>Duplicate emails / skill pairs / cert pairs:</strong> {demoHealth.integrity.duplicate_employee_emails} / {demoHealth.integrity.duplicate_skill_pairs} / {demoHealth.integrity.duplicate_certification_pairs}</div>
             </div>
             {readinessWarnings.length > 0 && (
-              <ul className=\"pet-overview-list\">
+              <ul className="pet-overview-list">
                 {readinessWarnings.map((warning) => (
-                  <li key={warning} className=\"pet-overview-list-row\">
-                    <span className=\"pet-overview-inline-status pet-overview-inline-status--risk\">Warning</span> {warning}
+                  <li key={warning} className="pet-overview-list-row">
+                    <span className="pet-overview-inline-status pet-overview-inline-status--risk">Warning</span> {warning}
                   </li>
                 ))}
               </ul>

@@ -8,8 +8,6 @@ use Pet\Application\System\Service\TransactionManager;
 use Pet\Application\Delivery\Service\ProjectHealthTransitionEmitter;
 use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Domain\Event\EventBus;
-use Pet\Domain\Delivery\Event\MilestoneCompletedEvent;
-use RuntimeException;
 
 class MarkMilestoneCompleteHandler
 {
@@ -32,25 +30,8 @@ class MarkMilestoneCompleteHandler
 
     public function handle(MarkMilestoneCompleteCommand $command): void
     {
-        $this->transactionManager->transactional(function () use ($command) {
-        $project = $this->projectRepository->findById($command->projectId());
-        if (!$project) {
-            throw new RuntimeException("Project not found: " . $command->projectId());
-        }
-
-        $project->completeTask($command->milestoneTitle());
-
-        $this->projectRepository->save($project);
-
-        $this->eventBus->dispatch(new MilestoneCompletedEvent(
-            $project->id(),
-            $command->milestoneTitle()
-        ));
-
-        // Evaluate health transition after task completion
-        $hoursUsed = (float)($project->malleableData()['hours_used'] ?? 0);
-        $this->healthEmitter->evaluate($project, $hoursUsed);
-    
-        });
+        throw new \DomainException(
+            'Legacy project milestone completion via tasks is disabled in tickets-only delivery execution.'
+        );
     }
 }

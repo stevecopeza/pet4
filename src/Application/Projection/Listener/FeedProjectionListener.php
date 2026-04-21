@@ -239,6 +239,10 @@ class FeedProjectionListener
 
     public function onTicketCreated(TicketCreated $event): void
     {
+        $ticket = $event->ticket();
+        if ($ticket->lifecycleOwner() === 'project' && $ticket->quoteId() !== null) {
+            return;
+        }
         $ticketId = (string)$event->ticket()->id();
 
         if ($this->feedRepo->findLatestBySource('support', $ticketId, 'support.ticket_created')) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Ticket, Employee } from '../types';
+import { Ticket, Employee, Customer } from '../types';
 import { DataTable, Column } from './DataTable';
 import TicketForm from './TicketForm';
 import TicketDetails from './TicketDetails';
@@ -37,9 +37,17 @@ const Support = () => {
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [pendingSelectId, setPendingSelectId] = useState<number | null>(null);
 
   const ticketIds = useMemo(() => tickets.map(t => String(t.id)), [tickets]);
+  const customerNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const customer of customers) {
+      map.set(Number(customer.id), customer.name);
+    }
+    return map;
+  }, [customers]);
   const { statuses: convStatuses } = useConversationStatus('ticket', ticketIds);
 
   useEffect(() => {
@@ -93,6 +101,30 @@ const Support = () => {
     };
 
     fetchEmployees();
+  }, []);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const apiUrl = window.petSettings?.apiUrl;
+        const nonce = window.petSettings?.nonce;
+        if (!apiUrl || !nonce) {
+          return;
+        }
+        const response = await fetch(`${apiUrl}/customers`, {
+          headers: { 'X-WP-Nonce': nonce },
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        setCustomers(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to fetch customers for Support list', err);
+      }
+    };
+
+    fetchCustomers();
   }, []);
 
   useEffect(() => {
@@ -347,7 +379,7 @@ const Support = () => {
         return '-';
       } 
     },
-    { key: 'customerId', header: 'Customer ID' },
+    { key: 'customerId', header: 'Customer', render: (val) => customerNameById.get(Number(val)) || `Customer #${val}` },
     { key: 'lifecycleOwner', header: 'Lifecycle' },
     { 
       key: 'assignedUserId', 

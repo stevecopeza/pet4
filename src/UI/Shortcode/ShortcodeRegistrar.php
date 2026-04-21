@@ -16,17 +16,28 @@ use Pet\Domain\Support\Repository\TicketRepository;
 use Pet\Domain\Identity\Repository\CustomerRepository;
 use Pet\Domain\Feed\Repository\FeedEventRepository;
 use Pet\Domain\Work\Repository\AssignmentRepository;
+use Pet\Domain\Work\Repository\RoleRepository;
 use Pet\Domain\Conversation\Repository\ConversationRepository;
 use Pet\Domain\Conversation\Repository\DecisionRepository;
 use Pet\Domain\Knowledge\Repository\ArticleRepository;
+use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Application\System\Service\FeatureFlagService;
 use Pet\Application\Helpdesk\Query\HelpdeskOverviewQueryService;
+use Pet\Domain\Commercial\Repository\QuoteRepository;
+use Pet\UI\Portal\Shortcode\PortalShortcode;
 use DateTimeImmutable;
 
 class ShortcodeRegistrar
 {
     public function register(): void
     {
+        // Staff portal SPA shortcode — registered independently
+        $portalShortcode = new PortalShortcode(
+            dirname(__DIR__, 3), // plugin root
+            plugin_dir_url(dirname(__DIR__, 3) . '/pet.php')
+        );
+        $portalShortcode->register();
+
         add_action('init', function () {
             add_shortcode('pet_my_profile', [$this, 'renderMyProfile']);
             add_shortcode('pet_my_work', [$this, 'renderMyWork']);
@@ -37,6 +48,8 @@ class ShortcodeRegistrar
             add_shortcode('pet_my_conversations', [$this, 'renderMyConversations']);
             add_shortcode('pet_my_approvals', [$this, 'renderMyApprovals']);
             add_shortcode('pet_knowledge_base', [$this, 'renderKnowledgeBase']);
+            // Staff mobile SPAs (Option B — 2026-04-21)
+            add_shortcode('pet_log_time', [$this, 'renderLogTime']);
         });
     }
 
@@ -526,113 +539,14 @@ class ShortcodeRegistrar
             }
         }
 
-        $petTeams = [];
-        $skills = [];
-        $certifications = [];
-        $skillsSource = 'pet';
-        $certsSource = 'pet';
-
-        try {
-            $container = ContainerFactory::create();
-            $employeeRepo = $container->get(EmployeeRepository::class);
-            $employee = $employeeRepo->findByWpUserId((int) $user->ID);
-
-            if ($employee && $employee->id() !== null) {
-                $teamIds = $employee->teamIds();
-                if (!empty($teamIds)) {
-                    $teamRepo = $container->get(TeamRepository::class);
-                    foreach ($teamIds as $teamId) {
-                        $team = $teamRepo->find((int) $teamId);
-                        if ($team && $team->isActive()) {
-                            $petTeams[] = $team->name();
-                        }
-                    }
-                }
-
-                $personSkillRepo = $container->get(PersonSkillRepository::class);
-                $skillRepo = $container->get(SkillRepository::class);
-                $personSkills = $personSkillRepo->findByEmployeeId((int) $employee->id());
-                $latestBySkill = [];
-                foreach ($personSkills as $personSkill) {
-                    $skillId = $personSkill->skillId();
-                    if (!isset($latestBySkill[$skillId])) {
-                        $latestBySkill[$skillId] = $personSkill;
-                    }
-                }
-                foreach ($latestBySkill as $skillId => $personSkill) {
-                    $skill = $skillRepo->findById((int) $skillId);
-                    $name = $skill ? $skill->name() : sprintf(__('Skill #%d', 'pet'), $skillId);
-                    $skills[] = [
-                        'name' => $name,
-                        'self_rating' => $personSkill->selfRating(),
-                        'manager_rating' => $personSkill->managerRating(),
-                        'effective_date' => $personSkill->effectiveDate()->format('Y-m-d'),
-                    ];
-                }
-
-                $personCertRepo = $container->get(PersonCertificationRepository::class);
-                $certRepo = $container->get(CertificationRepository::class);
-                $personCerts = $personCertRepo->findByEmployeeId((int) $employee->id());
-                foreach ($personCerts as $personCert) {
-                    $cert = $certRepo->findById($personCert->certificationId());
-                    $name = $cert ? $cert->name() : sprintf(__('Certification #%d', 'pet'), $personCert->certificationId());
-                    $issuer = $cert ? $cert->issuingBody() : '';
-                    $certifications[] = [
-                        'name' => $name,
-                        'issuer' => $issuer,
-                        'obtained' => $personCert->obtainedDate()->format('Y-m-d'),
-                        'expiry' => $personCert->expiryDate() ? $personCert->expiryDate()->format('Y-m-d') : '',
-                        'status' => $personCert->status(),
-                    ];
-                }
-            }
-        } catch (\Throwable $e) {
-            error_log('PET [pet_my_profile] data error: ' . $e->getMessage());
-        }
-
-        if (empty($skills)) {
-            $skillsSource = 'meta';
-            $skillsJson = get_user_meta($user->ID, 'pet_skills_json', true);
-            if (is_string($skillsJson) && $skillsJson !== '') {
-                $decoded = json_decode($skillsJson, true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $entry) {
-                        if (is_array($entry) && isset($entry['name'])) {
-                            $skills[] = ['name' => (string) $entry['name']];
-                        } elseif (is_string($entry)) {
-                            $skills[] = ['name' => $entry];
-                        }
-                    }
-                }
-            }
-        }
-
-        if (empty($certifications)) {
-            $certsSource = 'meta';
-            $certsJson = get_user_meta($user->ID, 'pet_certs_json', true);
-            if (is_string($certsJson) && $certsJson !== '') {
-                $decoded = json_decode($certsJson, true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $entry) {
-                        if (is_array($entry) && isset($entry['name'])) {
-                            $certifications[] = [
-                                'name' => (string) $entry['name'],
-                                'issuer' => isset($entry['issuer']) ? (string) $entry['issuer'] : '',
-                                'obtained' => isset($entry['obtained']) ? (string) $entry['obtained'] : '',
-                                'expiry' => isset($entry['expiry']) ? (string) $entry['expiry'] : '',
-                            ];
-                        } elseif (is_string($entry)) {
-                            $certifications[] = [
-                                'name' => $entry,
-                                'issuer' => '',
-                                'obtained' => '',
-                                'expiry' => '',
-                            ];
-                        }
-                    }
-                }
-            }
-        }
+        $profileDetails = $this->loadMyProfileDetails($user);
+        $petTeams = $profileDetails['pet_teams'];
+        $skills = $profileDetails['skills'];
+        $certifications = $profileDetails['certifications'];
+        $primaryRole = $profileDetails['primary_role'];
+        $availability = $profileDetails['availability'];
+        $responsibilitySummary = $profileDetails['responsibilities'];
+        $recentActivity = $profileDetails['recent_activity'];
 
         // Avatar
         $avatarUrl = get_avatar_url($user->ID, ['size' => 192]);
@@ -747,6 +661,9 @@ class ShortcodeRegistrar
         if ($atts['show_roles'] === '1') {
             $html .= '<div class="pmp-card">';
             $html .= '<h3 class="pmp-card-title">' . esc_html__('Roles & Teams', 'pet') . '</h3>';
+            $html .= '<div class="pmp-kv-grid">';
+            $html .= '<div><strong>' . esc_html__('Primary Role', 'pet') . '</strong><div>' . esc_html($primaryRole) . '</div></div>';
+            $html .= '</div>';
 
             if (!empty($wpRoles)) {
                 $html .= '<div class="pmp-subsection-label">' . esc_html__('Roles', 'pet') . '</div>';
@@ -823,6 +740,16 @@ class ShortcodeRegistrar
             $html .= '</div>'; // .pmp-card
         }
 
+        $html .= '<div class="pmp-card">';
+        $html .= '<h3 class="pmp-card-title">' . esc_html__('Availability / Work Pattern', 'pet') . '</h3>';
+        $html .= '<div class="pmp-kv-grid">';
+        $html .= '<div><strong>' . esc_html__('Status', 'pet') . '</strong><div>' . esc_html((string) $availability['state']) . '</div></div>';
+        $html .= '<div><strong>' . esc_html__('Work Pattern', 'pet') . '</strong><div>' . esc_html((string) $availability['work_pattern']) . '</div></div>';
+        $html .= '<div><strong>' . esc_html__('Next Available', 'pet') . '</strong><div>' . esc_html((string) $availability['next_available']) . '</div></div>';
+        $html .= '<div><strong>' . esc_html__('Location Note', 'pet') . '</strong><div>' . esc_html((string) $availability['location_note']) . '</div></div>';
+        $html .= '</div>';
+        $html .= '</div>';
+
         // Certifications
         if ($atts['show_certs'] === '1') {
             $html .= '<div class="pmp-card">';
@@ -864,10 +791,347 @@ class ShortcodeRegistrar
             $html .= '</div>'; // .pmp-card
         }
 
+        $html .= '<div class="pmp-card">';
+        $html .= '<h3 class="pmp-card-title">' . esc_html__('Responsibilities & Current Work', 'pet') . '</h3>';
+        $html .= '<div class="pmp-stats-grid">';
+        $html .= '<div class="pmp-stat"><strong>' . esc_html((string) $responsibilitySummary['assigned_tickets']) . '</strong><span>' . esc_html__('Assigned Tickets', 'pet') . '</span></div>';
+        $html .= '<div class="pmp-stat"><strong>' . esc_html((string) $responsibilitySummary['assigned_projects']) . '</strong><span>' . esc_html__('Assigned Projects', 'pet') . '</span></div>';
+        $html .= '<div class="pmp-stat"><strong>' . esc_html((string) $responsibilitySummary['assigned_tasks']) . '</strong><span>' . esc_html__('Assigned Tasks', 'pet') . '</span></div>';
+        $html .= '<div class="pmp-stat"><strong>' . esc_html((string) $responsibilitySummary['open_work_items']) . '</strong><span>' . esc_html__('Open Work Items', 'pet') . '</span></div>';
+        $html .= '</div>';
+        $html .= '<div class="pmp-profile-columns">';
+        $html .= '<div>';
+        $html .= '<div class="pmp-subsection-label">' . esc_html__('Top Ticket Responsibilities', 'pet') . '</div>';
+        if (empty($responsibilitySummary['top_tickets'])) {
+            $html .= '<div class="pmp-empty">' . esc_html__('No assigned tickets.', 'pet') . '</div>';
+        } else {
+            foreach ($responsibilitySummary['top_tickets'] as $ticket) {
+                $html .= '<a class="pmp-linked-row" href="' . esc_url((string) $ticket['link']) . '">';
+                $html .= '<span class="pmp-linked-row-title">' . esc_html((string) $ticket['title']) . '</span>';
+                $html .= '<span class="pmp-linked-row-meta">' . esc_html((string) $ticket['meta']) . '</span>';
+                $html .= '</a>';
+            }
+        }
+        $html .= '</div>';
+        $html .= '<div>';
+        $html .= '<div class="pmp-subsection-label">' . esc_html__('Top Project Responsibilities', 'pet') . '</div>';
+        if (empty($responsibilitySummary['top_projects'])) {
+            $html .= '<div class="pmp-empty">' . esc_html__('No assigned projects.', 'pet') . '</div>';
+        } else {
+            foreach ($responsibilitySummary['top_projects'] as $project) {
+                $html .= '<a class="pmp-linked-row" href="' . esc_url((string) $project['link']) . '">';
+                $html .= '<span class="pmp-linked-row-title">' . esc_html((string) $project['title']) . '</span>';
+                $html .= '<span class="pmp-linked-row-meta">' . esc_html((string) $project['meta']) . '</span>';
+                $html .= '</a>';
+            }
+        }
+        $html .= '</div>';
+        $html .= '</div>';
+        $html .= '</div>';
+
+        $html .= '<div class="pmp-card">';
+        $html .= '<h3 class="pmp-card-title">' . esc_html__('Recent Activity / Context', 'pet') . '</h3>';
+        if (empty($recentActivity)) {
+            $html .= '<div class="pmp-empty">' . esc_html__('No recent activity available.', 'pet') . '</div>';
+        } else {
+            foreach ($recentActivity as $entry) {
+                $html .= '<div class="pmp-activity-row">';
+                $html .= '<div class="pmp-linked-row-title">' . esc_html((string) $entry['headline']) . '</div>';
+                $html .= '<div class="pmp-linked-row-meta">' . esc_html((string) $entry['meta']) . '</div>';
+                $html .= '</div>';
+            }
+        }
+        $html .= '</div>';
+
         $html .= '</div>'; // .pmp-view-section
         $html .= '</div>'; // .pet-my-profile
 
         return $html;
+    }
+
+    protected function loadMyProfileDetails(object $user): array
+    {
+        $petTeams = [];
+        $skills = [];
+        $certifications = [];
+        $primaryRole = __('Unassigned', 'pet');
+        $availability = [
+            'state' => __('Available', 'pet'),
+            'work_pattern' => __('Not set', 'pet'),
+            'next_available' => __('Not set', 'pet'),
+            'location_note' => __('Not set', 'pet'),
+        ];
+        $responsibilitySummary = [
+            'assigned_tickets' => 0,
+            'assigned_projects' => 0,
+            'assigned_tasks' => 0,
+            'open_work_items' => 0,
+            'top_tickets' => [],
+            'top_projects' => [],
+        ];
+        $recentActivity = [];
+
+        try {
+            $container = ContainerFactory::create();
+            $employeeRepo = $container->get(EmployeeRepository::class);
+            $employee = $employeeRepo->findByWpUserId((int) $user->ID);
+
+            if ($employee && $employee->id() !== null) {
+                $teamIds = $employee->teamIds();
+                if (!empty($teamIds)) {
+                    $teamRepo = $container->get(TeamRepository::class);
+                    foreach ($teamIds as $teamId) {
+                        $team = $teamRepo->find((int) $teamId);
+                        if ($team && $team->isActive()) {
+                            $petTeams[] = $team->name();
+                        }
+                    }
+                }
+
+                $malleableData = $employee->malleableData();
+                $availabilityState = strtolower((string) ($malleableData['availability_state'] ?? 'available'));
+                $availability['state'] = match ($availabilityState) {
+                    'busy' => __('Busy', 'pet'),
+                    'limited' => __('Limited', 'pet'),
+                    'out' => __('Out', 'pet'),
+                    default => __('Available', 'pet'),
+                };
+                $availability['work_pattern'] = trim((string) ($malleableData['availability_pattern'] ?? '')) ?: __('Not set', 'pet');
+                $availability['next_available'] = trim((string) ($malleableData['next_available_note'] ?? '')) ?: __('Not set', 'pet');
+                $availability['location_note'] = trim((string) ($malleableData['location_note'] ?? '')) ?: __('Not set', 'pet');
+
+                $assignmentRepo = $container->get(AssignmentRepository::class);
+                $roleRepo = $container->get(RoleRepository::class);
+                $assignments = $assignmentRepo->findByEmployeeId((int) $employee->id());
+                foreach ($assignments as $assignment) {
+                    if ($assignment->status() !== 'active') {
+                        continue;
+                    }
+                    $role = $roleRepo->findById($assignment->roleId());
+                    if ($role) {
+                        $primaryRole = $role->name();
+                    }
+                    break;
+                }
+
+                $personSkillRepo = $container->get(PersonSkillRepository::class);
+                $skillRepo = $container->get(SkillRepository::class);
+                $personSkills = $personSkillRepo->findByEmployeeId((int) $employee->id());
+                $latestBySkill = [];
+                foreach ($personSkills as $personSkill) {
+                    $skillId = $personSkill->skillId();
+                    if (!isset($latestBySkill[$skillId])) {
+                        $latestBySkill[$skillId] = $personSkill;
+                    }
+                }
+                foreach ($latestBySkill as $skillId => $personSkill) {
+                    $skill = $skillRepo->findById((int) $skillId);
+                    $name = $skill ? $skill->name() : sprintf(__('Skill #%d', 'pet'), $skillId);
+                    $skills[] = [
+                        'name' => $name,
+                        'self_rating' => $personSkill->selfRating(),
+                        'manager_rating' => $personSkill->managerRating(),
+                        'effective_date' => $personSkill->effectiveDate()->format('Y-m-d'),
+                    ];
+                }
+
+                $personCertRepo = $container->get(PersonCertificationRepository::class);
+                $certRepo = $container->get(CertificationRepository::class);
+                $personCerts = $personCertRepo->findByEmployeeId((int) $employee->id());
+                foreach ($personCerts as $personCert) {
+                    $cert = $certRepo->findById($personCert->certificationId());
+                    $name = $cert ? $cert->name() : sprintf(__('Certification #%d', 'pet'), $personCert->certificationId());
+                    $issuer = $cert ? $cert->issuingBody() : '';
+                    $certifications[] = [
+                        'name' => $name,
+                        'issuer' => $issuer,
+                        'obtained' => $personCert->obtainedDate()->format('Y-m-d'),
+                        'expiry' => $personCert->expiryDate() ? $personCert->expiryDate()->format('Y-m-d') : '',
+                        'status' => $personCert->status(),
+                    ];
+                }
+
+                $workItemRepo = $container->get(WorkItemRepository::class);
+                $ticketRepo = $container->get(TicketRepository::class);
+                $projectRepo = $container->get(ProjectRepository::class);
+                $workItems = $workItemRepo->findByAssignedUser((string) $user->ID);
+                $responsibilitySummary['open_work_items'] = count($workItems);
+
+                $ticketIds = [];
+                $projectIds = [];
+                $taskCount = 0;
+                foreach ($workItems as $item) {
+                    $sourceType = strtolower((string) $item->getSourceType());
+                    $sourceId = (int) $item->getSourceId();
+                    if ($sourceType === 'ticket' && $sourceId > 0) {
+                        $ticketIds[$sourceId] = true;
+                        continue;
+                    }
+                    if ($sourceType === 'project' && $sourceId > 0) {
+                        $projectIds[$sourceId] = true;
+                        continue;
+                    }
+                    if ($sourceType === 'task') {
+                        $taskCount++;
+                    }
+                }
+
+                $responsibilitySummary['assigned_tickets'] = count($ticketIds);
+                $responsibilitySummary['assigned_tasks'] = $taskCount;
+
+                $topTickets = [];
+                foreach (array_keys($ticketIds) as $ticketId) {
+                    $ticket = $ticketRepo->findById((int) $ticketId);
+                    if (!$ticket) {
+                        continue;
+                    }
+                    $projectId = $ticket->projectId();
+                    if ($projectId !== null && $projectId > 0) {
+                        $projectIds[$projectId] = true;
+                    }
+                    $topTickets[] = [
+                        'title' => $ticket->subject(),
+                        'meta' => sprintf(__('Ticket #%d · %s', 'pet'), $ticket->id(), ucfirst((string) $ticket->status())),
+                        'link' => admin_url('admin.php?page=pet-support#ticket=' . $ticket->id()),
+                        'priority_rank' => $this->ticketPriorityRank((string) $ticket->priority()),
+                    ];
+                }
+                usort($topTickets, function (array $a, array $b): int {
+                    return ($b['priority_rank'] ?? 0) <=> ($a['priority_rank'] ?? 0);
+                });
+                $responsibilitySummary['top_tickets'] = array_map(function (array $ticket): array {
+                    unset($ticket['priority_rank']);
+                    return $ticket;
+                }, array_slice($topTickets, 0, 3));
+
+                $responsibilitySummary['assigned_projects'] = count($projectIds);
+                $topProjects = [];
+                foreach (array_keys($projectIds) as $projectId) {
+                    $project = $projectRepo->findById((int) $projectId);
+                    if (!$project) {
+                        continue;
+                    }
+                    $topProjects[] = [
+                        'title' => $project->name(),
+                        'meta' => sprintf(__('Project #%d · %s', 'pet'), $project->id(), ucfirst($project->state()->toString())),
+                        'link' => admin_url('admin.php?page=pet-delivery#project=' . $project->id()),
+                    ];
+                }
+                $responsibilitySummary['top_projects'] = array_slice($topProjects, 0, 3);
+            }
+
+            $recentActivity = $this->loadMyProfileRecentActivity();
+        } catch (\Throwable $e) {
+            error_log('PET [pet_my_profile] data error: ' . $e->getMessage());
+        }
+
+        if (empty($skills)) {
+            $skillsJson = get_user_meta($user->ID, 'pet_skills_json', true);
+            if (is_string($skillsJson) && $skillsJson !== '') {
+                $decoded = json_decode($skillsJson, true);
+                if (is_array($decoded)) {
+                    foreach ($decoded as $entry) {
+                        if (is_array($entry) && isset($entry['name'])) {
+                            $skills[] = ['name' => (string) $entry['name']];
+                        } elseif (is_string($entry)) {
+                            $skills[] = ['name' => $entry];
+                        }
+                    }
+                }
+            }
+        }
+
+        if (empty($certifications)) {
+            $certsJson = get_user_meta($user->ID, 'pet_certs_json', true);
+            if (is_string($certsJson) && $certsJson !== '') {
+                $decoded = json_decode($certsJson, true);
+                if (is_array($decoded)) {
+                    foreach ($decoded as $entry) {
+                        if (is_array($entry) && isset($entry['name'])) {
+                            $certifications[] = [
+                                'name' => (string) $entry['name'],
+                                'issuer' => isset($entry['issuer']) ? (string) $entry['issuer'] : '',
+                                'obtained' => isset($entry['obtained']) ? (string) $entry['obtained'] : '',
+                                'expiry' => isset($entry['expiry']) ? (string) $entry['expiry'] : '',
+                            ];
+                        } elseif (is_string($entry)) {
+                            $certifications[] = [
+                                'name' => $entry,
+                                'issuer' => '',
+                                'obtained' => '',
+                                'expiry' => '',
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return [
+            'pet_teams' => $petTeams,
+            'skills' => $skills,
+            'certifications' => $certifications,
+            'primary_role' => $primaryRole,
+            'availability' => $availability,
+            'responsibilities' => $responsibilitySummary,
+            'recent_activity' => $recentActivity,
+        ];
+    }
+
+    private function loadMyProfileRecentActivity(): array
+    {
+        $rows = [];
+        if (!class_exists('\\WP_REST_Request') || !function_exists('rest_do_request')) {
+            return $rows;
+        }
+
+        $request = new \WP_REST_Request('GET', '/pet/v1/activity');
+        $request->set_param('limit', 8);
+        $response = rest_do_request($request);
+        if (!method_exists($response, 'is_error') || $response->is_error()) {
+            return $rows;
+        }
+
+        $data = $response->get_data();
+        if (!is_array($data) || !isset($data['items']) || !is_array($data['items'])) {
+            return $rows;
+        }
+
+        foreach (array_slice($data['items'], 0, 8) as $entry) {
+            $headline = isset($entry['headline']) ? (string) $entry['headline'] : '';
+            if ($headline === '') {
+                continue;
+            }
+            $referenceType = isset($entry['reference_type']) ? (string) $entry['reference_type'] : '';
+            $referenceId = isset($entry['reference_id']) ? (string) $entry['reference_id'] : '';
+            $occurredAt = isset($entry['occurred_at']) ? (string) $entry['occurred_at'] : '';
+            $metaParts = [];
+            if ($referenceType !== '') {
+                $metaParts[] = $referenceId !== ''
+                    ? sprintf('%s #%s', $referenceType, $referenceId)
+                    : $referenceType;
+            }
+            if ($occurredAt !== '') {
+                $metaParts[] = $occurredAt;
+            }
+            $rows[] = [
+                'headline' => $headline,
+                'meta' => !empty($metaParts) ? implode(' · ', $metaParts) : __('General', 'pet'),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function ticketPriorityRank(string $priority): int
+    {
+        return match (strtolower($priority)) {
+            'critical' => 4,
+            'high' => 3,
+            'medium' => 2,
+            'low' => 1,
+            default => 0,
+        };
     }
 
     private function enqueueShortcodesCss(): void
@@ -1136,14 +1400,14 @@ class ShortcodeRegistrar
 
         $html = '<div class="pet-sc pet-my-work">';
         $html .= '<h2 class="sc-title">' . esc_html__('My Work', 'pet') . '</h2>';
-        $html .= '<p class="sc-subtitle">' . esc_html__('Your assigned tickets, tasks, and department queues.', 'pet') . '</p>';
+        $html .= '<p class="sc-subtitle">' . esc_html__('Your assigned tickets and department queues.', 'pet') . '</p>';
 
         // KPI strip
         $html .= '<div class="sc-kpi-strip">';
         $html .= '<div class="sc-kpi sc-kpi--accent"><div class="sc-kpi-value">' . count($supportItems) . '</div><div class="sc-kpi-label">' . esc_html__('My Tickets', 'pet') . '</div></div>';
         $html .= '<div class="sc-kpi sc-kpi--' . ($atRisk > 0 ? 'danger' : 'success') . '"><div class="sc-kpi-value">' . $atRisk . '</div><div class="sc-kpi-label">' . esc_html__('At Risk', 'pet') . '</div></div>';
         $html .= '<div class="sc-kpi sc-kpi--' . ($dueToday > 0 ? 'warn' : 'teal') . '"><div class="sc-kpi-value">' . $dueToday . '</div><div class="sc-kpi-label">' . esc_html__('Due Today', 'pet') . '</div></div>';
-        $html .= '<div class="sc-kpi sc-kpi--purple"><div class="sc-kpi-value">' . count($projectItems) . '</div><div class="sc-kpi-label">' . esc_html__('Tasks', 'pet') . '</div></div>';
+        $html .= '<div class="sc-kpi sc-kpi--purple"><div class="sc-kpi-value">' . count($projectItems) . '</div><div class="sc-kpi-label">' . esc_html__('Project Tickets', 'pet') . '</div></div>';
         $html .= '<div class="sc-kpi sc-kpi--teal"><div class="sc-kpi-value">' . $totalQueue . '</div><div class="sc-kpi-label">' . esc_html__('Queue', 'pet') . '</div></div>';
         $html .= '</div>';
 
@@ -1193,11 +1457,11 @@ class ShortcodeRegistrar
         }
         $html .= '</div>';
 
-        // Project tasks
+        // Project delivery tickets
         $html .= '<div class="sc-card">';
-        $html .= '<div class="sc-card-title">' . esc_html__('Project Tasks', 'pet') . ' <span class="sc-badge">' . count($projectItems) . '</span></div>';
+        $html .= '<div class="sc-card-title">' . esc_html__('Project Tickets', 'pet') . ' <span class="sc-badge">' . count($projectItems) . '</span></div>';
         if (empty($projectItems)) {
-            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128203;</span>' . esc_html__('No project tasks assigned.', 'pet') . '</div>';
+            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#128203;</span>' . esc_html__('No project tickets assigned.', 'pet') . '</div>';
         } else {
             foreach ($projectItems as $row) {
                 [$dueLabel, $dueClass] = $this->scFormatDue((string) $row['due']);
@@ -1705,7 +1969,7 @@ class ShortcodeRegistrar
             foreach ($conversations as $conversation) {
                 $url = admin_url('admin.php?page=pet-conversations&id=' . $conversation->id());
                 $ctx = $conversation->contextType();
-                $ctxClass = in_array($ctx, ['ticket'], true) ? 'ticket' : (in_array($ctx, ['project', 'project_task'], true) ? 'project' : 'general');
+                $ctxClass = in_array($ctx, ['ticket'], true) ? 'ticket' : (in_array($ctx, ['project'], true) ? 'project' : 'general');
                 $pillClass = $conversation->state() === 'open' ? 'sc-pill--open' : 'sc-pill--resolved';
                 $ago = human_time_diff($conversation->createdAt()->getTimestamp(), time());
 
@@ -1732,69 +1996,83 @@ class ShortcodeRegistrar
         return $html;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Staff mobile SPAs — [pet_log_time] and [pet_my_approvals]
+    // Both use a shared Vite entry (src/UI/Staff/main.tsx). The data-view
+    // attribute tells the React app which page to render.
+    // Added: 2026-04-21 (Option B go-live sprint)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function renderLogTime(array $atts = [], ?string $content = null): string
+    {
+        if (!is_user_logged_in()) {
+            return '<p style="padding:20px;">' . esc_html__('Please sign in to log time.', 'pet') . '</p>';
+        }
+
+        $this->enqueueStaffAssets('time');
+        return '<div id="pet-staff-app" data-view="time"></div>';
+    }
+
     public function renderMyApprovals(array $atts = [], ?string $content = null): string
     {
-        $this->enqueueShortcodesCss();
-
         if (!is_user_logged_in()) {
             return '<div class="pet-sc pet-my-approvals"><div class="sc-empty">' . esc_html__('Sign in required.', 'pet') . '</div></div>';
         }
 
-        $atts = shortcode_atts(['title' => 'Pending Approvals'], $atts, 'pet_my_approvals');
+        $this->enqueueStaffAssets('approvals');
+        return '<div id="pet-staff-app" data-view="approvals"></div>';
+    }
 
-        $userId = get_current_user_id();
-        $decisions = [];
+    /**
+     * Enqueue the staff React SPA bundle (dist/staff*.js + dist/staff*.css)
+     * and inject window.petStaffConfig. Safe to call multiple times on the
+     * same page — wp_enqueue_script/style are idempotent by handle.
+     */
+    private function enqueueStaffAssets(string $view): void
+    {
+        $pluginRoot = rtrim(dirname(__DIR__, 3), '/');
+        $pluginUrl  = rtrim(plugin_dir_url($pluginRoot . '/pet.php'), '/');
+        $manifestPath = $pluginRoot . '/dist/.vite/manifest.json';
 
-        try {
-            $container = ContainerFactory::create();
-            $decisionRepo = $container->get(DecisionRepository::class);
-            $decisions = $decisionRepo->findPendingByUserId($userId);
-        } catch (\Throwable $e) {
-            error_log('PET [pet_my_approvals] error: ' . $e->getMessage());
-            return '<div class="pet-sc pet-my-approvals"><div class="sc-empty">' . esc_html__('Error loading approvals.', 'pet') . '</div></div>';
+        if (!file_exists($manifestPath)) {
+            add_action('wp_footer', function (): void {
+                echo '<div style="padding:20px;text-align:center;color:#b32d2e;">PET Staff: run <code>npm run build</code> in the plugin directory.</div>';
+            });
+            return;
         }
 
-        $html = '<div class="pet-sc pet-my-approvals">';
-        $html .= '<h2 class="sc-title">' . esc_html($atts['title']) . '</h2>';
-        $html .= '<p class="sc-subtitle">' . esc_html(sprintf(__('%d pending decisions', 'pet'), count($decisions))) . '</p>';
+        $manifest = json_decode((string) file_get_contents($manifestPath), true);
+        $entryKey = 'src/UI/Staff/main.tsx';
 
-        if (empty($decisions)) {
-            $html .= '<div class="sc-empty"><span class="sc-empty-icon">&#10003;</span>' . esc_html__('No pending approvals — you\'re all caught up.', 'pet') . '</div>';
-        } else {
-            foreach ($decisions as $decision) {
-                $url = admin_url('admin.php?page=pet-conversations&id=' . $decision->conversationId());
-                $daysPending = max(0, (int) ((time() - $decision->requestedAt()->getTimestamp()) / 86400));
-                $urgencyClass = $daysPending >= 5 ? 'high' : ($daysPending >= 2 ? 'medium' : 'low');
-                $urgencyLabel = $daysPending === 0 ? __('Today', 'pet') : sprintf(__('%dd ago', 'pet'), $daysPending);
+        if (!isset($manifest[$entryKey])) {
+            // Build hasn't included the staff entry yet — silently skip.
+            return;
+        }
 
-                $payload = $decision->payload();
-                $details = '';
-                if (!empty($payload['description'])) {
-                    $details = (string) $payload['description'];
-                } elseif (!empty($payload['reason'])) {
-                    $details = (string) $payload['reason'];
-                }
+        $jsFile   = $manifest[$entryKey]['file'];
+        $cssFiles = $manifest[$entryKey]['css'] ?? [];
 
-                $html .= '<div class="sc-item">';
-                $html .= '<div class="sc-item-icon sc-item-icon--approval">&#9888;</div>';
-                $html .= '<div class="sc-item-body">';
-                $html .= '<div class="sc-item-title">' . esc_html(ucwords(str_replace('_', ' ', $decision->decisionType()))) . '</div>';
-                $html .= '<div class="sc-item-meta">';
-                if ($details !== '') {
-                    $html .= '<span>' . esc_html(mb_strimwidth($details, 0, 80, '...')) . '</span>';
-                }
-                $html .= '</div>';
-                $html .= '</div>';
-                $html .= '<div class="sc-item-right">';
-                $html .= '<span class="sc-approval-urgency sc-approval-urgency--' . esc_attr($urgencyClass) . '">' . esc_html($urgencyLabel) . '</span>';
-                $html .= '<a href="' . esc_url($url) . '" class="sc-action-btn">' . esc_html__('Review', 'pet') . '</a>';
-                $html .= '</div>';
-                $html .= '</div>';
+        wp_enqueue_script('pet-staff-app', $pluginUrl . '/dist/' . $jsFile, [], null, true);
+
+        // Vite outputs ES modules — must be loaded with type="module".
+        add_filter('script_loader_tag', static function (string $tag, string $handle): string {
+            if ($handle === 'pet-staff-app') {
+                $tag = str_replace('<script ', '<script type="module" ', $tag);
             }
-        }
-        $html .= '</div>';
+            return $tag;
+        }, 10, 2);
 
-        return $html;
+        foreach ($cssFiles as $index => $cssFile) {
+            wp_enqueue_style('pet-staff-style-' . $index, $pluginUrl . '/dist/' . $cssFile, [], null);
+        }
+
+        $currentUser = wp_get_current_user();
+        wp_localize_script('pet-staff-app', 'petStaffConfig', [
+            'apiUrl'      => rest_url('pet/v1'),
+            'nonce'       => wp_create_nonce('wp_rest'),
+            'userId'      => get_current_user_id(),
+            'displayName' => $currentUser->display_name ?? '',
+        ]);
     }
 
     public function renderKnowledgeBase(array $atts = [], ?string $content = null): string

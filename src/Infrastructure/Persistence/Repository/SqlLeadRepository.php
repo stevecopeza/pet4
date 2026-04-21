@@ -19,54 +19,91 @@ class SqlLeadRepository implements LeadRepository
     public function save(Lead $lead): void
     {
         $table = $this->wpdb->prefix . 'pet_leads';
-        
-        $data = [
-            'customer_id' => $lead->customerId(),
-            'subject' => $lead->subject(),
-            'description' => $lead->description(),
-            'status' => $lead->status(),
-            'source' => $lead->source(),
-            'estimated_value' => $lead->estimatedValue(),
-            'malleable_schema_version' => $lead->malleableSchemaVersion(),
-            'malleable_data' => !empty($lead->malleableData()) ? json_encode($lead->malleableData()) : null,
-            'created_at' => $lead->createdAt()->format('Y-m-d H:i:s'),
-            'updated_at' => $lead->updatedAt() ? $lead->updatedAt()->format('Y-m-d H:i:s') : null,
-            'converted_at' => $lead->convertedAt() ? $lead->convertedAt()->format('Y-m-d H:i:s') : null,
-        ];
 
-        $formats = ['%d', '%s', '%s', '%s', '%s', '%f', '%d', '%s', '%s', '%s', '%s'];
+        $data    = [];
+        $formats = [];
+
+        // customer_id is nullable — omit the %d cast when null to avoid wpdb writing 0
+        if ($lead->customerId() !== null) {
+            $data['customer_id'] = $lead->customerId();
+            $formats[] = '%d';
+        } else {
+            $data['customer_id'] = null;
+            $formats[] = '%s'; // wpdb treats '%s' with null as NULL in SQL
+        }
+
+        $data    = array_merge($data, [
+            'subject'                 => $lead->subject(),
+            'description'             => $lead->description(),
+            'status'                  => $lead->status(),
+            'source'                  => $lead->source(),
+            'estimated_value'         => $lead->estimatedValue(),
+            'malleable_schema_version'=> $lead->malleableSchemaVersion(),
+            'malleable_data'          => !empty($lead->malleableData()) ? json_encode($lead->malleableData()) : null,
+            'created_at'              => $lead->createdAt()->format('Y-m-d H:i:s'),
+            'updated_at'              => $lead->updatedAt() ? $lead->updatedAt()->format('Y-m-d H:i:s') : null,
+            'converted_at'            => $lead->convertedAt() ? $lead->convertedAt()->format('Y-m-d H:i:s') : null,
+        ]);
+
+        $formats = array_merge($formats, ['%s', '%s', '%s', '%s', '%f', '%d', '%s', '%s', '%s', '%s']);
 
         if ($lead->id()) {
             $this->wpdb->update($table, $data, ['id' => $lead->id()], $formats, ['%d']);
         } else {
             $this->wpdb->insert($table, $data, $formats);
+            $newId      = $this->wpdb->insert_id;
+            $reflection = new \ReflectionClass($lead);
+            $property   = $reflection->getProperty('id');
+            $property->setAccessible(true);
+            $property->setValue($lead, (int) $newId);
         }
     }
 
     public function findById(int $id): ?Lead
     {
         $table = $this->wpdb->prefix . 'pet_leads';
-        $row = $this->wpdb->get_row($this->wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
+        $row   = $this->wpdb->get_row(
+            $this->wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id)
+        );
 
-        if (!$row) {
-            return null;
-        }
-
-        return $this->hydrate($row);
+        return $row ? $this->hydrate($row) : null;
     }
 
     public function findAll(): array
     {
         $table = $this->wpdb->prefix . 'pet_leads';
-        $rows = $this->wpdb->get_results("SELECT * FROM $table ORDER BY created_at DESC");
+        $rows  = $this->wpdb->get_results("SELECT * FROM $table ORDER BY created_at DESC");
 
         return array_map([$this, 'hydrate'], $rows);
+    }
+
+    /**
+     * Returns leads enriched with customer name for list display.
+     * Returns raw stdClass rows (not Lead entities) so the controller
+     * can build the API response without a separate lookup.
+     */
+    public function findAllEnriched(): array
+    {
+        $leadsTable     = $this->wpdb->prefix . 'pet_leads';
+        $customersTable = $this->wpdb->prefix . 'pet_customers';
+
+        return $this->wpdb->get_results(
+            "SELECT l.*, c.name AS customer_name
+             FROM {$leadsTable} l
+             LEFT JOIN {$customersTable} c ON c.id = l.customer_id
+             ORDER BY l.created_at DESC"
+        );
     }
 
     public function findByCustomerId(int $customerId): array
     {
         $table = $this->wpdb->prefix . 'pet_leads';
-        $rows = $this->wpdb->get_results($this->wpdb->prepare("SELECT * FROM $table WHERE customer_id = %d ORDER BY created_at DESC", $customerId));
+        $rows  = $this->wpdb->get_results(
+            $this->wpdb->prepare(
+                "SELECT * FROM $table WHERE customer_id = %d ORDER BY created_at DESC",
+                $customerId
+            )
+        );
 
         return array_map([$this, 'hydrate'], $rows);
     }

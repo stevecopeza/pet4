@@ -29,7 +29,7 @@ class AdminPageRegistry
         add_menu_page(
             'PET Overview',
             'PET',
-            'manage_options',
+            'read',
             'pet-dashboard',
             [$this, 'renderPage'],
             'dashicons-chart-area',
@@ -46,6 +46,7 @@ class AdminPageRegistry
             'pet-finance' => 'Finance',
             'pet-delivery' => 'Delivery',
             'pet-time' => 'Time',
+            'pet-time-capture' => 'Time (mobile)',
             'pet-support' => 'Support',
             'pet-conversations' => 'Conversations',
             'pet-advisory' => 'Advisory',
@@ -65,14 +66,21 @@ class AdminPageRegistry
         if ($this->featureFlags !== null && $this->featureFlags->isEscalationEngineEnabled()) {
             $submenus['pet-escalations'] = 'Escalations';
         }
+        $readAccessSubmenus = [
+            'pet-dashboard',
+            'pet-dashboards',
+            'pet-my-work',
+            'pet-my-profile',
+        ];
 
 
         foreach ($submenus as $slug => $title) {
+            $capability = in_array($slug, $readAccessSubmenus, true) ? 'read' : 'manage_options';
             add_submenu_page(
                 'pet-dashboard',
                 'PET - ' . $title,
                 $title,
-                'manage_options',
+                $capability,
                 $slug,
                 [$this, 'renderPage']
             );
@@ -398,7 +406,7 @@ JS;
                     'resilience_indicators_enabled' => $this->featureFlags ? $this->featureFlags->isResilienceIndicatorsEnabled() : false,
                     'dashboards_enabled' => $this->featureFlags ? $this->featureFlags->isDashboardsEnabled() : false,
                     'helpdesk_enabled' => $this->featureFlags ? $this->featureFlags->isHelpdeskEnabled() : false,
-                    'support_operational_improvements_enabled' => $this->featureFlags ? $this->featureFlags->isSupportOperationalImprovementsEnabled() : false,
+                    'support_operational_improvements_enabled' => true,
                     'staff_setup_journey_enabled' => $this->featureFlags ? $this->featureFlags->isStaffSetupJourneyEnabled() : false,
                 ],
             ]);

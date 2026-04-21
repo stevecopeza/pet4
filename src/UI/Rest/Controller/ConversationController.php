@@ -275,7 +275,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -312,7 +312,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -348,7 +348,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -383,7 +383,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -418,7 +418,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -450,7 +450,7 @@ class ConversationController
 
             return new WP_REST_Response(['uuid' => $uuid], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -490,7 +490,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -532,7 +532,7 @@ class ConversationController
 
             return new WP_REST_Response(['uuid' => $decisionUuid], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -574,7 +574,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -604,7 +604,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -634,7 +634,7 @@ class ConversationController
 
             return new WP_REST_Response(['status' => 'success'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

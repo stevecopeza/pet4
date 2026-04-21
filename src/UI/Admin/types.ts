@@ -115,6 +115,15 @@ export interface Task {
   completed: boolean;
 }
 
+export interface QuoteApprovalState {
+  rejectionNote: string | null;
+  submittedForApprovalAt: string | null;
+  approvedAt: string | null;
+  approvedByUserId: number | null;
+  requiresApprovalForSend: boolean;
+  approvalReasons: string[];
+}
+
 export interface Quote {
   id: number;
   customerId: number;
@@ -134,6 +143,7 @@ export interface Quote {
   blocks?: QuoteBlock[];
   costAdjustments?: CostAdjustment[];
   malleableData?: Record<string, any>;
+  approvalState?: QuoteApprovalState;
   paymentSchedule?: Array<{
     id: number;
     title: string;
@@ -279,6 +289,11 @@ export interface QuoteBlock {
   componentId: number | null;
   priced: boolean;
   payload: Record<string, any>;
+  lineSellValue?: number | null;
+  lineCostValue?: number | null;
+  marginAmount?: number | null;
+  marginPercentage?: number | null;
+  hasMarginData?: boolean;
 }
 
 export interface QuoteLine {
@@ -626,7 +641,8 @@ export interface RoleKpi {
 
 export interface Lead {
   id: number;
-  customerId: number;
+  customerId: number | null;
+  customerName: string | null;
   subject: string;
   description: string;
   status: string;

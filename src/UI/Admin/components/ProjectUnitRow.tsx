@@ -21,7 +21,12 @@ export interface UnitDraft {
   quantity: number;
   unit: string;
   unitPrice: number;
+  unitCost?: number | null;
   totalValue: number;
+  totalCost?: number | null;
+  marginAmount?: number | null;
+  marginPercentage?: number | null;
+  hasMarginData?: boolean;
   price_override: boolean;
 }
 
@@ -151,6 +156,8 @@ const ProjectUnitRow: React.FC<ProjectUnitRowProps> = ({
   const ownerName =
     unit.ownerType === 'employee' ? unit.owner : unit.ownerType === 'team' ? unit.team : null;
   const total = Number(unit.totalValue) || 0;
+  const marginAmount = typeof (unit as any).marginAmount === 'number' ? (unit as any).marginAmount : null;
+  const marginPercentage = typeof (unit as any).marginPercentage === 'number' ? (unit as any).marginPercentage : null;
 
   if (!isEditing) {
     return (
@@ -176,6 +183,22 @@ const ProjectUnitRow: React.FC<ProjectUnitRowProps> = ({
         </td>
         <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>
           ${total.toFixed(2)}
+        </td>
+        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+          {marginAmount !== null ? (
+            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span style={{ fontWeight: 600, color: marginAmount < 0 ? '#b32d2e' : undefined }}>
+                ${marginAmount.toFixed(2)}
+              </span>
+              {marginPercentage !== null && (
+                <span style={{ fontSize: '10px', color: '#666' }}>
+                  {marginPercentage.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: '#999' }}>—</span>
+          )}
         </td>
         <td style={{ padding: '6px 10px', textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
           <KebabMenu
@@ -330,6 +353,9 @@ const ProjectUnitRow: React.FC<ProjectUnitRowProps> = ({
       </td>
       <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, verticalAlign: 'top' }}>
         ${editTotal.toFixed(2)}
+      </td>
+      <td style={{ padding: '6px 10px', textAlign: 'right', verticalAlign: 'top', color: '#999' }}>
+        —
       </td>
       <td style={{ padding: '6px 10px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
         <button

@@ -52,6 +52,7 @@ final class WorkQueueVisibilityServiceTest extends TestCase
         $this->assertSame('MANAGERIAL', $map['support:team:3']);
         $this->assertSame('MANAGERIAL', $map['delivery:team:3']);
         $this->assertSame('MANAGERIAL', $map['support:unrouted']);
+        $this->assertSame('MANAGERIAL', $map['delivery:unrouted']);
     }
 
     public function testVisibilityRestrictionForNonEmployeeUser(): void

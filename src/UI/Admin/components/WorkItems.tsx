@@ -37,6 +37,18 @@ type QueueItem = {
   routing_reason: string | null;
 };
 
+type Employee = {
+  id: number;
+  wpUserId: number;
+  firstName: string;
+  lastName: string;
+  status: string;
+};
+
+type ActiveModal =
+  | { type: 'close'; item: QueueItem }
+  | { type: 'reassign'; item: QueueItem };
+
 export const resolveReturnQueueId = (item: QueueItem, selectedQueueKey: string): string | null => {
   if (item.assigned_team_id) {
     return item.assigned_team_id;
@@ -85,6 +97,143 @@ const formatDueAt = (dueAt: string | null): string => {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 };
 
+// ── Inline modal overlay ───────────────────────────────────────────────────────
+
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+};
+const modalStyle: React.CSSProperties = {
+  background: '#fff', borderRadius: 8, padding: 24, minWidth: 340, maxWidth: 480,
+  boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+};
+const modalTitleStyle: React.CSSProperties = {
+  margin: '0 0 16px', fontSize: 16, fontWeight: 700,
+};
+const modalActionsStyle: React.CSSProperties = {
+  display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20,
+};
+
+// ── CloseModal ─────────────────────────────────────────────────────────────────
+
+interface CloseModalProps {
+  item: QueueItem;
+  onConfirm: (resolution: string) => Promise<void>;
+  onCancel: () => void;
+}
+
+const CloseModal: React.FC<CloseModalProps> = ({ item, onConfirm, onCancel }) => {
+  const [resolution, setResolution] = useState('');
+  const [acting, setActing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    try {
+      setActing(true);
+      setErr(null);
+      await onConfirm(resolution);
+    } catch (e: any) {
+      setErr(e.message ?? 'Failed to close ticket');
+      setActing(false);
+    }
+  };
+
+  return (
+    <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div style={modalStyle}>
+        <p style={modalTitleStyle}>Resolve Ticket</p>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#555' }}>
+          Ticket <strong>{item.reference_code}</strong> — {item.title ?? '(no title)'}
+        </p>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+          Resolution note (optional)
+        </label>
+        <textarea
+          style={{ width: '100%', padding: '8px', borderRadius: 4, border: '1px solid #ccd', fontSize: 13, resize: 'vertical', minHeight: 64 }}
+          placeholder="Describe how this was resolved…"
+          value={resolution}
+          onChange={(e) => setResolution(e.target.value)}
+          autoFocus
+        />
+        {err && <p style={{ color: '#dc3545', fontSize: 12, margin: '8px 0 0' }}>{err}</p>}
+        <div style={modalActionsStyle}>
+          <button className="button" onClick={onCancel} disabled={acting}>Cancel</button>
+          <button className="button button-primary" onClick={handleConfirm} disabled={acting}
+            style={{ background: '#dc3545', borderColor: '#dc3545' }}>
+            {acting ? 'Resolving…' : 'Resolve Ticket'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── ReassignModal ──────────────────────────────────────────────────────────────
+
+interface ReassignModalProps {
+  item: QueueItem;
+  employees: Employee[];
+  onConfirm: (employeeUserId: string) => Promise<void>;
+  onCancel: () => void;
+}
+
+const ReassignModal: React.FC<ReassignModalProps> = ({ item, employees, onConfirm, onCancel }) => {
+  const active = employees.filter(e => e.status === 'active');
+  const [selectedUserId, setSelectedUserId] = useState<string>(active[0]?.wpUserId?.toString() ?? '');
+  const [acting, setActing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    if (!selectedUserId) { setErr('Please select an agent.'); return; }
+    try {
+      setActing(true);
+      setErr(null);
+      await onConfirm(selectedUserId);
+    } catch (e: any) {
+      setErr(e.message ?? 'Failed to reassign ticket');
+      setActing(false);
+    }
+  };
+
+  return (
+    <div style={overlayStyle} onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div style={modalStyle}>
+        <p style={modalTitleStyle}>Reassign Ticket</p>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#555' }}>
+          Ticket <strong>{item.reference_code}</strong> — {item.title ?? '(no title)'}
+        </p>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+          Assign to agent
+        </label>
+        {active.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#888' }}>No active employees found.</p>
+        ) : (
+          <select
+            style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid #ccd', fontSize: 13 }}
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+          >
+            {active.map(emp => (
+              <option key={emp.id} value={emp.wpUserId.toString()}>
+                {emp.firstName} {emp.lastName}
+              </option>
+            ))}
+          </select>
+        )}
+        {err && <p style={{ color: '#dc3545', fontSize: 12, margin: '8px 0 0' }}>{err}</p>}
+        <div style={modalActionsStyle}>
+          <button className="button" onClick={onCancel} disabled={acting}>Cancel</button>
+          <button className="button button-primary" onClick={handleConfirm} disabled={acting || active.length === 0}>
+            {acting ? 'Reassigning…' : 'Reassign'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
 const WorkItems = () => {
   const [queues, setQueues] = useState<QueueDescriptor[]>([]);
   const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
@@ -94,6 +243,8 @@ const WorkItems = () => {
   const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<ActiveModal | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   // @ts-ignore
   const currentUserId = window.petSettings?.currentUserId;
@@ -146,6 +297,15 @@ const WorkItems = () => {
     }
   };
 
+  // Lazy-load employees (only needed for Reassign modal)
+  const ensureEmployees = async () => {
+    if (employees.length > 0) return;
+    try {
+      const res = await fetch(`${apiUrl}/employees`, { headers: hdrs() });
+      if (res.ok) setEmployees(await res.json());
+    } catch { /* non-critical */ }
+  };
+
   /* --- Item actions --- */
   const pullItem = async (item: QueueItem) => {
     if (item.source_type !== 'ticket') return;
@@ -175,6 +335,32 @@ const WorkItems = () => {
       if (!res.ok) throw new Error(await res.text());
       if (selectedQueueKey) fetchQueueItems(selectedQueueKey);
     } catch (e) { setActionError(e instanceof Error ? e.message : 'Return failed'); }
+  };
+
+  const closeItem = async (item: QueueItem, resolution: string) => {
+    const res = await fetch(`${apiUrl}/tickets/${item.source_id}/close`, {
+      method: 'POST', headers: jsonHdrs(),
+      body: JSON.stringify(resolution ? { resolution } : {}),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any)?.error?.message ?? (body as any)?.error ?? `Close failed (${res.status})`);
+    }
+    setActiveModal(null);
+    if (selectedQueueKey) fetchQueueItems(selectedQueueKey);
+  };
+
+  const reassignItem = async (item: QueueItem, employeeUserId: string) => {
+    const res = await fetch(`${apiUrl}/tickets/${item.source_id}/reassign`, {
+      method: 'POST', headers: jsonHdrs(),
+      body: JSON.stringify({ employeeUserId }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any)?.error?.message ?? (body as any)?.error ?? `Reassign failed (${res.status})`);
+    }
+    setActiveModal(null);
+    if (selectedQueueKey) fetchQueueItems(selectedQueueKey);
   };
 
   /* --- Drill-through --- */
@@ -241,11 +427,32 @@ const WorkItems = () => {
     },
   ];
 
+  // Tickets in terminal status can't be closed again
+  const isTerminal = (item: QueueItem) =>
+    ['resolved', 'closed', 'cancelled'].includes((item.status ?? '').toLowerCase());
+
   if (loadingQueues) return <div>Loading...</div>;
   if (error) return <div className="notice notice-error"><p>{error}</p></div>;
 
   return (
     <div className="wrap">
+      {/* Modals */}
+      {activeModal?.type === 'close' && (
+        <CloseModal
+          item={activeModal.item}
+          onConfirm={(resolution) => closeItem(activeModal.item, resolution)}
+          onCancel={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal?.type === 'reassign' && (
+        <ReassignModal
+          item={activeModal.item}
+          employees={employees}
+          onConfirm={(userId) => reassignItem(activeModal.item, userId)}
+          onCancel={() => setActiveModal(null)}
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ margin: 0 }}>Work Queues</h2>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -281,11 +488,30 @@ const WorkItems = () => {
         emptyMessage="No work items found."
         actions={(item) => {
           if (item.source_type !== 'ticket') return null;
+          const terminal = isTerminal(item);
           const menuItems = [
-            { type: 'action' as const, label: 'Pull', onClick: () => pullItem(item) },
+            { type: 'action' as const, label: 'Pull to me', onClick: () => pullItem(item) },
             { type: 'action' as const, label: 'Return to Queue', onClick: () => returnItem(item) },
+            { type: 'divider' as const },
+            {
+              type: 'action' as const,
+              label: 'Reassign…',
+              onClick: async () => {
+                await ensureEmployees();
+                setActiveModal({ type: 'reassign', item });
+              },
+            },
+            {
+              type: 'action' as const,
+              label: 'Resolve…',
+              danger: true,
+              disabled: terminal,
+              disabledReason: terminal ? 'Ticket is already in a terminal state' : undefined,
+              onClick: () => setActiveModal({ type: 'close', item }),
+            },
+            { type: 'divider' as const },
+            { type: 'action' as const, label: 'View', onClick: async () => { drillThrough(item); } },
           ];
-          menuItems.push({ type: 'action' as const, label: 'View', onClick: async () => { drillThrough(item); } });
           return <KebabMenu items={menuItems} />;
         }}
       />

@@ -170,7 +170,7 @@ class AdvisoryReportController implements RestController
                 $report = $this->generateHandler->handle(new GenerateAdvisoryReportCommand($customerId, $reportType, $generatedBy));
                 return new WP_REST_Response($this->serializeReportDetail($report), 201);
             } catch (\Throwable $e) {
-                return new WP_REST_Response(['message' => $e->getMessage()], 400);
+                return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
             }
         } finally {
             $this->endBenchmarkWorkloadProfile($profileToken);

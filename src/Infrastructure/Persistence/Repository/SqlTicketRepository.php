@@ -74,6 +74,7 @@ class SqlTicketRepository implements TicketRepository
         $this->conditionallyAddColumn($data, $formats, 'quote_id', $ticket->quoteId(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'phase_id', $ticket->phaseId(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'parent_ticket_id', $ticket->parentTicketId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'parent_ticket_key', $ticket->parentTicketId() ?? 0, '%d');
         $this->conditionallyAddColumn($data, $formats, 'root_ticket_id', $ticket->rootTicketId(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'ticket_kind', $ticket->ticketKind(), '%s');
         $this->conditionallyAddColumn($data, $formats, 'department_id_ext', $ticket->departmentIdExt(), '%d');
@@ -91,11 +92,17 @@ class SqlTicketRepository implements TicketRepository
         $this->conditionallyAddColumn($data, $formats, 'is_baseline_locked', $ticket->isBaselineLocked() ? 1 : 0, '%d');
         $this->conditionallyAddColumn($data, $formats, 'change_order_source_ticket_id', $ticket->changeOrderSourceTicketId(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'sold_value_cents', $ticket->soldValueCents(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'source_type', $ticket->sourceType(), '%s');
+        $this->conditionallyAddColumn($data, $formats, 'source_component_id', $ticket->sourceComponentId(), '%d');
 
         if ($ticket->id()) {
             $this->wpdb->update($table, $data, ['id' => $ticket->id()], $formats, ['%d']);
         } else {
-            $this->wpdb->insert($table, $data, $formats);
+            $result = $this->wpdb->insert($table, $data, $formats);
+            if ($result === false) {
+                $message = $this->wpdb->last_error ?: 'Unknown ticket insert failure';
+                throw new \RuntimeException('Ticket persistence failed: ' . $message);
+            }
             $insertId = (int) $this->wpdb->insert_id;
 
             if ($insertId > 0) {
@@ -133,6 +140,52 @@ class SqlTicketRepository implements TicketRepository
         $rows = $this->wpdb->get_results("SELECT * FROM $table ORDER BY created_at DESC");
 
         return array_map([$this, 'hydrate'], $rows);
+    }
+
+    public function findByProvisioningKey(int $projectId, int $sourceComponentId, ?int $parentTicketId): ?Ticket
+    {
+        $table = $this->wpdb->prefix . 'pet_tickets';
+        $this->ensureColumnsCached($table);
+
+        if (!$this->hasColumn('project_id') || !$this->hasColumn('source_component_id')) {
+            return null;
+        }
+        if ($this->hasColumn('parent_ticket_key')) {
+            $sql = $this->wpdb->prepare(
+                "SELECT * FROM $table
+                 WHERE project_id = %d
+                   AND source_component_id = %d
+                   AND parent_ticket_key = %d
+                 LIMIT 1",
+                $projectId,
+                $sourceComponentId,
+                $parentTicketId ?? 0
+            );
+        } elseif ($parentTicketId === null) {
+            $sql = $this->wpdb->prepare(
+                "SELECT * FROM $table
+                 WHERE project_id = %d
+                   AND source_component_id = %d
+                   AND parent_ticket_id IS NULL
+                 LIMIT 1",
+                $projectId,
+                $sourceComponentId
+            );
+        } else {
+            $sql = $this->wpdb->prepare(
+                "SELECT * FROM $table
+                 WHERE project_id = %d
+                   AND source_component_id = %d
+                   AND parent_ticket_id = %d
+                 LIMIT 1",
+                $projectId,
+                $sourceComponentId,
+                $parentTicketId
+            );
+        }
+
+        $row = $this->wpdb->get_row($sql);
+        return $row ? $this->hydrate($row) : null;
     }
 
     public function findByCustomerId(int $customerId): array
@@ -242,7 +295,9 @@ class SqlTicketRepository implements TicketRepository
             isset($row->lifecycle_owner) ? (string) $row->lifecycle_owner : 'support',
             isset($row->is_baseline_locked) ? (bool) $row->is_baseline_locked : false,
             isset($row->change_order_source_ticket_id) && $row->change_order_source_ticket_id ? (int) $row->change_order_source_ticket_id : null,
-            isset($row->sold_value_cents) && $row->sold_value_cents !== null ? (int) $row->sold_value_cents : null
+            isset($row->sold_value_cents) && $row->sold_value_cents !== null ? (int) $row->sold_value_cents : null,
+            isset($row->source_type) ? (string) $row->source_type : null,
+            isset($row->source_component_id) && $row->source_component_id !== null ? (int) $row->source_component_id : null
         );
     }
 

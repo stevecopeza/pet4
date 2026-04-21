@@ -11,6 +11,7 @@ use Pet\Application\Identity\Command\UpdateCustomerCommand;
 use Pet\Application\Identity\Command\UpdateCustomerHandler;
 use Pet\Application\Identity\Command\ArchiveCustomerCommand;
 use Pet\Application\Identity\Command\ArchiveCustomerHandler;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -43,12 +44,12 @@ class CustomerController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getCustomers'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createCustomer'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -56,12 +57,12 @@ class CustomerController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateCustomer'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'archiveCustomer'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
     }
@@ -69,6 +70,11 @@ class CustomerController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getCustomers(WP_REST_Request $request): WP_REST_Response
@@ -117,7 +123,7 @@ class CustomerController implements RestController
 
             return new WP_REST_Response(['message' => 'Customer created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -146,7 +152,7 @@ class CustomerController implements RestController
 
             return new WP_REST_Response(['message' => 'Customer updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -160,7 +166,7 @@ class CustomerController implements RestController
 
             return new WP_REST_Response(['message' => 'Customer archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 }

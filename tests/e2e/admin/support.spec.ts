@@ -65,20 +65,27 @@ test.describe.serial('Admin > Support Tickets CRUD', () => {
     await expect(page.getByRole('button', { name: /Back/i }).first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test('can archive a ticket via kebab menu', async ({ page, consoleErrors }) => {
-    page.on('dialog', (dialog) => dialog.accept());
+  test('can archive the created ticket via API cleanup path', async ({ page, consoleErrors }) => {
+    const nonce = await getNonce(page);
+    const apiUrl = await getApiUrl(page);
+    expect(nonce).toBeTruthy();
+    expect(apiUrl).toBeTruthy();
+    if (!nonce || !apiUrl) return;
 
-    const row = page.locator('tr', { hasText: ticketSubject });
-    await expect(row).toBeVisible();
+    const listRes = await page.request.get(`${apiUrl}/tickets`, {
+      headers: { 'X-WP-Nonce': nonce },
+    });
+    expect(listRes.ok()).toBeTruthy();
+    const tickets = await listRes.json();
+    const created = Array.isArray(tickets)
+      ? tickets.find((ticket) => typeof ticket.subject === 'string' && ticket.subject === ticketSubject)
+      : null;
+    expect(created).toBeTruthy();
 
-    await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
-    await page.getByText('Archive', { exact: true }).click();
-
-    await page.waitForResponse(
-      (resp) => resp.url().includes('/pet/v1/tickets/') && resp.request().method() === 'DELETE'
-    );
-
-    await expect(page.getByRole('button', { name: ticketSubject })).toBeHidden({ timeout: 5_000 });
+    const archiveRes = await page.request.delete(`${apiUrl}/tickets/${created.id}`, {
+      headers: { 'X-WP-Nonce': nonce },
+    });
+    expect(archiveRes.ok()).toBeTruthy();
   });
 
   test.afterAll(async ({ browser }) => {

@@ -482,16 +482,16 @@ Create 1 project for RPM:
 - malleable_schema_version: 1
 - created_at: 2026-02-03 08:00:00
 
-#### Tasks (`pet_tasks`)
-Create 8 tasks linked to the project, mapping loosely to quote tasks:
-- “Kick-off Workshop” estimated_hours 6 role=PM is_completed=1
-- “Requirements Validation” 12 role=Impl is_completed=1
-- “Data Extraction” 16 role=Impl is_completed=0
-- “Migration Rehearsal” 20 role=Impl is_completed=0
-- “Cutover Weekend” 12 role=Impl is_completed=0
-- “Hypercare Week 1” 12 role=Support is_completed=0
-- “Hypercare Week 2” 12 role=Support is_completed=0
-- “QBR Session #1” 4 role=PM is_completed=0
+#### Project delivery tickets (`pet_tickets`)
+Create 8 project delivery tickets linked to the project, mapping loosely to quote tasks:
+- “Kick-off Workshop” estimated_minutes 360 lifecycle_owner=project status=completed
+- “Requirements Validation” estimated_minutes 720 lifecycle_owner=project status=completed
+- “Data Extraction” estimated_minutes 960 lifecycle_owner=project status=in_progress
+- “Migration Rehearsal” estimated_minutes 1200 lifecycle_owner=project status=planned
+- “Cutover Weekend” estimated_minutes 720 lifecycle_owner=project status=planned
+- “Hypercare Week 1” estimated_minutes 720 lifecycle_owner=project status=planned
+- “Hypercare Week 2” estimated_minutes 720 lifecycle_owner=project status=planned
+- “QBR Session #1” estimated_minutes 240 lifecycle_owner=project status=planned
 
 ---
 
@@ -556,10 +556,10 @@ For each open/in_progress ticket create a clock row:
 #### Work items (`pet_work_items`)
 Create work items for:
 - all open/in_progress tickets (source_type=ticket)
-- 3 project tasks (source_type=task) with scheduled_start/due
+- project delivery tickets (source_type=ticket) with scheduled_start/due
 
 Populate:
-- assigned_user_id: Noah for support tickets; Liam/Ava for project tasks
+- assigned_user_id: Noah for support tickets; Liam/Ava for project delivery tickets
 - department_id: 1 (Support) or 2 (Delivery) (seed dept ids consistent with existing system)
 - required_role_id aligned to roles
 - sla_snapshot_id for ticket-based items
@@ -581,7 +581,7 @@ For each work item, create a queue row:
 Create 20 entries across last 21 days, spread across Liam/Ava/Noah:
 - mix of billable/non-billable
 - durations 30–240 minutes
-- link to task_id where relevant
+- link to ticket_id where relevant
 - status: 12 draft, 6 submitted, 2 approved (if enum supports)
 - submitted_at set for submitted rows
 - archived_at NULL

@@ -236,8 +236,8 @@ SECTION 10 — DELIVERY
 Project:
 "RPM SYSPRO Upgrade Phase 2"
 
-8 tasks mapped to quote tasks.
-Mix of completed + in-progress.
+8 project delivery tickets mapped to quote tasks.
+Mix of completed + in-progress ticket states.
 
 ====================================================================
 SECTION 11 — SUPPORT (FULL SLA MATRIX)
@@ -270,7 +270,7 @@ SECTION 12 — WORK ORCHESTRATION
 
 Work items created for:
 - all active tickets
-- selected project tasks
+- selected project delivery tickets
 
 Include:
 - assigned
@@ -289,7 +289,7 @@ SECTION 13 — TIME ENTRIES
 - submitted
 - approved
 - 1 rejected/corrected entry
-- linked to tickets and project tasks
+- linked to tickets (support and project delivery)
 
 ====================================================================
 SECTION 14 — KNOWLEDGE
@@ -491,7 +491,7 @@ SECTION 10 — DELIVERY (Expanded)
 - Nexus Cloud Migration
 - GDS Security Hardening
 
-27 project tasks distributed across all 3 projects.
+27 project delivery tickets distributed across all 3 projects.
 
 SECTION 11 — SUPPORT (Expanded)
 
@@ -523,7 +523,7 @@ New step added as first pipeline step:
 
 New steps added after seed.feed:
 - seed.conversations — ticket-context conversations
-- seed.projectTasks — granular task data for projects
+- seed.projectTickets — granular ticket data for projects
 
 End of Amendment v2.1.
 

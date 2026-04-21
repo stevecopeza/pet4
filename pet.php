@@ -100,7 +100,6 @@ add_action('plugins_loaded', function () {
         $workItemProjector = $container->get(\Pet\Application\Work\Projection\WorkItemProjector::class);
         $eventBus->subscribe(\Pet\Domain\Support\Event\TicketCreated::class, [$workItemProjector, 'onTicketCreated']);
         $eventBus->subscribe(\Pet\Domain\Support\Event\TicketAssigned::class, [$workItemProjector, 'onTicketAssigned']);
-        $eventBus->subscribe(\Pet\Domain\Delivery\Event\ProjectTaskCreated::class, [$workItemProjector, 'onProjectTaskCreated']);
 
         // Register Cron Handlers (all inside plugins_loaded, reusing singleton container)
         add_action('pet_outbox_dispatch_event', function () use ($container) {
@@ -150,8 +149,20 @@ add_filter('cron_schedules', function ($schedules) {
 
 // Schedule Cron Event on Activation
 register_activation_hook(__FILE__, function () {
-    // Flush rewrite rules so /pet-dashboards/ works immediately
+    // Flush rewrite rules so /pet-dashboards/ and /portal work immediately
     flush_rewrite_rules();
+
+    // Register portal capabilities on existing roles.
+    // These are per-user caps — assigned individually to staff WP users.
+    // We add them to the 'administrator' role so admins automatically pass portal gates.
+    $adminRole = get_role('administrator');
+    if ($adminRole) {
+        $adminRole->add_cap('pet_sales');
+        $adminRole->add_cap('pet_hr');
+        $adminRole->add_cap('pet_manager');
+    }
+    // Note: pet_sales, pet_hr, pet_manager are also granted individually to
+    // non-admin staff users via EmployeeController when portal_role is set.
 
     if (!wp_next_scheduled('pet_sla_automation_event')) {
         wp_schedule_event(time(), 'pet_five_minutes', 'pet_sla_automation_event');
@@ -461,5 +472,294 @@ if (\defined('WP_CLI') && \constant('WP_CLI')) {
         } catch (\Throwable $e) {
             \call_user_func('WP_CLI::error', 'Reset failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
         }
+    });
+
+    /**
+     * Import customers from a CSV file.
+     *
+     * ## OPTIONS
+     *
+     * <file>
+     * : Path to the CSV file.
+     *
+     * [--dry-run]
+     * : Preview what would be imported without writing to the database.
+     *
+     * [--update]
+     * : Update existing customers (matched by email) instead of skipping.
+     *
+     * ## EXAMPLES
+     *
+     *     wp pet import:customers customers.csv
+     *     wp pet import:customers customers.csv --dry-run
+     *
+     * Required CSV columns: name, email
+     * Optional columns: legal_name, status (default: active)
+     *
+     * @synopsis <file> [--dry-run] [--update]
+     */
+    \call_user_func('WP_CLI::add_command', 'pet import:customers', function ($args, $assocArgs) {
+        $file    = $args[0] ?? '';
+        $dryRun  = isset($assocArgs['dry-run']);
+        $update  = isset($assocArgs['update']);
+
+        if (!$file || !\file_exists($file)) {
+            \call_user_func('WP_CLI::error', "File not found: $file");
+            return;
+        }
+
+        global $wpdb;
+
+        $handle = \fopen($file, 'r');
+        if (!$handle) {
+            \call_user_func('WP_CLI::error', "Cannot open file: $file");
+            return;
+        }
+
+        // Read header row
+        $headers = \fgetcsv($handle);
+        if (!$headers) {
+            \call_user_func('WP_CLI::error', 'CSV is empty or unreadable.');
+            \fclose($handle);
+            return;
+        }
+        $headers = \array_map('trim', $headers);
+
+        $required = ['name', 'email'];
+        foreach ($required as $col) {
+            if (!\in_array($col, $headers, true)) {
+                \call_user_func('WP_CLI::error', "Required column missing: $col. Found: " . \implode(', ', $headers));
+                \fclose($handle);
+                return;
+            }
+        }
+
+        $container = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $customerRepo = $container->get(\Pet\Domain\Identity\Repository\CustomerRepository::class);
+        $createHandler = $container->get(\Pet\Application\Identity\Command\CreateCustomerHandler::class);
+
+        $customersTable = $wpdb->prefix . 'pet_customers';
+        $row = 1;
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors  = 0;
+
+        while (($data = \fgetcsv($handle)) !== false) {
+            $row++;
+            $record = \array_combine($headers, $data);
+            if (!$record) { $skipped++; continue; }
+
+            $name       = \trim($record['name'] ?? '');
+            $email      = \trim(\strtolower($record['email'] ?? ''));
+            $legalName  = \trim($record['legal_name'] ?? '') ?: null;
+            $status     = \trim($record['status'] ?? '') ?: 'active';
+
+            if (!$name || !$email) {
+                \call_user_func('WP_CLI::warning', "Row $row: name and email required — skipped.");
+                $skipped++;
+                continue;
+            }
+
+            // Check for existing customer by email
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM {$customersTable} WHERE contact_email = %s LIMIT 1",
+                $email
+            ));
+
+            if ($existing && !$update) {
+                \call_user_func('WP_CLI::log', "Row $row: Customer '$email' already exists — skipped.");
+                $skipped++;
+                continue;
+            }
+
+            if ($existing && $update) {
+                if (!$dryRun) {
+                    $wpdb->update(
+                        $customersTable,
+                        ['name' => $name, 'legal_name' => $legalName, 'status' => $status, 'updated_at' => \current_time('mysql')],
+                        ['id' => (int) $existing->id]
+                    );
+                }
+                \call_user_func('WP_CLI::log', "Row $row: Updated '$name' <$email>" . ($dryRun ? ' [DRY-RUN]' : ''));
+                $updated++;
+                continue;
+            }
+
+            // Create new
+            if (!$dryRun) {
+                try {
+                    $command = new \Pet\Application\Identity\Command\CreateCustomerCommand($name, $email, $legalName, $status);
+                    $createHandler->handle($command);
+                    \call_user_func('WP_CLI::log', "Row $row: Created '$name' <$email>");
+                    $created++;
+                } catch (\Throwable $e) {
+                    \call_user_func('WP_CLI::warning', "Row $row: Error for '$name': " . $e->getMessage());
+                    $errors++;
+                }
+            } else {
+                \call_user_func('WP_CLI::log', "Row $row: Would create '$name' <$email> [DRY-RUN]");
+                $created++;
+            }
+        }
+
+        \fclose($handle);
+
+        $label = $dryRun ? ' (DRY-RUN — no changes made)' : '';
+        \call_user_func('WP_CLI::success', "Import complete{$label}: $created created, $updated updated, $skipped skipped, $errors errors. ($row rows read)");
+    });
+
+    /**
+     * Import catalog items (products/services) from a CSV file.
+     *
+     * ## OPTIONS
+     *
+     * <file>
+     * : Path to the CSV file.
+     *
+     * [--dry-run]
+     * : Preview what would be imported without writing to the database.
+     *
+     * [--update]
+     * : Update existing items (matched by SKU or name) instead of skipping.
+     *
+     * ## EXAMPLES
+     *
+     *     wp pet import:products products.csv
+     *     wp pet import:products products.csv --dry-run
+     *
+     * Required CSV columns: name, type, unit_price
+     * Optional columns: unit_cost, sku, description, category
+     * type must be 'service' or 'product'
+     *
+     * @synopsis <file> [--dry-run] [--update]
+     */
+    \call_user_func('WP_CLI::add_command', 'pet import:products', function ($args, $assocArgs) {
+        $file   = $args[0] ?? '';
+        $dryRun = isset($assocArgs['dry-run']);
+        $update = isset($assocArgs['update']);
+
+        if (!$file || !\file_exists($file)) {
+            \call_user_func('WP_CLI::error', "File not found: $file");
+            return;
+        }
+
+        global $wpdb;
+
+        $handle = \fopen($file, 'r');
+        if (!$handle) {
+            \call_user_func('WP_CLI::error', "Cannot open file: $file");
+            return;
+        }
+
+        $headers = \fgetcsv($handle);
+        if (!$headers) {
+            \call_user_func('WP_CLI::error', 'CSV is empty or unreadable.');
+            \fclose($handle);
+            return;
+        }
+        $headers = \array_map('trim', $headers);
+
+        $required = ['name', 'type', 'unit_price'];
+        foreach ($required as $col) {
+            if (!\in_array($col, $headers, true)) {
+                \call_user_func('WP_CLI::error', "Required column missing: $col. Found: " . \implode(', ', $headers));
+                \fclose($handle);
+                return;
+            }
+        }
+
+        $catalogTable   = $wpdb->prefix . 'pet_catalog_items';
+        $container      = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $catalogRepo    = $container->get(\Pet\Domain\Commercial\Repository\CatalogItemRepository::class);
+        $createHandler  = $container->get(\Pet\Application\Commercial\Command\CreateCatalogItemHandler::class);
+
+        $row     = 1;
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors  = 0;
+
+        while (($data = \fgetcsv($handle)) !== false) {
+            $row++;
+            $record = \array_combine($headers, $data);
+            if (!$record) { $skipped++; continue; }
+
+            $name        = \trim($record['name'] ?? '');
+            $type        = \strtolower(\trim($record['type'] ?? 'service'));
+            $unitPrice   = (float) ($record['unit_price'] ?? 0);
+            $unitCost    = (float) ($record['unit_cost'] ?? 0);
+            $sku         = \trim($record['sku'] ?? '') ?: null;
+            $description = \trim($record['description'] ?? '') ?: null;
+            $category    = \trim($record['category'] ?? '') ?: null;
+
+            if (!$name) {
+                \call_user_func('WP_CLI::warning', "Row $row: name is required — skipped.");
+                $skipped++;
+                continue;
+            }
+            if (!\in_array($type, ['service', 'product'], true)) {
+                \call_user_func('WP_CLI::warning', "Row $row: invalid type '$type' (must be 'service' or 'product') — skipped.");
+                $skipped++;
+                continue;
+            }
+
+            // Check for existing item by SKU (if provided) or by name
+            $existing = null;
+            if ($sku) {
+                $existing = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id FROM {$catalogTable} WHERE sku = %s LIMIT 1",
+                    $sku
+                ));
+            }
+            if (!$existing) {
+                $existing = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id FROM {$catalogTable} WHERE name = %s AND type = %s LIMIT 1",
+                    $name, $type
+                ));
+            }
+
+            if ($existing && !$update) {
+                \call_user_func('WP_CLI::log', "Row $row: '$name' already exists — skipped.");
+                $skipped++;
+                continue;
+            }
+
+            if ($existing && $update) {
+                if (!$dryRun) {
+                    $wpdb->update(
+                        $catalogTable,
+                        ['name' => $name, 'type' => $type, 'unit_price' => $unitPrice, 'unit_cost' => $unitCost, 'sku' => $sku, 'description' => $description, 'category' => $category, 'updated_at' => \current_time('mysql')],
+                        ['id' => (int) $existing->id]
+                    );
+                }
+                \call_user_func('WP_CLI::log', "Row $row: Updated '$name'" . ($dryRun ? ' [DRY-RUN]' : ''));
+                $updated++;
+                continue;
+            }
+
+            // Create new
+            if (!$dryRun) {
+                try {
+                    $command = new \Pet\Application\Commercial\Command\CreateCatalogItemCommand(
+                        $name, $unitPrice, $unitCost, $sku, $description, $category, $type, []
+                    );
+                    $createHandler->handle($command);
+                    \call_user_func('WP_CLI::log', "Row $row: Created '$name' [$type] @ $unitPrice");
+                    $created++;
+                } catch (\Throwable $e) {
+                    \call_user_func('WP_CLI::warning', "Row $row: Error for '$name': " . $e->getMessage());
+                    $errors++;
+                }
+            } else {
+                \call_user_func('WP_CLI::log', "Row $row: Would create '$name' [$type] @ $unitPrice [DRY-RUN]");
+                $created++;
+            }
+        }
+
+        \fclose($handle);
+
+        $label = $dryRun ? ' (DRY-RUN — no changes made)' : '';
+        \call_user_func('WP_CLI::success', "Import complete{$label}: $created created, $updated updated, $skipped skipped, $errors errors. ($row rows read)");
     });
 }

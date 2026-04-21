@@ -34,6 +34,11 @@ class QuoteAccepted implements DomainEvent, SourcedEvent
         return (int)$this->quote->id();
     }
 
+    public function name(): string
+    {
+        return 'quote.accepted';
+    }
+
     public function aggregateType(): string
     {
         return 'quote';

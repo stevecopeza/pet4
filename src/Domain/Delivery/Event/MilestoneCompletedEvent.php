@@ -40,6 +40,11 @@ class MilestoneCompletedEvent implements DomainEvent, SourcedEvent
         return $this->projectId;
     }
 
+    public function name(): string
+    {
+        return 'project.milestone_completed';
+    }
+
     public function aggregateType(): string
     {
         return 'project';

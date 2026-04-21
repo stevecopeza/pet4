@@ -11,6 +11,7 @@ use Pet\Application\Team\Command\UpdateTeamCommand;
 use Pet\Application\Team\Command\UpdateTeamHandler;
 use Pet\Application\Team\Command\ArchiveTeamCommand;
 use Pet\Application\Team\Command\ArchiveTeamHandler;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -43,12 +44,12 @@ class TeamController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getTeams'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createTeam'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -56,12 +57,12 @@ class TeamController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getTeam'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateTeam'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -69,7 +70,7 @@ class TeamController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE, // POST to archive
                 'callback' => [$this, 'archiveTeam'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
     }
@@ -77,6 +78,16 @@ class TeamController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_manager');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getTeams(WP_REST_Request $request): WP_REST_Response

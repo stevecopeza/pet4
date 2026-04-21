@@ -11,6 +11,7 @@ use Pet\Application\Identity\Command\UpdateSiteCommand;
 use Pet\Application\Identity\Command\UpdateSiteHandler;
 use Pet\Application\Identity\Command\ArchiveSiteCommand;
 use Pet\Application\Identity\Command\ArchiveSiteHandler;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -43,12 +44,12 @@ class SiteController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getSites'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createSite'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -56,12 +57,12 @@ class SiteController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateSite'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'archiveSite'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
     }
@@ -69,6 +70,11 @@ class SiteController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getSites(WP_REST_Request $request): WP_REST_Response
@@ -126,7 +132,7 @@ class SiteController implements RestController
 
             return new WP_REST_Response(['message' => 'Site created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -157,7 +163,7 @@ class SiteController implements RestController
 
             return new WP_REST_Response(['message' => 'Site updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -171,7 +177,7 @@ class SiteController implements RestController
 
             return new WP_REST_Response(['message' => 'Site archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 }

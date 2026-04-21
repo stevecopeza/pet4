@@ -93,7 +93,7 @@ class KpiDefinitionController implements RestController
             $this->createKpiDefinitionHandler->handle($command);
             return new WP_REST_Response(['message' => 'KPI Definition created successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -118,9 +118,9 @@ class KpiDefinitionController implements RestController
             $this->updateKpiDefinitionHandler->handle($command);
             return new WP_REST_Response(['message' => 'KPI Definition updated successfully'], 200);
         } catch (\RuntimeException $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 404);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 404);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 

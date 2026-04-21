@@ -236,7 +236,7 @@ class PulsewayController implements RestController
 
             return new WP_REST_Response(['id' => $id, 'uuid' => $uuid, 'message' => 'Integration created'], 201);
         } catch (\Throwable $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -281,7 +281,7 @@ class PulsewayController implements RestController
 
             return new WP_REST_Response(['message' => 'Integration updated'], 200);
         } catch (\Throwable $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -330,7 +330,7 @@ class PulsewayController implements RestController
             $result = $this->ingestionService->pollIntegrationById($id);
             return new WP_REST_Response($result, 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to trigger poll'], 500);
         }
@@ -343,7 +343,7 @@ class PulsewayController implements RestController
             $result = $this->deviceService->syncIntegrationById($id);
             return new WP_REST_Response($result, 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to trigger device sync'], 500);
         }
@@ -367,7 +367,7 @@ class PulsewayController implements RestController
 
             return new WP_REST_Response(['message' => 'Circuit breaker reset'], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to reset circuit breaker'], 500);
         }
@@ -402,7 +402,7 @@ class PulsewayController implements RestController
             $mappingId = $this->repo->insertOrgMapping($data);
             return new WP_REST_Response(['id' => $mappingId, 'message' => 'Mapping created'], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to create mapping'], 500);
         }
@@ -429,7 +429,7 @@ class PulsewayController implements RestController
 
             return new WP_REST_Response(['message' => 'Mapping updated'], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to update mapping'], 500);
         }
@@ -513,7 +513,7 @@ class PulsewayController implements RestController
             $ruleId = $this->repo->insertRule($data);
             return new WP_REST_Response(['id' => $ruleId, 'message' => 'Rule created'], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to create rule'], 500);
         }
@@ -546,7 +546,7 @@ class PulsewayController implements RestController
 
             return new WP_REST_Response(['message' => 'Rule updated'], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to update rule'], 500);
         }

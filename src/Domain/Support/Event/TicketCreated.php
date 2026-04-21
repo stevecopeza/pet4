@@ -34,6 +34,11 @@ class TicketCreated implements DomainEvent, SourcedEvent
         return (int)$this->ticket->id();
     }
 
+    public function name(): string
+    {
+        return 'ticket.created';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

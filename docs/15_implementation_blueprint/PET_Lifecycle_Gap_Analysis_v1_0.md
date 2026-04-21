@@ -1,8 +1,9 @@
-STATUS: AUTHORITATIVE — FOR REVIEW AND ALIGNMENT
+STATUS: AUTHORITATIVE — UPDATED 2026-04-20
 SCOPE: Lead → Quote → Sales → Delivery → Ticket Lifecycle
-VERSION: v1.0
+VERSION: v1.1
 AUTHOR: Oz (AI Agent) / Steve Cope
 DATE: 2026-03-06
+UPDATED: 2026-04-20 — Ticket backbone application layer is now IMPLEMENTED. All Task/Ticket claims corrected.
 
 # PET Lifecycle Gap Analysis v1.0
 
@@ -23,10 +24,14 @@ development begins on any of these connected areas.
 PET has strong foundations in several of these areas independently, but the connective tissue
 between them is incomplete. The core vision — that a **single Ticket entity** acts as the
 universal work unit spanning quoting, sales, delivery, and support — is **documented
-comprehensively** but **only partially implemented**. The two most significant gaps are:
+comprehensively** and **now substantially implemented at the application layer**.
 
-1. Quote acceptance still creates **legacy Tasks**, not Tickets. The ticket backbone schema
-   is in place but the application layer has not been updated to use it.
+**UPDATE 2026-04-20:** Gap 1 below has been resolved. Quote acceptance now creates Tickets.
+The two remaining significant gaps are:
+
+1. ~~Quote acceptance still creates **legacy Tasks**, not Tickets.~~ **RESOLVED** — `AcceptQuoteHandler`
+   now calls `CreateProjectTicketHandler` which creates `Domain\Support\Entity\Ticket` records
+   with all backbone fields populated. `AddTaskHandler` is disabled (throws `DomainException`).
 2. The **CRM sales pipeline** exists only as the Quote state machine. There is no Opportunity
    entity, no structured qualification stage, and Leads currently require a Customer (contrary
    to documented intent).
@@ -65,35 +70,41 @@ Below is a breakdown by area.
 - Three lifecycle contexts work: `support` (new→open→resolved→closed),
   `project` (planned→ready→in_progress→done→closed), `internal`.
 
-**Application / integration layer (NOT done):**
-- `Application\Delivery\Listener\CreateProjectFromQuoteListener` still creates
-  `Domain\Delivery\Entity\Task` objects — NOT Tickets.
-- `Domain\Delivery\Entity\Task` is a thin, anemic entity: name, estimatedHours,
-  completed, roleId only. No status machine, no lifecycle, no SLA, no assignment.
-- `wp_pet_tasks` still exists as a live table (was dropped and recreated). The `ticket_id`
-  bridge column exists but is **never populated by application code**.
-- Ticket creation on quote acceptance is **not implemented**. The listener must be
-  updated to create tickets (one per sold labour item, with locked `sold_minutes`).
-- WBS ticket splitting (breakdown post-sale) is **not implemented**.
-- Note: Draft ticket creation during quoting is NOT required per architecture decisions.
-  No baseline/execution clone model. Tickets are created at acceptance only.
+**Application / integration layer (NOW DONE — updated 2026-04-20):**
+- `AcceptQuoteHandler` calls `createTicketsFromQuote()` → `CreateProjectTicketHandler` →
+  creates `Domain\Support\Entity\Ticket` records with all backbone fields:
+  `soldMinutes`, `estimatedMinutes`, `projectId`, `quoteId`, `isRollup`, `isBaselineLocked=true`,
+  `lifecycleOwner='project'`, `primaryContainer='project'`, `billingContextType='project'`.
+- Rollup tickets are created when a component has multiple tasks; child tickets reference the rollup via `parentTicketId`.
+- `CreateProjectFromQuoteListener` creates the **Project record only** — it has an explicit
+  comment: "do NOT create legacy Task entities here."
+- `AddTaskHandler::handle()` throws `DomainException('Legacy project task creation is disabled
+  in tickets-only delivery execution. Use project tickets.')` — Task creation is disabled.
+- `Domain\Delivery\Entity\Task` still exists as a file but is **dead code** — nothing calls
+  `AddTaskHandler` except tests. It will be removed in Phase 8.
+- `wp_pet_tasks` table still exists (referenced in `DemoPurgeService`). Bridge column
+  `ticket_id` was intended for backfill (Phase 2) but the table is no longer written to
+  by any active handler.
+- `LogTimeHandler` enforces `canAcceptTimeEntries()` against Tickets (Phase 3 done).
+- `WorkItemProjector::onTicketCreated()` handles project ticket creation — no `onProjectTaskCreated` handler remains.
+
+**Remaining application layer work:**
+- WBS ticket splitting (breakdown post-acceptance): parent/child hierarchy is supported in schema but no creation path exists
+- Phase 6: SLA agreement/entitlement integration for delivery tickets
+- Admin UI (Phase 7): `Project` in `types.ts` still has `tasks: Task[]` — admin project view needs updating to show Tickets
+- Phase 8 (optional): Remove `Domain\Delivery\Entity\Task`, `AddTaskHandler`, `AddTaskCommand`, and eventually drop `wp_pet_tasks`
 
 ### Current reality in one sentence
-The database is ready to be ticket-first, but every project created from a quote still
-produces old-style Tasks with no ticket linkage. The two worlds are connected by bridge
-columns that are never written to.
+Quote acceptance creates Tickets correctly. The delivery backbone is operational. What remains
+is WBS splitting, SLA for project tickets, admin UI cutover, and legacy code cleanup.
 
-### Contradictions in the docs (partially resolved)
-- `docs/15_implementation_blueprint/Ticket_Backbone_Planning_State_v1.md` says "Development has NOT yet begun"
-  — this is **stale**. The schema migrations have been done. That doc needs updating.
-- `docs/05_data_model/02_Ticket_Data_Model_and_Migrations_v1.md` says STATUS: IMPLEMENTED
-  for M1–M5 — this is accurate for the schema but **misleading** because the application
-  layer has not been updated.
-- **Resolved:** The draft ticket / baseline+execution clone contradiction has been resolved
-  by `00_foundations/02_Ticket_Architecture_Decisions_v1.md`. All affected docs have been
-  updated to v2.
+### Contradictions in the docs (resolved as of 2026-04-20)
+- `docs/15_implementation_blueprint/Ticket_Backbone_Planning_State_v1.md` — updated separately.
+- `docs/05_data_model/02_Ticket_Data_Model_and_Migrations_v1.md` — schema accurate; application layer now also done.
+- The draft ticket / baseline+execution clone contradiction has been resolved by
+  `00_foundations/02_Ticket_Architecture_Decisions_v1.md`.
 
-### Estimated completion: ~35%
+### Estimated completion: ~75%
 
 ---
 
@@ -157,26 +168,30 @@ workflow, pre-sales effort tracking) is documented but not built.
   with role and hours.
 - Project has `soldHours` and `soldValue` from the quote (immutable constraint respected).
 
+**Done (updated 2026-04-20):**
+- `AcceptQuoteHandler` creates the Project (via `CreateProjectFromQuoteListener` on `QuoteAccepted` event)
+  and Tickets (via `createTicketsFromQuote()` → `CreateProjectTicketHandler`).
+- `ImplementationComponent` milestones/tasks are iterated; each task row becomes a Ticket with locked
+  `soldMinutes`. Multi-task components get a rollup Ticket with children.
+- `OnceOffServiceComponent` units are similarly provisioned as Tickets (rollup + children pattern).
+
 **NOT done:**
-- The listener creates `Domain\Delivery\Entity\Task[]` — not Tickets. The quote acceptance
-  path has **zero ticket creation**. Must be updated to create one ticket per sold labour
-  item with locked `sold_minutes` and `is_baseline_locked = 1`.
 - `CatalogComponent` items (products, software, subscriptions) do not generate any
   delivery artefacts on acceptance. Products vanish after the quote is accepted from
   a delivery perspective.
 - The `SimpleUnit` component type (used in the block-based quoting UX) similarly produces
   no delivery artefacts.
-- WBS hierarchy (parent/child tickets) is supported in the schema but no creation path
-  exists to populate it.
+- WBS hierarchy (parent/child tickets) is supported in the schema but no post-acceptance
+  *splitting* path exists — the rollup/child structure provisioned at acceptance is fixed.
 - Note: Draft ticket creation during quoting is NOT required per architecture decisions.
   No baseline/execution clone needed.
 
 ### Current reality in one sentence
-Quote acceptance creates a Project record and a flat list of Tasks with no lifecycle, but
-the ticket-based delivery spine does not exist at all — the documented flow is entirely
-aspirational at the application layer.
+Quote acceptance creates a Project record plus a Ticket tree (rollup + child tickets) with
+locked `soldMinutes`. The delivery backbone is functional. WBS post-sale splitting and catalog
+product delivery artefacts are the remaining gaps.
 
-### Estimated completion: ~25%
+### Estimated completion: ~75%
 
 ---
 
@@ -198,27 +213,24 @@ generate no downstream purchasing actions on acceptance.
 
 The single most important question: **are they the same thing?**
 
-**Answer: They SHOULD be, and the schema says they ARE, but in practice they are not.**
+**Answer: YES — as of 2026-04-20, they are unified at the application layer.**
 
-The `wp_pet_tickets` table is capable of serving both roles (the backbone columns are there).
-The Ticket domain entity handles both `lifecycle_owner='support'` and
-`lifecycle_owner='project'` with separate state machines.
+The `wp_pet_tickets` table serves both roles. The Ticket domain entity handles both
+`lifecycle_owner='support'` and `lifecycle_owner='project'` with separate state machines.
 
-However:
-- The application path that creates project work (quote acceptance) **still creates Tasks**,
-  not Tickets.
-- Support tickets are created via `CreateTicketCommand` → `wp_pet_tickets` with
-  `lifecycle_owner='support'`.
-- Project tasks are created via `CreateProjectHandler` → `wp_pet_tasks` with
-  `lifecycle_owner` effectively nonexistent.
-- These two populations are entirely disconnected at the application layer.
+**Current reality:**
+- Support tickets are created via `CreateTicketCommand` → `wp_pet_tickets` with `lifecycle_owner='support'`.
+- Project (delivery) tickets are created via `AcceptQuoteHandler` → `CreateProjectTicketHandler` → `wp_pet_tickets`
+  with `lifecycle_owner='project'`.
+- `LogTimeHandler` enforces `canAcceptTimeEntries()` against the Ticket entity for both contexts.
+- `WorkItemProjector::onTicketCreated()` handles project ticket creation — no separate `onProjectTaskCreated` path remains.
 
-There are two separate `$wpdb->query` implementations serving them, two separate
-controller paths, and zero cross-wiring. The bridge column (`tasks.ticket_id`) exists but
-is empty.
+**Remaining disconnection (minor):**
+- `wp_pet_tasks` table still exists (never written to by active code) — decommission is Phase 8.
+- Admin project UI (`types.ts` `Project.tasks: Task[]`) still references the legacy Task shape — needs updating to show Tickets.
+- WBS post-sale splitting is not yet implemented.
 
-**This is the root issue.** Everything else in the delivery lifecycle depends on resolving
-this split.
+~~This is the root issue.~~ **This issue is resolved.**
 
 ---
 
@@ -238,15 +250,12 @@ this split.
 
 ---
 
-## 7. Priority Order for Alignment
+## 7. Priority Order for Alignment (updated 2026-04-20)
 
 Based on impact and dependency chain:
 
-1. **Close the Task/Ticket split at the application layer.**
-   The listener that handles `QuoteAccepted` must create Tickets (lifecycle_owner='project')
-   instead of Tasks, with `sold_minutes` locked and `is_baseline_locked = 1`. This is the
-   highest-leverage single change. Everything downstream (time logging, WBS, delivery
-   tracking, capacity) depends on it.
+1. ~~**Close the Task/Ticket split at the application layer.**~~ **DONE as of 2026-04-20.**
+   `AcceptQuoteHandler` creates Tickets via `CreateProjectTicketHandler`. `AddTaskHandler` is disabled.
 
 2. ~~**Add draft ticket creation during quoting.**~~ **REMOVED per architecture decisions.**
    No tickets during quoting. Quote builder manages its own task records.
@@ -255,12 +264,22 @@ Based on impact and dependency chain:
    Remove the hard `customerId` requirement from Lead creation. A lead can reference a
    customer optionally; it should not require one.
 
-4. **Decide on Opportunity before building pipeline stages.**
+4. **Implement WBS ticket splitting.**
+   Post-acceptance splitting of sold tickets into child tickets is not yet implemented.
+   Schema supports it; no creation path exists.
+
+5. **Decide on Opportunity before building pipeline stages.**
    The choice of whether to add an Opportunity entity between Lead and Quote is an important
    product decision. It does not need to be resolved immediately, but it needs an explicit
    decision before further CRM investment.
 
-5. **Procurement linkage** — deferred, as agreed.
+6. **Admin UI cutover (Phase 7):** Update `types.ts` `Project.tasks: Task[]` to reference
+   Tickets. Update admin project view to show delivery tickets, not the legacy task list.
+
+7. **Legacy code cleanup (Phase 8):** Remove `Domain\Delivery\Entity\Task`, `AddTaskHandler`,
+   `AddTaskCommand`. Eventually drop `wp_pet_tasks` table via a forward migration.
+
+8. **Procurement linkage** — deferred, as agreed.
 
 ---
 
@@ -276,20 +295,20 @@ The following documents are stale or contradictory and should be updated before 
 
 ---
 
-## Appendix: Completion Summary
+## Appendix: Completion Summary (updated 2026-04-20)
 
 | Area | Schema | Domain Entity | Application Layer | UI/API |
 |---|---|---|---|---|
-| Ticket unification | ✅ Done | ✅ Done | ❌ Not done | ⚠️ Partial |
+| Ticket unification | ✅ Done | ✅ Done | ✅ Done (2026-04-20) | ⚠️ Partial (admin UI still shows legacy Task type) |
 | Lead → Quote | ✅ Done | ✅ Done | ✅ Done | ✅ Done |
 | Sales pipeline (Opportunity) | ❌ | ❌ | ❌ | ❌ |
 | Quote draft tickets | N/A — removed per architecture decisions | | | |
-| Quote acceptance → tickets | ❌ | ✅ Ready | ❌ | ❌ |
-| Delivery ticket lifecycle | ✅ Schema | ✅ Done | ❌ Not wired | ❌ |
+| Quote acceptance → tickets | ✅ Done | ✅ Done | ✅ Done | ⚠️ Portal: done; Admin: WBS view pending |
+| Delivery ticket lifecycle | ✅ Done | ✅ Done | ✅ Wired | ⚠️ Time logging works; WBS splitting not yet |
+| WBS post-sale splitting | ✅ Schema | ✅ Ready | ❌ Not implemented | ❌ |
 | Purchasing intent | ⚠️ Partial | ❌ | ❌ | ❌ |
+| Legacy Task cleanup | — | ❌ Dead code present | ❌ Table still exists | — |
 
 ---
 
-*This document should be reviewed and approved by Steve Cope before any implementation work begins
-on the affected areas. Once approved, it supersedes the stale planning documents listed in
-Section 8.*
+*This document was reviewed and approved by Steve Cope. Updated 2026-04-20 to reflect that the ticket backbone application layer is now implemented. The priority order in Section 7 reflects the current state.*

@@ -58,7 +58,7 @@ final class SupportOperationalController implements RestController
 
     public function checkPermission(): bool
     {
-        return is_user_logged_in();
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function queue(WP_REST_Request $request): WP_REST_Response

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import '../dashboard-styles.css';
-import { Ticket, Employee } from '../types';
+import { Customer, Ticket, Employee } from '../types';
 import TicketDetails from './TicketDetails';
+import TicketForm from './TicketForm';
 
 /* ============================================================
    Types
@@ -156,6 +157,7 @@ const SupportOperational = () => {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [summary, setSummary] = useState<TeamSummary | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingQueues, setLoadingQueues] = useState(true);
   const [loadingItems, setLoadingItems] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -165,6 +167,7 @@ const SupportOperational = () => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignTarget, setAssignTarget] = useState<string>('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const selectedQueue = useMemo(
     () => queues.find((q) => q.queue_key === selectedQueueKey) || null,
@@ -192,6 +195,14 @@ const SupportOperational = () => {
     }
     return m;
   }, [employees]);
+
+  const customerMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const customer of customers) {
+      m.set(Number(customer.id), customer.name);
+    }
+    return m;
+  }, [customers]);
 
   const supportEmployees = useMemo(
     () => employees.filter((e) => e.status === 'active'),
@@ -284,6 +295,16 @@ const SupportOperational = () => {
     } catch { /* non-critical */ }
   }, []);
 
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const res = await fetch(`${getApiUrl()}/customers`, { headers: hdrs() });
+      if (res.ok) {
+        const payload = await res.json();
+        setCustomers(Array.isArray(payload) ? payload : []);
+      }
+    } catch { /* non-critical */ }
+  }, []);
+
   /* --- Ticket actions --- */
   const pullTicket = async (sourceId: string) => {
     setActionError(null);
@@ -329,6 +350,7 @@ const SupportOperational = () => {
     if (!getApiUrl() || !getNonce()) { setError('API settings missing'); setLoadingQueues(false); return; }
     fetchQueues();
     fetchEmployees();
+    fetchCustomers();
   }, []);
 
   useEffect(() => {
@@ -498,6 +520,16 @@ const SupportOperational = () => {
           <div className="pd-header-subtitle">{queues.length} queue{queues.length !== 1 ? 's' : ''} visible</div>
         </div>
         <div className="pd-header-right">
+          {!showCreateForm && (
+            <button
+              type="button"
+              className="button button-primary"
+              style={{ marginRight: 8 }}
+              onClick={() => setShowCreateForm(true)}
+            >
+              Create New Ticket
+            </button>
+          )}
           <a className="pd-refresh-btn" href="/wp-admin/admin.php?page=pet-escalations" style={{ marginRight: 8 }}>
             Escalations
           </a>
@@ -506,6 +538,23 @@ const SupportOperational = () => {
           </button>
         </div>
       </div>
+      {showCreateForm && (
+        <div className="pd-content" style={{ marginBottom: 16 }}>
+          <div className="pd-card" style={{ width: '100%' }}>
+            <TicketForm
+              onSuccess={() => {
+                setShowCreateForm(false);
+                setActionError(null);
+                if (selectedQueueKey) {
+                  fetchQueueItems(selectedQueueKey);
+                }
+                fetchQueues();
+              }}
+              onCancel={() => setShowCreateForm(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* --- Content --- */}
       <div className="pd-content" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
@@ -627,7 +676,7 @@ const SupportOperational = () => {
                         <span className={`pd-sla-label ${slaClass(item.sla_state)}`} style={{ position: 'static', fontSize: '0.67rem' }}>{slaLabel(item.sla_state)}</span>
                       </div>
                       <div className="pd-attention-meta" style={{ marginTop: 6, fontSize: '0.74rem' }}>
-                        {item.customer_id ? `Customer #${item.customer_id}` : 'No customer'}
+                        {item.customer_id ? (customerMap.get(Number(item.customer_id)) || `Customer #${item.customer_id}`) : 'No customer'}
                         {' · '}
                         {formatStatusLabel(item.status)}
                         {' · '}
@@ -669,7 +718,7 @@ const SupportOperational = () => {
                           {selectedItem.title || '(no title)'}
                         </div>
                         <div style={{ marginTop: 8, fontSize: '0.84rem', color: '#344054' }}>
-                          {selectedItem.reference_code} · Customer {selectedItem.customer_id ? `#${selectedItem.customer_id}` : 'N/A'} · {modeLabel(selectedItem.assignment_mode)}
+                          {selectedItem.reference_code} · Customer {selectedItem.customer_id ? (customerMap.get(Number(selectedItem.customer_id)) || `#${selectedItem.customer_id}`) : 'N/A'} · {modeLabel(selectedItem.assignment_mode)}
                           {selectedItem.assigned_user_id ? ` — ${employeeMap.get(selectedItem.assigned_user_id) || selectedItem.assigned_user_id}` : ''}
                         </div>
                       </div>

@@ -9,10 +9,9 @@ use Pet\Domain\Support\Entity\Ticket;
 use Pet\Domain\Support\Repository\TicketRepository;
 use Pet\Domain\Event\EventBus;
 use Pet\Domain\Support\Event\TicketCreated;
-use Pet\Domain\Work\Service\DepartmentResolver;
 
 /**
- * Creates a project ticket from an accepted quote task.
+ * Creates a project ticket from accepted quote delivery components.
  * Sets correct backbone defaults: status=planned, lifecycle_owner=project,
  * is_baseline_locked=1, billing_context_type=project.
  *
@@ -40,6 +39,22 @@ class CreateProjectTicketHandler
     public function handle(CreateProjectTicketCommand $command): int
     {
         return $this->transactionManager->transactional(function () use ($command) {
+            if ($command->projectId() === null || $command->projectId() <= 0) {
+                throw new \DomainException('Project ticket provisioning requires a valid project_id.');
+            }
+
+            if ($command->sourceComponentId() <= 0) {
+                throw new \DomainException('Project ticket provisioning requires a valid source_component_id.');
+            }
+
+            $existing = $this->ticketRepository->findByProvisioningKey(
+                (int)$command->projectId(),
+                $command->sourceComponentId(),
+                $command->parentTicketId()
+            );
+            if ($existing && $existing->id() !== null) {
+                return (int)$existing->id();
+            }
             $ticket = new Ticket(
                 $command->customerId(),
                 $command->subject(),
@@ -62,7 +77,7 @@ class CreateProjectTicketHandler
                 null,                                   // responseDueAt
                 null,                                   // resolutionDueAt
                 null,                                   // respondedAt
-                DepartmentResolver::DEPT_DELIVERY,      // queueId
+                null,                                   // queueId
                 null,                                   // ownerUserId
                 null,                                   // category
                 null,                                   // subcategory
@@ -73,7 +88,7 @@ class CreateProjectTicketHandler
                 $command->projectId(),                  // projectId
                 $command->quoteId(),                    // quoteId
                 $command->phaseId(),                    // phaseId
-                null,                                   // parentTicketId
+                $command->parentTicketId(),             // parentTicketId
                 null,                                   // rootTicketId (set by repo post-insert)
                 'work',                                 // ticketKind
                 $command->departmentIdExt(),            // departmentIdExt
@@ -86,18 +101,36 @@ class CreateProjectTicketHandler
                 $command->soldMinutes(),                // soldMinutes
                 $command->estimatedMinutes(),           // estimatedMinutes
                 null,                                   // remainingMinutes (not stored)
-                false,                                  // isRollup
+                $command->isRollup(),                   // isRollup
                 'project',                              // lifecycleOwner
                 true,                                   // isBaselineLocked
                 $command->changeOrderSourceTicketId(),  // changeOrderSourceTicketId
-                $command->soldValueCents()              // soldValueCents
+                $command->soldValueCents(),             // soldValueCents
+                $command->sourceType(),                 // sourceType
+                $command->sourceComponentId()           // sourceComponentId
             );
 
-            $this->ticketRepository->save($ticket);
+            try {
+                $this->ticketRepository->save($ticket);
+            } catch (\RuntimeException $e) {
+                if (stripos($e->getMessage(), 'Duplicate entry') === false) {
+                    throw $e;
+                }
+
+                $existing = $this->ticketRepository->findByProvisioningKey(
+                    (int)$command->projectId(),
+                    $command->sourceComponentId(),
+                    $command->parentTicketId()
+                );
+                if ($existing && $existing->id() !== null) {
+                    return (int)$existing->id();
+                }
+                throw $e;
+            }
 
             $this->eventBus->dispatch(new TicketCreated($ticket));
 
-            return $ticket->id();
+            return (int)$ticket->id();
         });
     }
 }

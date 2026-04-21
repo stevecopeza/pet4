@@ -23,6 +23,8 @@ export interface ServiceBlockDraft {
   quantity: number;
   unit: string;
   sellValue: number;
+  unitCost?: number | null;
+  totalCost?: number | null;
   price_override: boolean;
 }
 
@@ -39,6 +41,8 @@ interface ServiceBlockEditorProps {
   teams: Team[];
   ownerOptions: OwnerOptions | null;
   onRoleChange: (roleId: number | null) => void;
+  /** Called when a new catalog item is created on-the-fly so parent can refresh the list. */
+  onCatalogItemCreated?: (item: CatalogItem) => void;
 }
 
 const UNIT_OPTIONS = ['hours', 'days', 'licenses', 'months'];
@@ -56,8 +60,70 @@ const ServiceBlockEditor: React.FC<ServiceBlockEditorProps> = ({
   teams,
   ownerOptions,
   onRoleChange,
+  onCatalogItemCreated,
 }) => {
   const [errors, setErrors] = useState<ValidationErrors>({});
+
+  // On-the-fly catalog item creation
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [newItemCost, setNewItemCost] = useState('0');
+  const [newItemType, setNewItemType] = useState<'service' | 'product'>('service');
+  const [creatingItem, setCreatingItem] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const handleCreateCatalogItem = async () => {
+    if (!newItemName.trim() || !newItemPrice) return;
+    setCreatingItem(true);
+    setCreateError(null);
+    try {
+      // @ts-ignore
+      const apiUrl = window.petSettings?.apiUrl;
+      // @ts-ignore
+      const nonce = window.petSettings?.nonce;
+      const res = await fetch(`${apiUrl}/catalog-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+        body: JSON.stringify({
+          name: newItemName.trim(),
+          unit_price: parseFloat(newItemPrice),
+          unit_cost: parseFloat(newItemCost) || 0,
+          type: newItemType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create catalog item');
+
+      // data = { id, name, unit_price, unit_cost, type }
+      const created: CatalogItem = {
+        id: data.id,
+        name: data.name,
+        unit_price: data.unit_price,
+        unit_cost: data.unit_cost,
+        type: data.type,
+      };
+
+      if (onCatalogItemCreated) onCatalogItemCreated(created);
+
+      // Auto-select the new item
+      onDraftChange('catalogItemId', created.id);
+      onDraftChange('description', created.name);
+      onDraftChange('sellValue', created.unit_price);
+      onDraftChange('price_override', false);
+
+      // Reset form
+      setShowCreateForm(false);
+      setNewItemName('');
+      setNewItemPrice('');
+      setNewItemCost('0');
+      setNewItemType('service');
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Create failed');
+    } finally {
+      setCreatingItem(false);
+    }
+  };
 
   // Revalidate on draft changes
   useEffect(() => {
@@ -161,20 +227,92 @@ const ServiceBlockEditor: React.FC<ServiceBlockEditorProps> = ({
               autoFocus
             />
           </FieldValidation>
-          <select
-            value={draft.catalogItemId ?? ''}
-            onChange={handleCatalogChange}
-            style={{ width: '100%', fontSize: '11px', color: '#666' }}
-          >
-            <option value="">Catalog: Select service…</option>
-            {catalogItems
-              .filter((item) => item.type === 'service')
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <select
+              value={draft.catalogItemId ?? ''}
+              onChange={(e) => {
+                if (e.target.value === '__create__') {
+                  setShowCreateForm(true);
+                  return;
+                }
+                handleCatalogChange(e);
+              }}
+              style={{ flex: 1, fontSize: '11px', color: '#666' }}
+            >
+              <option value="">Catalog: select…</option>
+              {catalogItems
+                .filter((item) => item.type === 'service')
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              <option value="__create__">＋ Add new catalog item…</option>
+            </select>
+          </div>
+
+          {/* Inline create form */}
+          {showCreateForm && (
+            <div style={{ marginTop: '6px', padding: '8px', background: '#f8fff8', border: '1px solid #46b450', borderRadius: '4px', fontSize: '12px' }}>
+              <strong style={{ display: 'block', marginBottom: '6px', color: '#1d7e2c' }}>New catalog item</strong>
+              <input
+                type="text"
+                placeholder="Name *"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                style={{ width: '100%', marginBottom: '4px', boxSizing: 'border-box' }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Unit price *"
+                  value={newItemPrice}
+                  onChange={(e) => setNewItemPrice(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Unit cost"
+                  value={newItemCost}
+                  onChange={(e) => setNewItemCost(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <select
+                  value={newItemType}
+                  onChange={(e) => setNewItemType(e.target.value as 'service' | 'product')}
+                  style={{ flex: 0, width: '80px', fontSize: '11px' }}
+                >
+                  <option value="service">Service</option>
+                  <option value="product">Product</option>
+                </select>
+              </div>
+              {createError && <div style={{ color: '#b32d2e', marginBottom: '4px', fontSize: '11px' }}>{createError}</div>}
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  type="button"
+                  className="button button-primary"
+                  style={{ fontSize: '11px', padding: '2px 8px' }}
+                  onClick={handleCreateCatalogItem}
+                  disabled={creatingItem || !newItemName.trim() || !newItemPrice}
+                >
+                  {creatingItem ? 'Creating…' : 'Create & Select'}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  style={{ fontSize: '11px', padding: '2px 8px' }}
+                  onClick={() => { setShowCreateForm(false); setCreateError(null); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </td>
 
         {/* Role */}
@@ -290,6 +428,11 @@ const ServiceBlockEditor: React.FC<ServiceBlockEditorProps> = ({
           ${total.toFixed(2)}
         </td>
 
+        {/* Margin (read-only placeholder while editing) */}
+        <td style={{ padding: '8px 10px', textAlign: 'right', verticalAlign: 'top', color: '#999' }}>
+          —
+        </td>
+
         {/* Save / Cancel */}
         <td style={{ padding: '8px 10px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
           <button
@@ -316,14 +459,14 @@ const ServiceBlockEditor: React.FC<ServiceBlockEditorProps> = ({
       </tr>
       {Object.keys(errors).length > 1 && (
         <tr>
-          <td colSpan={8} style={{ padding: 0 }}>
+          <td colSpan={9} style={{ padding: 0 }}>
             <RowErrorSummary errors={errors} />
           </td>
         </tr>
       )}
       {serverError && (
         <tr>
-          <td colSpan={8} style={{ padding: 0 }}>
+          <td colSpan={9} style={{ padding: 0 }}>
             <ServerErrorBanner message={serverError} onRetry={onSave} />
           </td>
         </tr>

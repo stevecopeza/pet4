@@ -42,6 +42,7 @@ use Pet\Application\Commercial\Command\CloneQuoteSectionCommand;
 use Pet\Application\Commercial\Command\CloneQuoteSectionHandler;
 use Pet\Application\Commercial\Command\DeleteQuoteSectionCommand;
 use Pet\Application\Commercial\Command\DeleteQuoteSectionHandler;
+use Pet\Application\Commercial\Service\QuoteBlockMarginCalculator;
 use Pet\Domain\Commercial\Repository\QuoteBlockRepository;
 use Pet\Domain\Commercial\Entity\Component\CatalogComponent;
 use Pet\Domain\Commercial\Entity\Component\ImplementationComponent;
@@ -54,6 +55,7 @@ use Pet\Domain\Commercial\Entity\Component\SimpleUnit;
 use Pet\Domain\Commercial\Entity\CostAdjustment;
 use Pet\Domain\Commercial\Entity\QuoteSection;
 use Pet\UI\Rest\Validation\InputValidation as V;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -85,6 +87,13 @@ class QuoteController implements RestController
     private CreateQuoteBlockHandler $createQuoteBlockHandler;
     private UpdateQuoteBlockHandler $updateQuoteBlockHandler;
     private DeleteQuoteBlockHandler $deleteQuoteBlockHandler;
+    private QuoteBlockMarginCalculator $quoteBlockMarginCalculator;
+
+    // Approval workflow
+    private \Pet\Application\Commercial\Command\SubmitQuoteForApprovalHandler $submitForApprovalHandler;
+    private \Pet\Application\Commercial\Command\ApproveQuoteHandler $approveQuoteHandler;
+    private \Pet\Application\Commercial\Command\RejectQuoteApprovalHandler $rejectQuoteApprovalHandler;
+    private \Pet\Application\Commercial\Service\QuoteApprovalRulesService $approvalRulesService;
 
     public function __construct(
         QuoteRepository $quoteRepository,
@@ -107,7 +116,12 @@ class QuoteController implements RestController
         QuoteBlockRepository $quoteBlockRepository,
         CreateQuoteBlockHandler $createQuoteBlockHandler,
         UpdateQuoteBlockHandler $updateQuoteBlockHandler,
-        DeleteQuoteBlockHandler $deleteQuoteBlockHandler
+        DeleteQuoteBlockHandler $deleteQuoteBlockHandler,
+        QuoteBlockMarginCalculator $quoteBlockMarginCalculator,
+        \Pet\Application\Commercial\Command\SubmitQuoteForApprovalHandler $submitForApprovalHandler,
+        \Pet\Application\Commercial\Command\ApproveQuoteHandler $approveQuoteHandler,
+        \Pet\Application\Commercial\Command\RejectQuoteApprovalHandler $rejectQuoteApprovalHandler,
+        \Pet\Application\Commercial\Service\QuoteApprovalRulesService $approvalRulesService
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->createQuoteHandler = $createQuoteHandler;
@@ -130,6 +144,11 @@ class QuoteController implements RestController
         $this->createQuoteBlockHandler = $createQuoteBlockHandler;
         $this->updateQuoteBlockHandler = $updateQuoteBlockHandler;
         $this->deleteQuoteBlockHandler = $deleteQuoteBlockHandler;
+        $this->quoteBlockMarginCalculator = $quoteBlockMarginCalculator;
+        $this->submitForApprovalHandler   = $submitForApprovalHandler;
+        $this->approveQuoteHandler        = $approveQuoteHandler;
+        $this->rejectQuoteApprovalHandler = $rejectQuoteApprovalHandler;
+        $this->approvalRulesService       = $approvalRulesService;
     }
 
     public function registerRoutes(): void
@@ -138,12 +157,12 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getQuotes'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
                 'args' => [
                     'customerId' => V::requiredIntArg(),
                     'title' => V::requiredStringArg(),
@@ -156,12 +175,12 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
                 'args' => [
                     'title' => V::requiredStringArg(),
                     'description' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeTextarea']],
@@ -170,7 +189,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'archiveQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -178,7 +197,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addLine'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -186,7 +205,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addComponent'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -194,7 +213,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'removeComponent'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -202,7 +221,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'sendQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -210,7 +229,31 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'acceptQuote'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/submit-for-approval', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'submitForApproval'],
+                'permission_callback' => [$this, 'checkLoggedIn'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/approve', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'approveQuote'],
+                'permission_callback' => [$this, 'checkLoggedIn'],
+            ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/reject-approval', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'rejectQuoteApproval'],
+                'permission_callback' => [$this, 'checkLoggedIn'],
             ],
         ]);
 
@@ -218,7 +261,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addCostAdjustment'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -226,7 +269,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'removeCostAdjustment'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -234,7 +277,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'setPaymentSchedule'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -242,7 +285,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addSection'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -250,12 +293,12 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateSection'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'deleteSection'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -263,7 +306,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'cloneSection'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -271,7 +314,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'reorderSections'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -279,7 +322,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'addBlockToSection'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -287,7 +330,7 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'reorderBlocks'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -295,12 +338,12 @@ class QuoteController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateBlock'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'deleteBlock'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -327,6 +370,20 @@ class QuoteController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_manager');
+    }
+
+    /**
+     * Approval actions only need an authenticated user — manager authorisation
+     * is enforced at the domain layer inside the handler.
+     */
+    public function checkLoggedIn(): bool
+    {
+        return is_user_logged_in();
     }
 
     public function getQuotes(WP_REST_Request $request): WP_REST_Response
@@ -495,6 +552,7 @@ class QuoteController implements RestController
                 ];
             }, $sections),
             'blocks' => array_map(function ($block) {
+                $marginData = $this->quoteBlockMarginCalculator->calculate($block->type(), $block->payload());
                 return [
                     'id' => $block->id(),
                     'quoteId' => null,
@@ -503,9 +561,25 @@ class QuoteController implements RestController
                     'orderIndex' => $block->position(),
                     'componentId' => $block->componentId(),
                     'priced' => $block->isPriced(),
-                    'payload' => $block->payload(),
+                    'payload' => $marginData['payload'],
+                    'lineSellValue' => $marginData['lineSellValue'],
+                    'lineCostValue' => $marginData['lineCostValue'],
+                    'marginAmount' => $marginData['marginAmount'],
+                    'marginPercentage' => $marginData['marginPercentage'],
+                    'hasMarginData' => $marginData['hasMarginData'],
                 ];
             }, $blocks),
+            // Approval workflow fields
+            'approvalState' => [
+                'rejectionNote'           => $quote->rejectionNote(),
+                'submittedForApprovalAt'  => $quote->submittedForApprovalAt()
+                    ? $quote->submittedForApprovalAt()->format(\DateTimeImmutable::ATOM) : null,
+                'approvedAt'              => $quote->approvedAt()
+                    ? $quote->approvedAt()->format(\DateTimeImmutable::ATOM) : null,
+                'approvedByUserId'        => $quote->approvedByUserId(),
+                'requiresApprovalForSend' => $this->approvalRulesService->requiresApproval($quote, 0.0),
+                'approvalReasons'         => $this->approvalRulesService->approvalReasons($quote, 0.0),
+            ],
         ];
     }
 
@@ -539,7 +613,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -564,7 +638,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -602,7 +676,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to update section'], 500);
         }
@@ -625,7 +699,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to delete section'], 500);
         }
@@ -648,7 +722,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to clone section'], 500);
         }
@@ -696,7 +770,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to reorder sections'], 500);
         }
@@ -723,7 +797,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to reorder blocks'], 500);
         }
@@ -749,7 +823,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to update block'], 500);
         }
@@ -772,7 +846,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to delete block'], 500);
         }
@@ -797,7 +871,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($quoteId);
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -822,7 +896,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -844,7 +918,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response(['message' => 'Line added'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -865,7 +939,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -881,7 +955,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -896,7 +970,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -911,7 +985,57 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
+        }
+    }
+
+    public function submitForApproval(WP_REST_Request $request): WP_REST_Response
+    {
+        $id     = (int) $request->get_param('id');
+        $userId = get_current_user_id();
+
+        try {
+            $command = new \Pet\Application\Commercial\Command\SubmitQuoteForApprovalCommand($id, $userId);
+            $this->submitForApprovalHandler->handle($command);
+
+            $quote = $this->quoteRepository->findById($id);
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
+        }
+    }
+
+    public function approveQuote(WP_REST_Request $request): WP_REST_Response
+    {
+        $id     = (int) $request->get_param('id');
+        $userId = get_current_user_id();
+
+        try {
+            $command = new \Pet\Application\Commercial\Command\ApproveQuoteCommand($id, $userId);
+            $this->approveQuoteHandler->handle($command);
+
+            $quote = $this->quoteRepository->findById($id);
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
+        }
+    }
+
+    public function rejectQuoteApproval(WP_REST_Request $request): WP_REST_Response
+    {
+        $id     = (int) $request->get_param('id');
+        $userId = get_current_user_id();
+        $params = $request->get_json_params();
+        $note   = trim($params['note'] ?? '');
+
+        try {
+            $command = new \Pet\Application\Commercial\Command\RejectQuoteApprovalCommand($id, $userId, $note);
+            $this->rejectQuoteApprovalHandler->handle($command);
+
+            $quote = $this->quoteRepository->findById($id);
+            return new WP_REST_Response($this->serializeQuote($quote), 200);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -925,7 +1049,7 @@ class QuoteController implements RestController
 
             return new WP_REST_Response(['message' => 'Quote archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -947,7 +1071,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -963,7 +1087,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -979,7 +1103,7 @@ class QuoteController implements RestController
             $quote = $this->quoteRepository->findById($id);
             return new WP_REST_Response($this->serializeQuote($quote), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 }

@@ -88,6 +88,10 @@ Typical KPIs:
 - Project variance count
 - Estimate accuracy
 
+Drill-down contract:
+- Project cards in the Project Manager dashboard open the Delivery surface in project detail mode using `?page=pet-delivery#project=<id>`.
+- This drill-down is navigational only and must not mutate project or ticket state.
+
 ---
 
 ### Support Dashboard

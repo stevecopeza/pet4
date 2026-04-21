@@ -100,11 +100,23 @@ Minimum expectations:
 - assignment visible
 - blocker visibility
 - split / WBS access where supported
+- direct deep-linking to a selected project detail workspace
 
 Prohibited:
 - task-only delivery views for newly accepted work
 - hiding sold baseline after acceptance
 - mixing task truth and ticket truth in the same execution flow without explicit migration design
+
+### 5.1 Delivery deep-link and dashboard handoff contract
+
+The Delivery surface must support direct project-detail opening from URL state:
+
+- `.../wp-admin/admin.php?page=pet-delivery#project=<id>` must select project `<id>` and render detail workspace mode.
+- Detail workspace mode must render project context (title/metrics) and a visible `Back to Projects` action.
+- During initial data load, hash-selected project state must be preserved and must not be cleared before project data is available.
+- If `<id>` does not exist in the current filtered dataset after loading, the surface may safely fall back to list mode.
+
+Project Manager dashboard drill-through must use this contract as its navigation target.
 
 ---
 

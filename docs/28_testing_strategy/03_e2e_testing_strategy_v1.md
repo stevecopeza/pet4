@@ -91,6 +91,7 @@ These tests interact with the real REST API (`/pet/v1/*`) through the browser â€
 #### 3. Navigation and Routing
 - Clicking each WP admin submenu item loads the correct PET page (the `<h1>` reads the expected title)
 - The Dashboards page renders in standalone mode (no WP admin bar visible)
+- Project Manager dashboard card click-through opens Delivery in detail mode (`?page=pet-delivery#project=<id>`) with project workspace visible
 - React ErrorBoundary catches and renders a fallback for broken components (simulated by injecting a bad prop)
 
 #### 4. Shortcode Page Tests

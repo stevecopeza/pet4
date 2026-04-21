@@ -48,10 +48,10 @@ final class SqlWorkItemRepositoryAssignmentInvariantTest extends TestCase
         $this->repository = new SqlWorkItemRepository($this->wpdb);
     }
 
-    public function testSaveRejectsDualAssignmentInvariantViolation(): void
+    public function testSaveAcceptsTeamOnlyAssignment(): void
     {
         $workItem = WorkItem::create(
-            'wi-invariant',
+            'wi-team-only',
             'ticket',
             '42',
             'support',
@@ -64,18 +64,69 @@ final class SqlWorkItemRepositoryAssignmentInvariantTest extends TestCase
             null
         );
 
-        // Simulate corrupted state reaching persistence boundary.
-        $ref = new \ReflectionObject($workItem);
-        $assignedUserProp = $ref->getProperty('assignedUserId');
-        $assignedUserProp->setAccessible(true);
-        $assignedUserProp->setValue($workItem, '99');
-
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('both assigned_team_id and assigned_user_id are set');
         $this->repository->save($workItem);
+
+        $saved = $this->repository->findById('wi-team-only');
+        self::assertNotNull($saved);
+        self::assertSame('3', $saved->getAssignedTeamId());
+        self::assertNull($saved->getAssignedUserId());
+        self::assertSame(WorkItem::ASSIGNMENT_MODE_TEAM_QUEUE, $saved->getAssignmentMode());
+        self::assertSame('support:team:3', $saved->getQueueKey());
     }
 
-    public function testFindByAssignedUserNormalizesLegacyDualAssignmentRows(): void
+    public function testSaveAcceptsUserOnlyAssignment(): void
+    {
+        $workItem = WorkItem::create(
+            'wi-user-only',
+            'ticket',
+            '43',
+            'support',
+            15.0,
+            'active',
+            new DateTimeImmutable('2026-03-19 20:10:00'),
+            null,
+            null,
+            '99',
+            null
+        );
+
+        $this->repository->save($workItem);
+
+        $saved = $this->repository->findById('wi-user-only');
+        self::assertNotNull($saved);
+        self::assertNull($saved->getAssignedTeamId());
+        self::assertSame('99', $saved->getAssignedUserId());
+        self::assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $saved->getAssignmentMode());
+        self::assertSame('support:user:99', $saved->getQueueKey());
+    }
+
+    public function testSaveAcceptsDualAssignmentAndRoundTripsBothFields(): void
+    {
+        $workItem = WorkItem::create(
+            'wi-dual',
+            'ticket',
+            '44',
+            'support',
+            20.0,
+            'active',
+            new DateTimeImmutable('2026-03-19 20:20:00'),
+            null,
+            '3',
+            '99',
+            null
+        );
+
+        $this->repository->save($workItem);
+
+        $saved = $this->repository->findById('wi-dual');
+        self::assertNotNull($saved);
+        self::assertSame('3', $saved->getAssignedTeamId());
+        self::assertSame('99', $saved->getAssignedUserId());
+        self::assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $saved->getAssignmentMode());
+        self::assertSame('support:user:99', $saved->getQueueKey());
+    }
+
+    public function testFindByAssignedUserPreservesDualAssignmentRows(): void
     {
         $table = $this->wpdb->prefix . 'pet_work_items';
         $this->wpdb->insert($table, [
@@ -107,7 +158,7 @@ final class SqlWorkItemRepositoryAssignmentInvariantTest extends TestCase
         $items = $this->repository->findByAssignedUser('1');
         self::assertCount(1, $items);
         self::assertSame('1', $items[0]->getAssignedUserId());
-        self::assertNull($items[0]->getAssignedTeamId());
+        self::assertSame('3', $items[0]->getAssignedTeamId());
         self::assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $items[0]->getAssignmentMode());
         self::assertSame('support:user:1', $items[0]->getQueueKey());
     }

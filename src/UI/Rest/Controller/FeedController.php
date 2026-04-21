@@ -168,7 +168,7 @@ class FeedController implements RestController
             $this->announcementRepository->save($announcement);
             return new WP_REST_Response($this->serializeAnnouncement($announcement), 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -201,7 +201,7 @@ class FeedController implements RestController
                 'acknowledgedAt' => $ack->getAcknowledgedAt()->format(DateTimeImmutable::ATOM),
             ], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -241,7 +241,7 @@ class FeedController implements RestController
                 'createdAt' => $reaction->getCreatedAt()->format(DateTimeImmutable::ATOM),
             ], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

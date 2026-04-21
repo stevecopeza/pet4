@@ -147,7 +147,7 @@ final class TicketControllerGetTicketsStatusTest extends TestCase
         // Regression guard: malformed seeded work items should not break getTickets path.
         $workItems = $this->createMock(WorkItemRepository::class);
         $workItems->method('findAll')->willThrowException(
-            new \InvalidArgumentException('Work item cannot be both team-queued and user-assigned.')
+            new \InvalidArgumentException('Malformed work item assignment state.')
         );
 
         return new TicketController(

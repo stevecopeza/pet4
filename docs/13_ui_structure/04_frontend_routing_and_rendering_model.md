@@ -56,9 +56,15 @@ Characteristics:
 
 Examples:
 - `/wp-admin/admin.php?page=pet-dashboard`
-- `/wp-admin/admin.php?page=pet-projects#/123/tasks`
+- `/wp-admin/admin.php?page=pet-dashboards`
+- `/wp-admin/admin.php?page=pet-delivery`
+- `/wp-admin/admin.php?page=pet-delivery#project=123`
 
 Hash or history routing may be used internally.
+
+Delivery deep-link contract:
+- `#project=<id>` on `pet-delivery` opens project detail workspace for that project.
+- PM dashboard drill-through must target this URL contract for project-specific navigation.
 
 ---
 

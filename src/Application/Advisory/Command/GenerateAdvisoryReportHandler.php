@@ -65,9 +65,9 @@ class GenerateAdvisoryReportHandler
     {
         $ticketsOverdue = (int)($snapshot['tickets']['overdue'] ?? 0);
         $signalsActive = (int)($snapshot['signals']['total_active'] ?? 0);
-        $openTasks = (int)($snapshot['tasks']['open'] ?? 0);
+        $openDeliveryTickets = (int)($snapshot['delivery_tickets']['open'] ?? 0);
 
-        return "Active signals: {$signalsActive}; Ticket overdue: {$ticketsOverdue}; Open tasks: {$openTasks}";
+        return "Active signals: {$signalsActive}; Ticket overdue: {$ticketsOverdue}; Open delivery tickets: {$openDeliveryTickets}";
     }
 }
 

@@ -7,6 +7,7 @@ namespace Pet\UI\Rest\Controller;
 use Pet\Application\Commercial\Command\CreateCatalogItemCommand;
 use Pet\Application\Commercial\Command\CreateCatalogItemHandler;
 use Pet\Domain\Commercial\Repository\CatalogItemRepository;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -33,12 +34,12 @@ class CatalogItemController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getItems'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createItem'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -46,12 +47,12 @@ class CatalogItemController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateItem'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'deleteItem'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
     }
@@ -107,9 +108,25 @@ class CatalogItemController implements RestController
 
             $this->createHandler->handle($command);
 
+            // Return the newly created item so callers can immediately use it
+            global $wpdb;
+            $newId = (int) $wpdb->insert_id;
+            if ($newId > 0) {
+                $created = $this->repository->findById($newId);
+                if ($created) {
+                    return new WP_REST_Response([
+                        'id'         => $created->id(),
+                        'name'       => $created->name(),
+                        'unit_price' => $created->unitPrice(),
+                        'unit_cost'  => $created->unitCost(),
+                        'type'       => $created->type(),
+                    ], 201);
+                }
+            }
+
             return new WP_REST_Response(['status' => 'created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -163,7 +180,7 @@ class CatalogItemController implements RestController
                 'unit_cost' => $item->unitCost(),
             ], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -181,12 +198,17 @@ class CatalogItemController implements RestController
 
             return new WP_REST_Response(['status' => 'deleted'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 }

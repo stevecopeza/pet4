@@ -10,10 +10,115 @@ use Pet\Domain\Event\EventBus;
 final class DemoSeedService
 {
     private $wpdb;
+    private const TARGETED_MULTI_PHASE_SOURCE_COMPONENT_IDS = [
+        'discovery_design' => 990001,
+        'build_implementation' => 990002,
+        'go_live_handover' => 990003,
+    ];
 
     public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
+    }
+
+    private function cleanupDeliverySeedResidue(): array
+    {
+        $wpdb = $this->wpdb;
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+        $timeEntriesTable = $wpdb->prefix . 'pet_time_entries';
+        $workItemsTable = $wpdb->prefix . 'pet_work_items';
+        $slaClockTable = $wpdb->prefix . 'pet_sla_clock_state';
+        $ticketLinksTable = $wpdb->prefix . 'pet_ticket_links';
+        $deleteTicketArtifacts = function (array $ticketIds) use (
+            $wpdb,
+            $ticketsTable,
+            $timeEntriesTable,
+            $slaClockTable,
+            $ticketLinksTable,
+            $workItemsTable
+        ): int {
+            $ticketIds = array_values(array_filter(array_map('intval', $ticketIds), static function (int $id): bool {
+                return $id > 0;
+            }));
+            if (empty($ticketIds)) {
+                return 0;
+            }
+
+            $idsCsv = implode(',', $ticketIds);
+            $wpdb->query("DELETE FROM $timeEntriesTable WHERE ticket_id IN ($idsCsv)");
+            if ($this->tableExists($slaClockTable)) {
+                $wpdb->query("DELETE FROM $slaClockTable WHERE ticket_id IN ($idsCsv)");
+            }
+            if ($this->tableExists($ticketLinksTable)) {
+                $wpdb->query("DELETE FROM $ticketLinksTable WHERE ticket_id IN ($idsCsv)");
+                $wpdb->query("DELETE FROM $ticketLinksTable WHERE link_type = 'ticket' AND CAST(linked_id AS UNSIGNED) IN ($idsCsv)");
+            }
+            if ($this->tableExists($workItemsTable)) {
+                $wpdb->query("DELETE FROM $workItemsTable WHERE source_type = 'ticket' AND CAST(source_id AS UNSIGNED) IN ($idsCsv)");
+            }
+            $wpdb->query("DELETE FROM $ticketsTable WHERE id IN ($idsCsv)");
+
+            return count($ticketIds);
+        };
+
+        $invalidTicketIds = array_map('intval', $wpdb->get_col(
+            "SELECT tt.id
+             FROM $ticketsTable tt
+             LEFT JOIN $projectsTable p ON p.id = tt.project_id
+             WHERE tt.primary_container = 'project'
+               AND (p.id IS NULL OR p.source_quote_id IS NULL)"
+        ));
+        $deletedTickets = $deleteTicketArtifacts($invalidTicketIds);
+
+        $orphanQuoteProjectIds = array_map('intval', $wpdb->get_col(
+            "SELECT p.id
+             FROM $projectsTable p
+             WHERE p.source_quote_id IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM $ticketsTable tt
+                   WHERE tt.project_id = p.id
+                     AND tt.primary_container = 'project'
+               )"
+        ));
+        $deletedProjects = 0;
+        if (!empty($orphanQuoteProjectIds)) {
+            $projectIdsCsv = implode(',', $orphanQuoteProjectIds);
+            $wpdb->query("DELETE FROM $projectsTable WHERE id IN ($projectIdsCsv)");
+            $deletedProjects = count($orphanQuoteProjectIds);
+        }
+
+        $testDebrisProjectIds = array_map('intval', $wpdb->get_col(
+            "SELECT p.id
+             FROM $projectsTable p
+             WHERE p.source_quote_id IS NULL
+               AND (
+                   p.name LIKE 'E2E Test Project%'
+                   OR p.name LIKE 'Final Blocker Project%'
+                   OR p.name LIKE 'Project for Quote #%'
+               )"
+        ));
+        $deletedTestDebrisProjects = 0;
+        $deletedTestDebrisTickets = 0;
+        if (!empty($testDebrisProjectIds)) {
+            $projectIdsCsv = implode(',', array_map('intval', $testDebrisProjectIds));
+            $testDebrisTicketIds = array_map('intval', $wpdb->get_col(
+                "SELECT id
+                 FROM $ticketsTable
+                 WHERE project_id IN ($projectIdsCsv)"
+            ));
+            $deletedTestDebrisTickets = $deleteTicketArtifacts($testDebrisTicketIds);
+            $wpdb->query("DELETE FROM $projectsTable WHERE id IN ($projectIdsCsv)");
+            $deletedTestDebrisProjects = count($testDebrisProjectIds);
+        }
+
+        return [
+            'deleted_invalid_project_tickets' => $deletedTickets,
+            'deleted_orphan_quote_projects' => $deletedProjects,
+            'deleted_test_debris_projects' => $deletedTestDebrisProjects,
+            'deleted_test_debris_project_tickets' => $deletedTestDebrisTickets,
+        ];
     }
 
     private function validateManagedTeamTopology(array $managedTeamNames): array
@@ -146,6 +251,8 @@ final class DemoSeedService
         $now = new \DateTimeImmutable();
         $recentDate = $now->format('Y-m-d H:i:s');
 
+        $summary['delivery_residue_cleanup'] = $this->cleanupDeliverySeedResidue();
+
         $summary['feature_flags'] = $this->seedFeatureFlags($seedRunId);
         $summary['demo_feature_enablement'] = $this->enableDemoFeatureFlags($seedProfile, $recentDate);
         $summary['employees'] = $this->seedEmployees($seedRunId, $seedProfile, $recentDate);
@@ -162,6 +269,7 @@ final class DemoSeedService
         $summary['catalog_products'] = $this->seedCatalogProducts($seedRunId, $seedProfile, $recentDate);
         $summary['commercial'] = $this->seedCommercial($seedRunId, $seedProfile, $recentDate);
         $summary['block_quotes'] = $this->seedBlockBasedQuotes($seedRunId, $seedProfile, $recentDate);
+        $summary['approval_scenarios'] = $this->seedApprovalScenarios($seedRunId, $seedProfile);
         $summary['leads'] = $this->seedLeads($seedRunId, $seedProfile, $recentDate);
         $summary['delivery'] = $this->seedDelivery($seedRunId, $seedProfile, $recentDate);
         $summary['support'] = $this->seedSupport($seedRunId, $seedProfile, $recentDate);
@@ -172,8 +280,10 @@ final class DemoSeedService
         $summary['knowledge'] = $this->seedKnowledge($seedRunId, $seedProfile, $recentDate);
         $summary['feed'] = $this->seedFeed($seedRunId, $seedProfile, $recentDate);
         $summary['conversations'] = $this->seedConversations($seedRunId, $seedProfile, $recentDate);
-        $summary['project_tasks'] = $this->seedProjectTasks($seedRunId, $seedProfile, $recentDate);
-        $summary['project_enrichment'] = $this->seedProjectEnrichment($seedRunId, $seedProfile, $recentDate);
+        $summary['project_ticket_enrichment'] = $this->seedProjectTicketEnrichment($seedRunId, $seedProfile, $recentDate);
+        $summary['targeted_multi_phase_project_enrichment'] = $this->seedTargetedMultiPhaseProjectEnrichment($seedRunId, $seedProfile, $recentDate);
+        $summary['project_ticket_conversation_enrichment'] = $this->seedProjectTicketConversationEnrichment($seedRunId, $seedProfile, $recentDate);
+        $summary['delivery_lineage_validation'] = $this->validateDeliveryTicketLineage($seedRunId, $seedProfile, $recentDate);
         $summary['billing'] = $this->seedBilling($seedRunId, $seedProfile, $recentDate);
         $summary['event_backbone'] = $this->seedEventBackboneExpectations($seedRunId, $seedProfile, $recentDate);
         $summary['pulseway'] = $this->seedPulseway($seedRunId, $seedProfile, $recentDate);
@@ -906,6 +1016,7 @@ final class DemoSeedService
     private function seedEmployees(string $seedRunId, string $seedProfile, string $seededAt): array
     {
         $t = $this->wpdb->prefix . 'pet_employees';
+        $emailDedupBefore = $this->normalizeDuplicateEmployeeEmails();
         $rows = [
             ['first_name' => 'Steve', 'last_name' => 'Admin', 'email' => 'steve@example.com', 'status' => 'active', 'hire_date' => '2024-01-10', 'manager' => null],
             ['first_name' => 'Mia', 'last_name' => 'Manager', 'email' => 'mia@example.com', 'status' => 'active', 'hire_date' => '2024-02-12', 'manager' => 'Steve'],
@@ -1024,11 +1135,13 @@ final class DemoSeedService
                 ['%d']
             );
         }
+        $emailDedupAfter = $this->normalizeDuplicateEmployeeEmails();
 
         return [
             'count' => (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $t"),
             'managed_staff' => count($rows),
             'created' => $createdCount,
+            'deduped_email_rows' => (int)($emailDedupBefore['deleted_rows'] ?? 0) + (int)($emailDedupAfter['deleted_rows'] ?? 0),
             'skipped' => false,
         ];
     }
@@ -1876,6 +1989,8 @@ final class DemoSeedService
         if ($avaId && $awsId) {
             $this->upsertSeededPersonCertification($seedRunId, $avaId, $awsId, substr($seededAt, 0, 10), null, null, 'valid', $seededAt);
         }
+        $skillPairDedup = $this->normalizeDuplicatePersonSkillPairs();
+        $certPairDedup = $this->normalizeDuplicatePersonCertificationPairs();
 
         // Generate Person KPIs for current month
         /** @var \Pet\Application\Work\Command\GeneratePersonKpisHandler $generatePersonKpis */
@@ -1896,7 +2011,14 @@ final class DemoSeedService
         $skillsCount = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM {$this->wpdb->prefix}pet_skills");
         $rolesCount = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM {$this->wpdb->prefix}pet_roles");
         $kpisCount = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM {$this->wpdb->prefix}pet_kpi_definitions");
-        return ['capabilities' => $capsCount, 'skills' => $skillsCount, 'roles' => $rolesCount, 'kpi_definitions' => $kpisCount];
+        return [
+            'capabilities' => $capsCount,
+            'skills' => $skillsCount,
+            'roles' => $rolesCount,
+            'kpi_definitions' => $kpisCount,
+            'deduped_skill_rows' => (int)($skillPairDedup['deleted_rows'] ?? 0),
+            'deduped_certification_rows' => (int)($certPairDedup['deleted_rows'] ?? 0),
+        ];
     }
 
     private function seedLeave(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -2160,6 +2282,7 @@ final class DemoSeedService
         if ($projectId > 0) {
             $this->registryAdd($seedRunId, $this->wpdb->prefix . 'pet_projects', (string)$projectId);
         }
+        $this->ensureDeliveryTicketsForAcceptedQuote($q1Id, $seedRunId);
 
         // Q2: Milestone-only (Implementation), draft (simple implementation: 2 milestones, 3 tasks)
         $q2Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q2 ERP Migration Plan'));
@@ -2266,15 +2389,7 @@ final class DemoSeedService
             $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q4Id));
             $acceptQuote->handle(new \Pet\Application\Commercial\Command\AcceptQuoteCommand($q4Id));
         }
-        // Project for Q4 (Acme Catalog Services)
-        $projQ4Check = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM {$this->wpdb->prefix}pet_projects WHERE source_quote_id = %d LIMIT 1", $q4Id));
-        if ($projQ4Check <= 0) {
-            $createProject = $c->get(\Pet\Application\Delivery\Command\CreateProjectHandler::class);
-            $q4e = $quoteRepo->findById($q4Id);
-            $createProject->handle(new \Pet\Application\Delivery\Command\CreateProjectCommand(
-                $acmeId, 'Acme Catalog Services Delivery', 0.0, $q4Id, $q4e ? $q4e->totalValue() : 0.0, null, null, []
-            ));
-        }
+        $this->ensureDeliveryTicketsForAcceptedQuote($q4Id, $seedRunId);
 
         // Resolve new customer IDs
         $nexusId = (int)$this->wpdb->get_var("SELECT id FROM {$this->wpdb->prefix}pet_customers WHERE name = 'Nexus Startup Labs' LIMIT 1");
@@ -2364,6 +2479,7 @@ final class DemoSeedService
                 $nexusId, 'Nexus Cloud Migration & Managed Services', 0.0, $q5Id, $q5e ? $q5e->totalValue() : 0.0, null, null, []
             ));
         }
+        $this->ensureDeliveryTicketsForAcceptedQuote($q5Id, $seedRunId);
 
         // Q6: Government IT Assessment (Catalog only) — draft
         $q6Existing = (int)$this->wpdb->get_var($this->wpdb->prepare("SELECT id FROM $quotesTable WHERE title = %s ORDER BY id DESC LIMIT 1", 'Q6 IT Infrastructure Assessment'));
@@ -2571,10 +2687,417 @@ final class DemoSeedService
                 $sendQuote->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($q10Id));
                 $acceptQuote->handle(new \Pet\Application\Commercial\Command\AcceptQuoteCommand($q10Id));
             }
+            $this->ensureDeliveryTicketsForAcceptedQuote($q10Id, $seedRunId);
+        }
+
+        $acceptedQuoteIds = $this->wpdb->get_col(
+            "SELECT q.id
+             FROM {$this->wpdb->prefix}pet_quotes q
+             INNER JOIN {$this->wpdb->prefix}pet_projects p ON p.source_quote_id = q.id
+             WHERE q.accepted_at IS NOT NULL"
+        );
+        foreach ($acceptedQuoteIds as $acceptedQuoteId) {
+            $this->ensureDeliveryTicketsForAcceptedQuote((int)$acceptedQuoteId, $seedRunId);
+            $projectId = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM {$this->wpdb->prefix}pet_projects WHERE source_quote_id = %d ORDER BY id DESC LIMIT 1",
+                (int)$acceptedQuoteId
+            ));
+            if ($projectId > 0) {
+                $this->registryAdd($seedRunId, $this->wpdb->prefix . 'pet_projects', (string)$projectId);
+            }
         }
 
         $totalQuotes = (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $quotesTable");
         return ['quotes' => $totalQuotes];
+    }
+
+    private function ensureDeliveryTicketsForAcceptedQuote(int $quoteId, ?string $seedRunId = null): void
+    {
+        if ($quoteId <= 0) {
+            return;
+        }
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        /** @var \Pet\Domain\Commercial\Repository\QuoteRepository $quoteRepo */
+        $quoteRepo = $c->get(\Pet\Domain\Commercial\Repository\QuoteRepository::class);
+        /** @var \Pet\Domain\Delivery\Repository\ProjectRepository $projectRepo */
+        $projectRepo = $c->get(\Pet\Domain\Delivery\Repository\ProjectRepository::class);
+        /** @var \Pet\Application\Commercial\Command\CreateProjectTicketHandler $createProjectTicket */
+        $createProjectTicket = $c->get(\Pet\Application\Commercial\Command\CreateProjectTicketHandler::class);
+
+        $acceptedAt = (string)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT accepted_at FROM {$this->wpdb->prefix}pet_quotes WHERE id = %d",
+            $quoteId
+        ));
+        if ($acceptedAt === '') {
+            return;
+        }
+        $quote = $quoteRepo->findById($quoteId, true);
+        if (!$quote) {
+            return;
+        }
+
+        $project = $projectRepo->findByQuoteId($quoteId);
+        $projectId = $project ? (int)$project->id() : 0;
+        if ($projectId <= 0) {
+            return;
+        }
+
+        $this->cleanupStaleQuoteProvisionedProjectTickets($quote, $projectId);
+
+        foreach ($quote->components() as $component) {
+            if ($component instanceof \Pet\Domain\Commercial\Entity\Component\ImplementationComponent) {
+                $this->provisionImplementationTicketsForAcceptedQuote($quote, $component, $projectId, $createProjectTicket);
+            } elseif ($component instanceof \Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent) {
+                $this->provisionOnceOffServiceTicketsForAcceptedQuote($quote, $component, $projectId, $createProjectTicket);
+            }
+        }
+
+        $projectTickets = $this->wpdb->get_col($this->wpdb->prepare(
+            "SELECT id
+             FROM {$this->wpdb->prefix}pet_tickets
+             WHERE primary_container = %s
+               AND project_id = %d
+               AND quote_id = %d
+               AND source_type = %s",
+            'project',
+            $projectId,
+            $quoteId,
+            'quote_component'
+        ));
+        if ($seedRunId !== null && $seedRunId !== '') {
+            foreach ($projectTickets as $ticketId) {
+                $this->registryAdd($seedRunId, $this->wpdb->prefix . 'pet_tickets', (string)(int)$ticketId);
+            }
+        }
+    }
+
+    private function cleanupStaleQuoteProvisionedProjectTickets(
+        \Pet\Domain\Commercial\Entity\Quote $quote,
+        int $projectId
+    ): void {
+        if ($projectId <= 0) {
+            return;
+        }
+
+        $allowedSourceIds = [];
+        foreach ($quote->components() as $component) {
+            $componentId = (int)$component->id();
+            if ($componentId > 0) {
+                $allowedSourceIds[$componentId] = true;
+            }
+
+            if ($component instanceof \Pet\Domain\Commercial\Entity\Component\ImplementationComponent) {
+                foreach ($component->milestones() as $milestone) {
+                    foreach ($milestone->tasks() as $task) {
+                        $taskId = (int)$task->id();
+                        if ($taskId > 0) {
+                            $allowedSourceIds[$taskId] = true;
+                        }
+                    }
+                }
+            } elseif ($component instanceof \Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent) {
+                foreach ($component->units() as $unit) {
+                    $unitId = (int)$unit->id();
+                    if ($unitId > 0) {
+                        $allowedSourceIds[$unitId] = true;
+                    }
+                }
+            }
+        }
+        $targetedProject = $this->resolveTargetedMultiPhaseProjectCandidate();
+        if (
+            is_array($targetedProject)
+            && (int)($targetedProject['id'] ?? 0) === $projectId
+            && (int)($targetedProject['source_quote_id'] ?? 0) === (int)$quote->id()
+        ) {
+            foreach ($this->targetedMultiPhaseSourceComponentIds() as $syntheticSourceId) {
+                $allowedSourceIds[(int)$syntheticSourceId] = true;
+            }
+        }
+
+        if (empty($allowedSourceIds)) {
+            return;
+        }
+
+        $ticketsTable = $this->wpdb->prefix . 'pet_tickets';
+        $ticketRows = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT id, parent_ticket_id, source_component_id
+             FROM $ticketsTable
+             WHERE primary_container = %s
+               AND project_id = %d
+               AND quote_id = %d
+               AND source_type = %s",
+            'project',
+            $projectId,
+            (int)$quote->id(),
+            'quote_component'
+        ), ARRAY_A);
+        if (!is_array($ticketRows) || empty($ticketRows)) {
+            return;
+        }
+
+        $staleTicketIds = [];
+        foreach ($ticketRows as $row) {
+            $ticketId = (int)($row['id'] ?? 0);
+            if ($ticketId <= 0) {
+                continue;
+            }
+            $sourceComponentId = (int)($row['source_component_id'] ?? 0);
+            if ($sourceComponentId <= 0 || !isset($allowedSourceIds[$sourceComponentId])) {
+                $staleTicketIds[$ticketId] = true;
+            }
+        }
+
+        if (empty($staleTicketIds)) {
+            return;
+        }
+
+        $expanded = true;
+        while ($expanded) {
+            $expanded = false;
+            foreach ($ticketRows as $row) {
+                $ticketId = (int)($row['id'] ?? 0);
+                $parentTicketId = (int)($row['parent_ticket_id'] ?? 0);
+                if ($ticketId <= 0 || $parentTicketId <= 0) {
+                    continue;
+                }
+                if (isset($staleTicketIds[$parentTicketId]) && !isset($staleTicketIds[$ticketId])) {
+                    $staleTicketIds[$ticketId] = true;
+                    $expanded = true;
+                }
+            }
+        }
+
+        $staleIds = array_map('intval', array_keys($staleTicketIds));
+        if (empty($staleIds)) {
+            return;
+        }
+        $idsCsv = implode(',', $staleIds);
+
+        $timeEntriesTable = $this->wpdb->prefix . 'pet_time_entries';
+        if ($this->tableExists($timeEntriesTable)) {
+            $this->wpdb->query("DELETE FROM $timeEntriesTable WHERE ticket_id IN ($idsCsv)");
+        }
+
+        $slaClockTable = $this->wpdb->prefix . 'pet_sla_clock_state';
+        if ($this->tableExists($slaClockTable)) {
+            $this->wpdb->query("DELETE FROM $slaClockTable WHERE ticket_id IN ($idsCsv)");
+        }
+
+        $ticketLinksTable = $this->wpdb->prefix . 'pet_ticket_links';
+        if ($this->tableExists($ticketLinksTable)) {
+            $this->wpdb->query("DELETE FROM $ticketLinksTable WHERE ticket_id IN ($idsCsv)");
+            $this->wpdb->query("DELETE FROM $ticketLinksTable WHERE link_type = 'ticket' AND CAST(linked_id AS UNSIGNED) IN ($idsCsv)");
+        }
+
+        $workItemsTable = $this->wpdb->prefix . 'pet_work_items';
+        if ($this->tableExists($workItemsTable)) {
+            $this->wpdb->query("DELETE FROM $workItemsTable WHERE source_type = 'ticket' AND CAST(source_id AS UNSIGNED) IN ($idsCsv)");
+        }
+
+        $this->wpdb->query("DELETE FROM $ticketsTable WHERE id IN ($idsCsv)");
+    }
+
+    private function provisionImplementationTicketsForAcceptedQuote(
+        \Pet\Domain\Commercial\Entity\Quote $quote,
+        \Pet\Domain\Commercial\Entity\Component\ImplementationComponent $component,
+        int $projectId,
+        \Pet\Application\Commercial\Command\CreateProjectTicketHandler $createProjectTicket
+    ): void {
+        $componentId = (int)$component->id();
+        if ($componentId <= 0) {
+            return;
+        }
+
+        $taskRows = [];
+        foreach ($component->milestones() as $milestone) {
+            foreach ($milestone->tasks() as $task) {
+                $sourceTaskId = (int)$task->id();
+                if ($sourceTaskId <= 0) {
+                    continue;
+                }
+                $soldMinutes = (int)round($task->durationHours() * 60);
+                $taskRows[] = [
+                    'source_id' => $sourceTaskId,
+                    'subject' => $task->title(),
+                    'description' => $task->description() ?? '',
+                    'sold_minutes' => $soldMinutes,
+                    'sold_value_cents' => (int)round($task->sellValue() * 100),
+                    'required_role_id' => $task->roleId(),
+                ];
+            }
+        }
+
+        if (empty($taskRows)) {
+            return;
+        }
+
+        if (count($taskRows) === 1) {
+            $single = $taskRows[0];
+            $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+                $quote->customerId(),
+                $projectId,
+                (int)$quote->id(),
+                $single['subject'],
+                $single['description'],
+                $single['sold_minutes'],
+                $single['sold_value_cents'],
+                $single['sold_minutes'],
+                null,
+                $single['required_role_id'],
+                null,
+                null,
+                'quote_component',
+                $componentId,
+                null,
+                false
+            ));
+            return;
+        }
+
+        $rollupSoldMinutes = 0;
+        $rollupSoldValue = 0;
+        foreach ($taskRows as $row) {
+            $rollupSoldMinutes += (int)$row['sold_minutes'];
+            $rollupSoldValue += (int)$row['sold_value_cents'];
+        }
+
+        $rollupSubject = trim((string)$component->description()) !== ''
+            ? (string)$component->description()
+            : ('Implementation Component #' . $componentId);
+
+        $rollupId = $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+            $quote->customerId(),
+            $projectId,
+            (int)$quote->id(),
+            $rollupSubject,
+            'Rollup ticket for implementation component provisioning.',
+            $rollupSoldMinutes,
+            $rollupSoldValue,
+            $rollupSoldMinutes,
+            null,
+            null,
+            null,
+            null,
+            'quote_component',
+            $componentId,
+            null,
+            true
+        ));
+
+        foreach ($taskRows as $row) {
+            $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+                $quote->customerId(),
+                $projectId,
+                (int)$quote->id(),
+                $row['subject'],
+                $row['description'],
+                (int)$row['sold_minutes'],
+                (int)$row['sold_value_cents'],
+                (int)$row['sold_minutes'],
+                null,
+                $row['required_role_id'],
+                null,
+                null,
+                'quote_component',
+                (int)$row['source_id'],
+                (int)$rollupId,
+                false
+            ));
+        }
+    }
+
+    private function provisionOnceOffServiceTicketsForAcceptedQuote(
+        \Pet\Domain\Commercial\Entity\Quote $quote,
+        \Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent $component,
+        int $projectId,
+        \Pet\Application\Commercial\Command\CreateProjectTicketHandler $createProjectTicket
+    ): void {
+        $componentId = (int)$component->id();
+        if ($componentId <= 0) {
+            return;
+        }
+
+        $units = $component->units();
+        if (empty($units)) {
+            return;
+        }
+
+        if (count($units) === 1) {
+            $unit = $units[0];
+            $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+                $quote->customerId(),
+                $projectId,
+                (int)$quote->id(),
+                $unit->title(),
+                $unit->description() ?? '',
+                0,
+                (int)round($unit->sellValue() * 100),
+                0,
+                null,
+                null,
+                null,
+                null,
+                'quote_component',
+                $componentId,
+                null,
+                false
+            ));
+            return;
+        }
+
+        $rollupSubject = trim((string)$component->description()) !== ''
+            ? (string)$component->description()
+            : ('Service Component #' . $componentId);
+        $rollupSoldValue = 0;
+        foreach ($units as $unit) {
+            $rollupSoldValue += (int)round($unit->sellValue() * 100);
+        }
+
+        $rollupId = $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+            $quote->customerId(),
+            $projectId,
+            (int)$quote->id(),
+            $rollupSubject,
+            'Rollup ticket for once-off service component provisioning.',
+            0,
+            $rollupSoldValue,
+            0,
+            null,
+            null,
+            null,
+            null,
+            'quote_component',
+            $componentId,
+            null,
+            true
+        ));
+
+        foreach ($units as $unit) {
+            $sourceUnitId = (int)$unit->id();
+            if ($sourceUnitId <= 0) {
+                continue;
+            }
+            $createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+                $quote->customerId(),
+                $projectId,
+                (int)$quote->id(),
+                $unit->title(),
+                $unit->description() ?? '',
+                0,
+                (int)round($unit->sellValue() * 100),
+                0,
+                null,
+                null,
+                null,
+                null,
+                'quote_component',
+                $sourceUnitId,
+                (int)$rollupId,
+                false
+            ));
+        }
     }
 
     /**
@@ -2933,9 +3456,10 @@ final class DemoSeedService
             ]);
             $insertBlock($bq2, $s1, 'OnceOffSimpleServiceBlock', 1, [
                 'description' => 'Network Architecture Review',
-                'quantity' => 3, 'sellValue' => 195.0, 'totalValue' => 585.0,
+                'quantity' => 3, 'sellValue' => 165.0, 'totalValue' => 495.0,
                 'roleId' => $rDevOps, 'ownerType' => 'employee', 'ownerId' => $eEthan, 'owner' => $nEthan,
                 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('SERV-005'),
+                'price_override' => true, 'baselineSellValue' => 195.0,
             ]);
 
             $s2 = $insertSection($bq2, 'Implementation', 1, true, true, true);
@@ -3054,6 +3578,7 @@ final class DemoSeedService
                 'quantity' => 3, 'sellValue' => 200.0, 'totalValue' => 600.0,
                 'roleId' => $rConsultant, 'ownerType' => 'employee', 'ownerId' => $eAva, 'owner' => $nAva,
                 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-002'),
+                'price_override' => true, 'baselineSellValue' => 220.0,
             ]);
             $created++;
         }
@@ -3104,9 +3629,10 @@ final class DemoSeedService
             ]);
             $insertBlock($bq4, $s2, 'OnceOffSimpleServiceBlock', 2, [
                 'description' => 'Governance Review Sessions',
-                'quantity' => 6, 'sellValue' => 200.0, 'totalValue' => 1200.0,
+                'quantity' => 6, 'sellValue' => 170.0, 'totalValue' => 1020.0,
                 'roleId' => $rPM, 'ownerType' => 'employee', 'ownerId' => $eMia, 'owner' => $nMia,
                 'teamId' => $tDelivery, 'team' => 'Delivery', 'catalogItemId' => $catId('ADVIS-001'),
+                'price_override' => true, 'baselineSellValue' => 200.0,
             ]);
             $created++;
         }
@@ -3122,9 +3648,10 @@ final class DemoSeedService
             ], false);
             $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 1, [
                 'description' => 'Helpdesk Support Hours',
-                'quantity' => 20, 'sellValue' => 150.0, 'totalValue' => 3000.0,
+                'quantity' => 20, 'sellValue' => 130.0, 'totalValue' => 2600.0,
                 'roleId' => $rSupport, 'ownerType' => 'employee', 'ownerId' => $eLiam, 'owner' => $nLiam,
                 'teamId' => $tSupport, 'team' => 'Support', 'catalogItemId' => $catId('SERV-002'),
+                'price_override' => true, 'baselineSellValue' => 150.0,
             ]);
             $insertBlock($bq5, $s1, 'OnceOffSimpleServiceBlock', 2, [
                 'description' => 'Proactive Monitoring Setup',
@@ -3170,6 +3697,240 @@ final class DemoSeedService
         }
 
         return ['block_quotes' => $created];
+    }
+
+    /**
+     * Seed approval scenarios for block-based quotes.
+     *
+     * Change A  — upserts pet_quote_approval_value_threshold = 5000 and
+     *             pet_quote_approval_discount_threshold_pct = 15 so the UI
+     *             approval gate fires on all demo BQ quotes.
+     *
+     * Change C2 — JSON_SET patches on already-seeded blocks that lack
+     *             price_override / baselineSellValue (idempotent).
+     *
+     * Change B  — State-machine transitions to create a full pipeline:
+     *   BQ1  draft             (Submit for Approval button visible)
+     *   BQ2  pending_approval  (populates [pet_my_approvals] queue)
+     *   BQ3  draft + note      (rejection feedback banner visible)
+     *   BQ4  approved          (Send Quote button visible)
+     *   BQ5  sent              (Accept Quote button visible)
+     */
+    private function seedApprovalScenarios(string $seedRunId, string $seedProfile): array
+    {
+        if ($seedProfile !== 'demo_full') {
+            return ['skipped' => true];
+        }
+
+        $wpdb          = $this->wpdb;
+        $quotesTable   = $wpdb->prefix . 'pet_quotes';
+        $blocksTable   = $wpdb->prefix . 'pet_quote_blocks';
+        $settingsTable = $wpdb->prefix . 'pet_settings';
+        $teamsTable    = $wpdb->prefix . 'pet_teams';
+        $empTable      = $wpdb->prefix . 'pet_employees';
+        $now           = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
+
+        // ── A: Approval threshold settings ───────────────────────────────────
+        $thresholds = [
+            'pet_quote_approval_value_threshold' => [
+                'value' => '5000',
+                'type'  => 'number',
+                'desc'  => 'Minimum quote value (billing currency) that requires manager approval before sending',
+            ],
+            'pet_quote_approval_discount_threshold_pct' => [
+                'value' => '15',
+                'type'  => 'number',
+                'desc'  => 'Maximum discount % allowed on any block before manager approval is required',
+            ],
+        ];
+
+        foreach ($thresholds as $key => $def) {
+            $existing = $wpdb->get_var($wpdb->prepare(
+                "SELECT setting_key FROM $settingsTable WHERE setting_key = %s", $key
+            ));
+            if (!$existing) {
+                $wpdb->insert($settingsTable, [
+                    'setting_key'   => $key,
+                    'setting_value' => $def['value'],
+                    'setting_type'  => $def['type'],
+                    'description'   => $def['desc'],
+                    'updated_at'    => $now,
+                ]);
+            } else {
+                // Always restore to demo values so the approval UI fires reliably
+                $wpdb->update(
+                    $settingsTable,
+                    ['setting_value' => $def['value'], 'updated_at' => $now],
+                    ['setting_key'   => $key]
+                );
+            }
+        }
+
+        // ── C2: Post-process discount badge blocks ────────────────────────────
+        // Patches existing seeded blocks that lack price_override/baselineSellValue.
+        // JSON_SET is safe to re-run: the WHERE clause skips blocks already patched.
+        //
+        // Columns updated: sellValue, totalValue, baselineSellValue, price_override.
+        // Discount story:
+        //   BQ2 Network Architecture Review   195 → 165/h  (−15.4%, exceeds 15% threshold)
+        //   BQ3 Cost Optimisation Review       220 → 200/h  (−9.1%)
+        //   BQ4 Governance Review Sessions     200 → 170/h  (−15.0%, at threshold)
+        //   BQ5 Helpdesk Support Hours         150 → 130/h  (−13.3%)
+        $discountPatches = [
+            // [quoteTitle, blockDescription, newSellValue, baseline, newTotalValue]
+            ['BQ2 Acme Infrastructure Overhaul',      'Network Architecture Review', 165.0, 195.0,  495.0],
+            ['BQ3 Nexus Cloud-Native Platform',        'Cost Optimisation Review',   200.0, 220.0,  600.0],
+            ['BQ4 Government Security Programme',      'Governance Review Sessions', 170.0, 200.0, 1020.0],
+            ['BQ5 RPM Support & Maintenance Package',  'Helpdesk Support Hours',     130.0, 150.0, 2600.0],
+        ];
+
+        $patchedBlocks = 0;
+        foreach ($discountPatches as [$quoteTitle, $blockDesc, $sellValue, $baseline, $totalValue]) {
+            $rows = $wpdb->query($wpdb->prepare(
+                "UPDATE $blocksTable b
+                 JOIN $quotesTable q ON q.id = b.quote_id
+                 SET b.payload_json = JSON_SET(
+                     b.payload_json,
+                     '$.price_override',    CAST('true' AS JSON),
+                     '$.baselineSellValue', %f,
+                     '$.sellValue',         %f,
+                     '$.totalValue',        %f
+                 )
+                 WHERE q.title = %s
+                   AND JSON_UNQUOTE(JSON_EXTRACT(b.payload_json, '$.description')) = %s
+                   AND (JSON_EXTRACT(b.payload_json, '$.price_override') IS NULL
+                        OR JSON_EXTRACT(b.payload_json, '$.price_override') = CAST('false' AS JSON))",
+                $baseline, $sellValue, $totalValue, $quoteTitle, $blockDesc
+            ));
+            $patchedBlocks += (int)$rows;
+        }
+
+        // ── B: Quote approval state pipeline ─────────────────────────────────
+        // Resolve approver: the employee ID of the Executive team manager.
+        // Note: ApproveQuoteHandler / RejectQuoteApprovalHandler both check
+        // team->managerId() which stores employee IDs, so we pass the employee
+        // ID here — not the WP user ID.
+        $managerId = (int)$wpdb->get_var(
+            "SELECT manager_id FROM $teamsTable WHERE name = 'Executive' LIMIT 1"
+        );
+        if ($managerId <= 0) {
+            // Fallback: any employee who is a team manager
+            $managerId = (int)$wpdb->get_var(
+                "SELECT manager_id FROM $teamsTable WHERE manager_id IS NOT NULL LIMIT 1"
+            );
+        }
+
+        $c         = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $quoteRepo = $c->get(\Pet\Domain\Commercial\Repository\QuoteRepository::class);
+        $submitH   = $c->get(\Pet\Application\Commercial\Command\SubmitQuoteForApprovalHandler::class);
+        $approveH  = $c->get(\Pet\Application\Commercial\Command\ApproveQuoteHandler::class);
+        $rejectH   = $c->get(\Pet\Application\Commercial\Command\RejectQuoteApprovalHandler::class);
+        $sendH     = $c->get(\Pet\Application\Commercial\Command\SendQuoteHandler::class);
+
+        $transitions = 0;
+
+        $bqId = fn(string $title): int =>
+            (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $quotesTable WHERE title = %s ORDER BY id ASC LIMIT 1", $title
+            ));
+
+        // BQ2: draft → pending_approval
+        // Sits in the approvals queue so [pet_my_approvals] is populated immediately.
+        $bq2Id = $bqId('BQ2 Acme Infrastructure Overhaul');
+        if ($bq2Id) {
+            $q = $quoteRepo->findById($bq2Id);
+            if ($q && $q->state()->toString() === 'draft') {
+                $submitH->handle(new \Pet\Application\Commercial\Command\SubmitQuoteForApprovalCommand(
+                    $bq2Id, $managerId
+                ));
+                $transitions++;
+            }
+        }
+
+        // BQ3: draft → pending_approval → rejected (back to draft with rejection note)
+        // Shows the red rejection banner in QuoteDetails for the demo.
+        // Guard: skip if already in draft with a rejection note (fully idempotent re-run).
+        $bq3Id = $bqId('BQ3 Nexus Cloud-Native Platform');
+        if ($bq3Id) {
+            $q = $quoteRepo->findById($bq3Id);
+            $alreadyRejected = $q && $q->state()->toString() === 'draft' && $q->rejectionNote() !== null;
+            if (!$alreadyRejected) {
+                if ($q && $q->state()->toString() === 'draft') {
+                    $submitH->handle(new \Pet\Application\Commercial\Command\SubmitQuoteForApprovalCommand(
+                        $bq3Id, $managerId
+                    ));
+                    $transitions++;
+                }
+                $q = $quoteRepo->findById($bq3Id);
+                if ($q && $q->state()->toString() === 'pending_approval') {
+                    $rejectH->handle(new \Pet\Application\Commercial\Command\RejectQuoteApprovalCommand(
+                        $bq3Id,
+                        $managerId,
+                        'DevOps rate on Cost Optimisation Review is 16% below the margin floor — please revise pricing before resubmitting.'
+                    ));
+                    $transitions++;
+                }
+            }
+        }
+
+        // BQ4: draft → pending_approval → approved
+        // Shows "Send Quote" button in the approved state — live send during demo.
+        $bq4Id = $bqId('BQ4 Government Security Programme');
+        if ($bq4Id) {
+            $q = $quoteRepo->findById($bq4Id);
+            if ($q && $q->state()->toString() === 'draft') {
+                $submitH->handle(new \Pet\Application\Commercial\Command\SubmitQuoteForApprovalCommand(
+                    $bq4Id, $managerId
+                ));
+                $transitions++;
+            }
+            $q = $quoteRepo->findById($bq4Id);
+            if ($q && $q->state()->toString() === 'pending_approval') {
+                $approveH->handle(new \Pet\Application\Commercial\Command\ApproveQuoteCommand(
+                    $bq4Id, $managerId
+                ));
+                $transitions++;
+            }
+        }
+
+        // BQ5: draft → pending_approval → approved → sent
+        // Shows "Accept Quote" button — live acceptance during demo.
+        $bq5Id = $bqId('BQ5 RPM Support & Maintenance Package');
+        if ($bq5Id) {
+            $q = $quoteRepo->findById($bq5Id);
+            if ($q && $q->state()->toString() === 'draft') {
+                $submitH->handle(new \Pet\Application\Commercial\Command\SubmitQuoteForApprovalCommand(
+                    $bq5Id, $managerId
+                ));
+                $transitions++;
+            }
+            $q = $quoteRepo->findById($bq5Id);
+            if ($q && $q->state()->toString() === 'pending_approval') {
+                $approveH->handle(new \Pet\Application\Commercial\Command\ApproveQuoteCommand(
+                    $bq5Id, $managerId
+                ));
+                $transitions++;
+            }
+            $q = $quoteRepo->findById($bq5Id);
+            if ($q && $q->state()->toString() === 'approved') {
+                $sendH->handle(new \Pet\Application\Commercial\Command\SendQuoteCommand($bq5Id));
+                $transitions++;
+            }
+        }
+
+        return [
+            'thresholds_upserted' => 2,
+            'blocks_patched'      => $patchedBlocks,
+            'state_transitions'   => $transitions,
+            'manager_employee_id' => $managerId,
+            'pipeline'            => [
+                'BQ1' => 'draft (Submit for Approval button visible)',
+                'BQ2' => 'pending_approval (in approvals queue)',
+                'BQ3' => 'draft + rejection note (banner visible)',
+                'BQ4' => 'approved (Send Quote button visible)',
+                'BQ5' => 'sent (Accept Quote button visible)',
+            ],
+        ];
     }
 
     private function seedLeads(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -3763,8 +4524,8 @@ final class DemoSeedService
     }
 
     /**
-     * C4: Seed project and internal tickets using backbone fields.
-     * Creates WBS parent/child structure for project tickets and internal admin/R&D tickets.
+     * C4: Seed non-delivery backbone tickets.
+     * Delivery tickets must come only from Quote acceptance provisioning flow.
      */
     private function seedBackboneTickets(string $seedRunId, string $seedProfile, string $seededAt): array
     {
@@ -3772,126 +4533,42 @@ final class DemoSeedService
         $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $now = (new \DateTimeImmutable())->format('Y-m-d H:i:s');
 
-        // Get a project to attach tickets to
-        $project = $wpdb->get_row("SELECT id, customer_id FROM {$wpdb->prefix}pet_projects ORDER BY id ASC LIMIT 1");
-        if (!$project) {
-            return ['project_tickets' => 0, 'internal_tickets' => 0];
+        $customerId = (int)$wpdb->get_var("SELECT customer_id FROM {$wpdb->prefix}pet_projects WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 1");
+        if ($customerId <= 0) {
+            $customerId = (int)$wpdb->get_var("SELECT id FROM {$wpdb->prefix}pet_customers ORDER BY id ASC LIMIT 1");
         }
-        $projectId = (int)$project->id;
-        $customerId = (int)$project->customer_id;
-        $existingParentId = (int)$wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM $ticketsTable WHERE project_id = %d AND primary_container = %s AND subject = %s LIMIT 1",
-            $projectId,
-            'project',
-            'Website Redesign — Full Delivery'
+        if ($customerId <= 0) {
+            return ['project_tickets' => 0, 'internal_tickets' => 0, 'ticket_links' => 0];
+        }
+
+        // Idempotent guard for internal-only backbone records.
+        $existingInternal = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $ticketsTable WHERE primary_container = %s AND subject IN (%s, %s, %s, %s)",
+            'internal',
+            'Update internal wiki documentation',
+            'Quarterly security audit prep',
+            'R&D: Evaluate new monitoring stack',
+            'Office network switch upgrade'
         ));
-        if ($existingParentId > 0) {
+        if ($existingInternal > 0) {
+            $linksTable = $wpdb->prefix . 'pet_ticket_links';
             return [
                 'project_tickets' => (int)$wpdb->get_var($wpdb->prepare(
-                    "SELECT COUNT(*) FROM $ticketsTable WHERE project_id = %d AND primary_container = %s",
-                    $projectId,
+                    "SELECT COUNT(*) FROM $ticketsTable WHERE primary_container = %s",
                     'project'
                 )),
                 'internal_tickets' => (int)$wpdb->get_var($wpdb->prepare(
                     "SELECT COUNT(*) FROM $ticketsTable WHERE primary_container = %s",
                     'internal'
                 )),
-                'ticket_links' => (int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}pet_ticket_links"),
+                'ticket_links' => ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable)
+                    ? (int)$wpdb->get_var("SELECT COUNT(*) FROM $linksTable")
+                    : 0,
                 'skipped' => true,
             ];
         }
 
-        // --- Project tickets with WBS (parent → children) ---
-        // Parent (rollup) ticket
-        $wpdb->insert($ticketsTable, [
-            'customer_id' => $customerId,
-            'subject' => 'Website Redesign — Full Delivery',
-            'description' => 'Rollup ticket for the full website redesign project scope.',
-            'status' => 'in_progress',
-            'priority' => 'high',
-            'primary_container' => 'project',
-            'lifecycle_owner' => 'project',
-            'project_id' => $projectId,
-            'ticket_kind' => 'deliverable',
-            'billing_context_type' => 'project',
-            'is_billable_default' => 1,
-            'is_rollup' => 1,
-            'is_baseline_locked' => 1,
-            'estimated_minutes' => 2400,
-            'sold_minutes' => 2400,
-            'sold_value_cents' => 36000000,  // $360,000 = 2400min * $150/hr
-            'created_at' => $now,
-            'opened_at' => $now,
-        ]);
-        $parentId = (int)$wpdb->insert_id;
-        $this->registryAdd($seedRunId, $ticketsTable, (string)$parentId);
-
-        // Update root_ticket_id to self
-        $wpdb->update($ticketsTable, ['root_ticket_id' => $parentId], ['id' => $parentId]);
-
-        // Child leaf tickets — [subject, status, est_min, sold_min, sold_value_cents, kind]
-        $children = [
-            ['Discovery & Requirements', 'planned', 480, 480, 7200000, 'task'],   // 8h * $150 = $72,000
-            ['UI/UX Design', 'in_progress', 600, 600, 9000000, 'task'],           // 10h * $150 = $90,000
-            ['Frontend Development', 'planned', 720, 720, 10800000, 'task'],      // 12h * $150 = $108,000
-            ['Backend Integration', 'planned', 360, 360, 5400000, 'task'],        // 6h * $150 = $54,000
-            ['QA & Testing', 'planned', 240, 240, 3600000, 'task'],              // 4h * $150 = $36,000
-        ];
-        $childIds = [];
-        foreach ($children as [$subject, $status, $est, $sold, $soldCents, $kind]) {
-            $wpdb->insert($ticketsTable, [
-                'customer_id' => $customerId,
-                'subject' => $subject,
-                'description' => "Project work package: $subject",
-                'status' => $status,
-                'priority' => 'medium',
-                'primary_container' => 'project',
-                'lifecycle_owner' => 'project',
-                'project_id' => $projectId,
-                'parent_ticket_id' => $parentId,
-                'root_ticket_id' => $parentId,
-                'ticket_kind' => $kind,
-                'billing_context_type' => 'project',
-                'is_billable_default' => 1,
-                'is_rollup' => 0,
-                'is_baseline_locked' => 1,
-                'estimated_minutes' => $est,
-                'sold_minutes' => $sold,
-                'sold_value_cents' => $soldCents,
-                'created_at' => $now,
-                'opened_at' => $now,
-            ]);
-            $childIds[] = (int)$wpdb->insert_id;
-            $this->registryAdd($seedRunId, $ticketsTable, (string)$wpdb->insert_id);
-        }
-
-        // --- Change order ticket (independent sold commitment) ---
-        $wpdb->insert($ticketsTable, [
-            'customer_id' => $customerId,
-            'subject' => 'Additional UX Review (Change Order)',
-            'description' => 'Change order: additional UX review scope added after initial acceptance.',
-            'status' => 'planned',
-            'priority' => 'medium',
-            'primary_container' => 'project',
-            'lifecycle_owner' => 'project',
-            'project_id' => $projectId,
-            'ticket_kind' => 'work',
-            'billing_context_type' => 'project',
-            'is_billable_default' => 1,
-            'is_rollup' => 0,
-            'is_baseline_locked' => 1,
-            'estimated_minutes' => 240,
-            'sold_minutes' => 240,
-            'sold_value_cents' => 6000000,  // 4h * $250 = $60,000
-            'change_order_source_ticket_id' => $parentId,
-            'created_at' => $now,
-            'opened_at' => $now,
-        ]);
-        $changeOrderId = (int)$wpdb->insert_id;
-        $wpdb->update($ticketsTable, ['root_ticket_id' => $changeOrderId], ['id' => $changeOrderId]);
-        $this->registryAdd($seedRunId, $ticketsTable, (string)$changeOrderId);
-
-        // --- Internal tickets (no customer, no billing) ---
+        // --- Internal tickets only (delivery project tickets are provisioned from accepted quotes) ---
         $internalTickets = [
             ['Update internal wiki documentation', 'in_progress', 'admin'],
             ['Quarterly security audit prep', 'planned', 'compliance'],
@@ -3899,11 +4576,12 @@ final class DemoSeedService
             ['Office network switch upgrade', 'done', 'infrastructure'],
         ];
         $internalCount = 0;
+        $internalIds = [];
         foreach ($internalTickets as [$subject, $status, $kind]) {
             $wpdb->insert($ticketsTable, [
-                'customer_id' => $customerId, // internal still needs a customer_id (NOT NULL)
+                'customer_id' => $customerId, // still required by schema
                 'subject' => $subject,
-                'description' => "Internal task: $subject",
+                'description' => "Internal ticket: $subject",
                 'status' => $status,
                 'priority' => 'low',
                 'primary_container' => 'internal',
@@ -3915,66 +4593,34 @@ final class DemoSeedService
                 'created_at' => $now,
                 'opened_at' => $now,
             ]);
-            $this->registryAdd($seedRunId, $ticketsTable, (string)$wpdb->insert_id);
-            $internalCount++;
+            $newId = (int)$wpdb->insert_id;
+            if ($newId > 0) {
+                $internalIds[] = $newId;
+                $this->registryAdd($seedRunId, $ticketsTable, (string)$newId);
+                $internalCount++;
+            }
         }
 
-        // --- Assign backbone tickets ---
-        // Queue IDs use canonical string names matching frontend QUEUES constant
+        // Assign internal tickets for demo queue realism.
         $empTable = $wpdb->prefix . 'pet_employees';
-        $miaId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Mia' LIMIT 1");
-        $liamId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Liam' LIMIT 1");
-        $ethanId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Ethan' LIMIT 1");
         $steveId = (string)$wpdb->get_var("SELECT id FROM $empTable WHERE first_name='Steve' LIMIT 1");
-
-        // Project parent — owned by Mia (PM) in Projects queue
-        $wpdb->update($ticketsTable, ['owner_user_id' => $miaId, 'queue_id' => 'projects'], ['id' => $parentId]);
-        // Project children — mix of assigned and queue-only
-        $projectAssignees = [$liamId, $ethanId, null, $liamId, null];
-        foreach ($childIds as $ci => $childId) {
-            $wpdb->update($ticketsTable, [
-                'owner_user_id' => $projectAssignees[$ci] ?? null,
-                'queue_id' => 'projects',
-            ], ['id' => $childId]);
-        }
-        // Internal tickets — assigned to Steve (admin) in Internal queue
-        $internalIds = $wpdb->get_col("SELECT id FROM $ticketsTable WHERE primary_container = 'internal' AND created_at = '$now' ORDER BY id ASC");
         foreach ($internalIds as $ii => $iid) {
-            $owner = ($ii % 2 === 0) ? $steveId : null; // half assigned, half queue-only
+            $owner = ($ii % 2 === 0) ? $steveId : null;
             $wpdb->update($ticketsTable, [
                 'owner_user_id' => $owner,
                 'queue_id' => 'internal',
             ], ['id' => (int)$iid]);
         }
 
-        // --- Seed ticket_links: cross-context references ---
+        // Optional non-delivery ticket links for cross-context demo richness.
         $linksTable = $wpdb->prefix . 'pet_ticket_links';
-        if ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable) {
-            // Link project parent to the project entity
-            $wpdb->insert($linksTable, [
-                'ticket_id' => $parentId,
-                'link_type' => 'project',
-                'linked_id' => (string)$projectId,
-                'created_at' => $now,
-            ]);
-            $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
-            // Link a support ticket to the project (helpdesk assisting project)
+        if ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable && !empty($internalIds)) {
             $supportTicketForLink = (int)$wpdb->get_var("SELECT id FROM $ticketsTable WHERE primary_container = 'support' ORDER BY id ASC LIMIT 1");
-            if ($supportTicketForLink) {
+            if ($supportTicketForLink > 0) {
                 $wpdb->insert($linksTable, [
                     'ticket_id' => $supportTicketForLink,
-                    'link_type' => 'project',
-                    'linked_id' => (string)$projectId,
-                    'created_at' => $now,
-                ]);
-                $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
-            }
-            // Link a child ticket to the customer
-            if (!empty($childIds)) {
-                $wpdb->insert($linksTable, [
-                    'ticket_id' => $childIds[0],
-                    'link_type' => 'customer',
-                    'linked_id' => (string)$customerId,
+                    'link_type' => 'ticket',
+                    'linked_id' => (string)$internalIds[0],
                     'created_at' => $now,
                 ]);
                 $this->registryAdd($seedRunId, $linksTable, (string)$wpdb->insert_id);
@@ -3982,11 +4628,121 @@ final class DemoSeedService
         }
 
         return [
-            'project_tickets' => 1 + count($childIds) + 1, // parent + children + change order
+            'project_tickets' => (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $ticketsTable WHERE primary_container = %s",
+                'project'
+            )),
             'internal_tickets' => $internalCount,
             'ticket_links' => ($wpdb->get_var("SHOW TABLES LIKE '$linksTable'") === $linksTable)
                 ? (int)$wpdb->get_var("SELECT COUNT(*) FROM $linksTable")
                 : 0,
+        ];
+    }
+
+    private function validateDeliveryTicketLineage(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+        $registryTable = $wpdb->prefix . 'pet_demo_seed_registry';
+
+        $seedProjectIds = [];
+        if ($this->tableExists($registryTable)) {
+            $seedProjectIds = array_map('intval', $wpdb->get_col($wpdb->prepare(
+                "SELECT row_id
+                 FROM $registryTable
+                 WHERE seed_run_id = %s
+                   AND table_name = %s",
+                $seedRunId,
+                $projectsTable
+            )));
+        }
+        if (empty($seedProjectIds)) {
+            $seedProjectIds = array_map('intval', $wpdb->get_col($wpdb->prepare(
+                "SELECT id
+                 FROM $projectsTable
+                 WHERE created_at >= %s",
+                $seededAt
+            )));
+        }
+        if (empty($seedProjectIds)) {
+            throw new \RuntimeException('Demo seed validation failed: no seed-run projects were recorded for lineage validation.');
+        }
+        $seedProjectIdsCsv = implode(',', array_map('intval', $seedProjectIds));
+
+        $quoteBackedProjects = (int)$wpdb->get_var(
+            "SELECT COUNT(*)
+             FROM $projectsTable p
+             WHERE p.id IN ($seedProjectIdsCsv)
+               AND p.source_quote_id IS NOT NULL"
+        );
+        $projectTicketsOnQuoteBackedProjects = (int)$wpdb->get_var(
+            "SELECT COUNT(*)
+             FROM $ticketsTable tt
+             INNER JOIN $projectsTable p ON p.id = tt.project_id
+             WHERE tt.primary_container = 'project'
+               AND p.source_quote_id IS NOT NULL
+               AND p.id IN ($seedProjectIdsCsv)"
+        );
+        $missingCoverageProjects = (int)$wpdb->get_var(
+            "SELECT COUNT(*)
+             FROM $projectsTable p
+             WHERE p.source_quote_id IS NOT NULL
+               AND p.id IN ($seedProjectIdsCsv)
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM $ticketsTable tt
+                   WHERE tt.project_id = p.id
+                     AND tt.primary_container = 'project'
+               )"
+        );
+        $invalidLineageTickets = (int)$wpdb->get_var(
+            "SELECT COUNT(*)
+             FROM $ticketsTable tt
+             INNER JOIN $projectsTable p ON p.id = tt.project_id
+             WHERE tt.primary_container = 'project'
+               AND p.source_quote_id IS NOT NULL
+               AND p.id IN ($seedProjectIdsCsv)
+               AND (
+                    tt.quote_id IS NULL
+                    OR tt.source_type IS NULL
+                    OR tt.source_type <> 'quote_component'
+                    OR tt.source_component_id IS NULL
+               )"
+        );
+        $mismatchedQuoteLinks = (int)$wpdb->get_var(
+            "SELECT COUNT(*)
+             FROM $ticketsTable tt
+             INNER JOIN $projectsTable p ON p.id = tt.project_id
+             WHERE tt.primary_container = 'project'
+               AND p.source_quote_id IS NOT NULL
+               AND p.id IN ($seedProjectIdsCsv)
+               AND tt.quote_id IS NOT NULL
+               AND tt.quote_id <> p.source_quote_id"
+        );
+
+        if ($quoteBackedProjects <= 0) {
+            throw new \RuntimeException('Demo seed validation failed: no quote-backed delivery projects were produced.');
+        }
+        if ($missingCoverageProjects > 0) {
+            throw new \RuntimeException('Demo seed validation failed: one or more quote-backed projects have zero delivery tickets.');
+        }
+        if ($projectTicketsOnQuoteBackedProjects <= 0) {
+            throw new \RuntimeException('Demo seed validation failed: no delivery tickets exist on quote-backed projects.');
+        }
+        if ($invalidLineageTickets > 0) {
+            throw new \RuntimeException('Demo seed validation failed: found delivery tickets without required quote/source linkage.');
+        }
+        if ($mismatchedQuoteLinks > 0) {
+            throw new \RuntimeException('Demo seed validation failed: ticket quote linkage does not match project source quote.');
+        }
+
+        return [
+            'quote_backed_projects' => $quoteBackedProjects,
+            'project_tickets_on_quote_backed_projects' => $projectTicketsOnQuoteBackedProjects,
+            'missing_coverage_projects' => $missingCoverageProjects,
+            'invalid_lineage_tickets' => $invalidLineageTickets,
+            'mismatched_quote_links' => $mismatchedQuoteLinks,
         ];
     }
 
@@ -4709,17 +5465,17 @@ final class DemoSeedService
             ['commercial', 'quote', 'quote_accepted', 'strategic', 'Quote Accepted — Acme Manufacturing', 'Acme accepted Q4 Catalog Services', 'global', null, ['customer_id' => $acmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Mia Manager']],
             // Delivery events
             ['delivery', 'project', 'project_created', 'operational', 'Project Kicked Off — RPM Resources', 'Project created from accepted quote Q1', 'department', 'delivery', ['project_id' => $projId, 'customer_id' => $rpmId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Mia Manager']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Kickoff Workshop', 'Discovery milestone progressing — RPM project', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Requirements Elicitation', 'Discovery milestone complete — moving to Build', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Kickoff Workshop', 'Discovery milestone progressing — RPM project', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Requirements Elicitation', 'Discovery milestone complete — moving to Build', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Ava Consultant']],
             ['delivery', 'milestone', 'milestone_completed', 'strategic', 'Milestone Completed: Discovery', 'RPM project Discovery phase delivered on time', 'global', null, ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Mia Manager']],
             // Additional delivery events for richer PM view
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Theme Setup', 'Build phase progressing — RPM custom theme configured', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Custom Components', 'RPM custom component library delivered for review', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Onsite Training Day 1', 'Acme staff training day 1 delivered successfully', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Onsite Training Day 2', 'Acme staff training day 2 completed', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
-            ['delivery', 'task', 'task_completed', 'informational', 'Task Completed: Remote Consulting Session 1', 'Acme follow-up consulting session delivered', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Theme Setup', 'Build phase progressing — RPM custom theme configured', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Custom Components', 'RPM custom component library delivered for review', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Onsite Training Day 1', 'Acme staff training day 1 delivered successfully', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Onsite Training Day 2', 'Acme staff training day 2 completed', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
+            ['delivery', 'ticket', 'ticket_completed', 'informational', 'Ticket Completed: Remote Consulting Session 1', 'Acme follow-up consulting session delivered', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
             ['delivery', 'project', 'project_status_changed', 'critical', 'Project At Risk: Acme Catalog Services', 'Deadline passed — project 4 days overdue with 38h logged against 35h budget', 'global', null, ['project_id' => $projAcmeId, 'customer_id' => $acmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'System', 'tags' => ['Overdue', 'Over Budget']]],
-            ['delivery', 'task', 'task_started', 'informational', 'Task Started: Cloud Readiness Assessment', 'Nexus cloud migration assessment underway', 'department', 'delivery', ['project_id' => $projNexusId, 'customer_id' => $nexusId, 'customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Ethan DevOps']],
+            ['delivery', 'ticket', 'ticket_started', 'informational', 'Ticket Started: Cloud Readiness Assessment', 'Nexus cloud migration assessment underway', 'department', 'delivery', ['project_id' => $projNexusId, 'customer_id' => $nexusId, 'customer_name' => 'Nexus Startup Labs', 'actor_name' => 'Ethan DevOps']],
             ['time', 'time_entry', 'time_entry_logged', 'operational', 'Time Logged: RPM Website', 'Liam logged 6h against RPM Website — Custom Components', 'department', 'delivery', ['project_id' => $projId, 'customer_name' => 'RPM Resources', 'actor_name' => 'Liam Lead Tech']],
             ['time', 'time_entry', 'time_entry_logged', 'operational', 'Time Logged: Acme Catalog', 'Ava logged 8h against Acme Catalog — Remote Consulting', 'department', 'delivery', ['project_id' => $projAcmeId, 'customer_name' => 'Acme Manufacturing', 'actor_name' => 'Ava Consultant']],
             // Support events
@@ -5058,8 +5814,8 @@ final class DemoSeedService
             }
         }
 
-        // Conversations on tickets — all non-closed tickets get a discussion thread
-        $tickets = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed') ORDER BY id ASC");
+        // Conversations on non-project tickets — project ticket conversations are seeded separately and minimally.
+        $tickets = $wpdb->get_results("SELECT id, subject FROM {$wpdb->prefix}pet_tickets WHERE status NOT IN ('closed') AND primary_container <> 'project' ORDER BY id ASC");
         $ticketMessages = [
             // 1. Login issue (RPM)
             [
@@ -5708,107 +6464,34 @@ final class DemoSeedService
         return ['conversations' => $created];
     }
 
-    private function seedProjectTasks(string $seedRunId, string $seedProfile, string $seededAt): array
-    {
-        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
-        /** @var \Pet\Application\Delivery\Command\AddTaskHandler $addTask */
-        $addTask = $c->get(\Pet\Application\Delivery\Command\AddTaskHandler::class);
-        $wpdb = $this->wpdb;
-
-        $projects = $wpdb->get_results("SELECT id, name FROM {$wpdb->prefix}pet_projects WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 3");
-        if (empty($projects)) {
-            return ['tasks' => 0];
-        }
-
-        $defaultRoleId = (int)$wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$wpdb->prefix}pet_roles WHERE name = %s LIMIT 1",
-            'Developer'
-        ));
-        if ($defaultRoleId <= 0) {
-            $defaultRoleId = (int)$wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$wpdb->prefix}pet_roles WHERE name = %s LIMIT 1",
-                'Consultant'
-            ));
-        }
-
-        // Task definitions per project (completion is handled in seedProjectEnrichment)
-        $projectTasks = [
-            // Project 1: RPM Website (Discovery complete, Build in progress)
-            [
-                ['Kickoff Workshop', 6.0],
-                ['Requirements Elicitation', 12.0],
-                ['Theme Setup', 10.0],
-                ['Custom Components', 20.0],
-                ['UAT Support', 8.0],
-                ['Go-Live Checklist', 6.0],
-                ['Cutover Planning', 4.0],
-                ['Hypercare Support', 6.0],
-                ['Stabilization Review', 4.0],
-                ['Handover Workshop', 6.0],
-            ],
-            // Project 2: Acme Catalog Services
-            [
-                ['Training Schedule Setup', 4.0],
-                ['Onsite Training Day 1', 8.0],
-                ['Onsite Training Day 2', 8.0],
-                ['Remote Consulting Session 1', 3.0],
-                ['Remote Consulting Session 2', 3.0],
-                ['Remote Consulting Session 3', 3.0],
-                ['Progress Review', 2.0],
-                ['Final Report', 4.0],
-            ],
-            // Project 3: Nexus Cloud Migration
-            [
-                ['Cloud Readiness Assessment', 16.0],
-                ['Architecture Design', 12.0],
-                ['Migration Runbook', 8.0],
-                ['Infrastructure Provisioning', 20.0],
-                ['Data Migration', 16.0],
-                ['Application Deployment', 12.0],
-                ['Performance Testing', 8.0],
-                ['Security Audit', 6.0],
-                ['Handover & Training', 8.0],
-            ],
-        ];
-
-        $totalCount = 0;
-        foreach ($projects as $pi => $project) {
-            $projectId = (int)$project->id;
-            $existingTasks = (int)$wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->prefix}pet_tasks WHERE project_id = %d", $projectId
-            ));
-            if ($existingTasks > 0) continue;
-
-            $tasks = $projectTasks[$pi] ?? [];
-            foreach ($tasks as [$name, $hours]) {
-                try {
-                    $addTask->handle(new \Pet\Application\Delivery\Command\AddTaskCommand(
-                        $projectId,
-                        $name,
-                        $hours,
-                        $defaultRoleId > 0 ? $defaultRoleId : null
-                    ));
-                    $totalCount++;
-                } catch (\Throwable $e) {
-                    // Skip on error
-                }
-            }
-        }
-
-        return ['tasks' => $totalCount];
-    }
-
-    private function seedProjectEnrichment(string $seedRunId, string $seedProfile, string $seededAt): array
+    private function seedProjectTicketEnrichment(string $seedRunId, string $seedProfile, string $seededAt): array
     {
         $wpdb = $this->wpdb;
         $projTable = $wpdb->prefix . 'pet_projects';
-        $taskTable = $wpdb->prefix . 'pet_tasks';
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
         $now = new \DateTimeImmutable();
 
-        // Fetch all seeded projects (created from quotes) in order
-        $projects = $wpdb->get_results(
-            "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 5"
-        );
+        $registryTable = $wpdb->prefix . 'pet_demo_seed_registry';
+        $projects = [];
+        if ($this->tableExists($registryTable)) {
+            $seededProjectIds = array_values(array_filter(array_map('intval', (array)$wpdb->get_col($wpdb->prepare(
+                "SELECT row_id FROM $registryTable WHERE seed_run_id = %s AND table_name = %s ORDER BY id ASC",
+                $seedRunId,
+                $projTable
+            ))), static fn(int $id): bool => $id > 0));
+            if (!empty($seededProjectIds)) {
+                $seededProjectIdsCsv = implode(',', $seededProjectIds);
+                $projects = $wpdb->get_results(
+                    "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL AND id IN ($seededProjectIdsCsv) ORDER BY id ASC LIMIT 5"
+                );
+            }
+        }
+        if (empty($projects)) {
+            // Fallback for environments without per-run registry entries.
+            $projects = $wpdb->get_results(
+                "SELECT id, name FROM $projTable WHERE source_quote_id IS NOT NULL ORDER BY id ASC LIMIT 5"
+            );
+        }
         if (empty($projects)) {
             return ['enriched' => 0];
         }
@@ -5818,6 +6501,7 @@ final class DemoSeedService
         $enrichments = [
             // RPM Website: active, 6 weeks in, 2 weeks to go — healthy mid-delivery
             [
+                'name' => 'RPM Website Revamp & Digital Presence',
                 'state' => 'active',
                 'start_days' => -42,
                 'end_days' => 14,
@@ -5825,9 +6509,10 @@ final class DemoSeedService
                 'hours_used' => 24.0,
                 'pm' => 'Mia Manager',
                 'health' => 'on_track',
-                'complete_tasks' => ['Kickoff Workshop', 'Requirements Elicitation', 'Theme Setup', 'Custom Components'],
+                'complete_first_n_tickets' => 2,
+                'in_progress_first_n_tickets' => 2,
             ],
-            // Acme Catalog: active, started 3 weeks ago, deadline was 4 days ago — OVERDUE + OVER BUDGET
+            // Quote-linked project slot #2: active, started 3 weeks ago, deadline was 4 days ago — OVERDUE + OVER BUDGET
             [
                 'state' => 'active',
                 'start_days' => -21,
@@ -5836,9 +6521,10 @@ final class DemoSeedService
                 'hours_used' => 38.0,
                 'pm' => 'Ava Consultant',
                 'health' => 'at_risk',
-                'complete_tasks' => ['Training Schedule Setup', 'Onsite Training Day 1', 'Onsite Training Day 2', 'Remote Consulting Session 1', 'Remote Consulting Session 2'],
+                'complete_first_n_tickets' => 3,
+                'in_progress_first_n_tickets' => 1,
             ],
-            // Nexus Cloud: active, 5 weeks in, 3 weeks to go — mid-delivery recovery story
+            // Quote-linked project slot #3: active, 5 weeks in, 3 weeks to go — mid-delivery recovery story
             [
                 'state' => 'active',
                 'start_days' => -35,
@@ -5847,10 +6533,12 @@ final class DemoSeedService
                 'hours_used' => 52.0,
                 'pm' => 'Ethan DevOps',
                 'health' => 'on_track',
-                'complete_tasks' => ['Cloud Readiness Assessment', 'Architecture Design', 'Migration Runbook'],
+                'complete_first_n_tickets' => 1,
+                'in_progress_first_n_tickets' => 2,
             ],
             // Quote #10 — Acme Security/Compliance: active, 3 weeks in, 5 weeks to go
             [
+                'name' => 'Acme Security & Compliance Rollout',
                 'state' => 'active',
                 'start_days' => -21,
                 'end_days' => 35,
@@ -5858,7 +6546,8 @@ final class DemoSeedService
                 'hours_used' => 8.0,
                 'pm' => 'Mia Manager',
                 'health' => 'on_track',
-                'complete_first_n_tasks' => 1,
+                'complete_first_n_tickets' => 1,
+                'in_progress_first_n_tickets' => 1,
             ],
         ];
 
@@ -5903,6 +6592,7 @@ final class DemoSeedService
         }
 
         $enrichedCount = 0;
+        $ticketsUpdated = 0;
         foreach ($projects as $pi => $project) {
             $def = $enrichments[$pi] ?? null;
             if (!$def) continue;
@@ -5919,7 +6609,8 @@ final class DemoSeedService
 
             // Use explicit prepared SQL for reliable direct writes
             $result = $wpdb->query($wpdb->prepare(
-                "UPDATE $projTable SET state = %s, start_date = %s, end_date = %s, sold_hours = %f, malleable_data = %s, updated_at = %s WHERE id = %d",
+                "UPDATE $projTable SET name = %s, state = %s, start_date = %s, end_date = %s, sold_hours = %f, malleable_data = %s, updated_at = %s WHERE id = %d",
+                $def['name'] ?? (string)$project->name,
                 $def['state'],
                 $startDate,
                 $endDate,
@@ -5930,38 +6621,734 @@ final class DemoSeedService
             ));
 
             if ($result === false) {
-                error_log("PET seedProjectEnrichment: UPDATE failed for project $projectId — " . $wpdb->last_error);
+                error_log("PET seedProjectTicketEnrichment: UPDATE failed for project $projectId — " . $wpdb->last_error);
+                continue;
             }
 
-            // Complete specified tasks via explicit SQL
-            if (!empty($def['complete_tasks'])) {
-                foreach ($def['complete_tasks'] as $taskName) {
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE $taskTable SET is_completed = 1 WHERE project_id = %d AND name = %s",
-                        $projectId,
-                        $taskName
-                    ));
-                }
+            $ticketFilter = 'project_id = %d';
+            $ticketFilterParams = [$projectId];
+            if ($this->tableHasColumn($ticketsTable, 'lifecycle_owner')) {
+                $ticketFilter .= ' AND lifecycle_owner = %s';
+                $ticketFilterParams[] = 'project';
             }
-            // Complete first N tasks by position (for projects with unknown task names)
-            if (!empty($def['complete_first_n_tasks'])) {
-                $taskIds = $wpdb->get_col($wpdb->prepare(
-                    "SELECT id FROM $taskTable WHERE project_id = %d ORDER BY id ASC LIMIT %d",
-                    $projectId,
-                    (int)$def['complete_first_n_tasks']
-                ));
-                foreach ($taskIds as $tid) {
-                    $wpdb->query($wpdb->prepare(
-                        "UPDATE $taskTable SET is_completed = 1 WHERE id = %d",
-                        (int)$tid
-                    ));
+            if ($this->tableHasColumn($ticketsTable, 'is_rollup')) {
+                $ticketFilter .= ' AND (is_rollup = 0 OR is_rollup IS NULL)';
+            }
+
+            $ticketIds = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM $ticketsTable WHERE $ticketFilter ORDER BY id ASC",
+                ...$ticketFilterParams
+            ));
+            if (!empty($ticketIds)) {
+                $completeN = min(count($ticketIds), (int)($def['complete_first_n_tickets'] ?? 0));
+                $inProgressN = min(count($ticketIds) - $completeN, (int)($def['in_progress_first_n_tickets'] ?? 0));
+                foreach (array_values($ticketIds) as $idx => $ticketId) {
+                    $status = 'planned';
+                    if ($idx < $completeN) {
+                        $status = 'completed';
+                    } elseif ($idx < ($completeN + $inProgressN)) {
+                        $status = 'in_progress';
+                    }
+                    if ($this->tableHasColumn($ticketsTable, 'updated_at')) {
+                        $wpdb->query($wpdb->prepare(
+                            "UPDATE $ticketsTable SET status = %s, updated_at = %s WHERE id = %d",
+                            $status,
+                            $seededAt,
+                            (int)$ticketId
+                        ));
+                    } else {
+                        $wpdb->query($wpdb->prepare(
+                            "UPDATE $ticketsTable SET status = %s WHERE id = %d",
+                            $status,
+                            (int)$ticketId
+                        ));
+                    }
+                    $ticketsUpdated++;
                 }
             }
 
             $enrichedCount++;
         }
+        $quotesTable = $wpdb->prefix . 'pet_quotes';
+        $genericProjects = $wpdb->get_results(
+            "SELECT p.id, p.source_quote_id, q.title AS quote_title
+             FROM $projTable p
+             INNER JOIN $quotesTable q ON q.id = p.source_quote_id
+             WHERE p.source_quote_id IS NOT NULL
+               AND p.name LIKE 'Project for Quote #%'
+             ORDER BY p.id ASC"
+        );
+        $renamedGenericCount = 0;
+        foreach ($genericProjects as $genericProject) {
+            $sourceQuoteId = (int)($genericProject->source_quote_id ?? 0);
+            $quoteTitle = trim((string)($genericProject->quote_title ?? ''));
+            if ($quoteTitle === '') {
+                $quoteTitle = 'Delivery Project #' . $sourceQuoteId;
+            }
+            $renameResult = $wpdb->query($wpdb->prepare(
+                "UPDATE $projTable SET name = %s, updated_at = %s WHERE id = %d",
+                $quoteTitle,
+                $seededAt,
+                (int)$genericProject->id
+            ));
+            if ($renameResult !== false) {
+                $renamedGenericCount++;
+            }
+        }
 
-        return ['enriched' => $enrichedCount];
+        return [
+            'enriched' => $enrichedCount,
+            'tickets_updated' => $ticketsUpdated,
+            'renamed_generic_active_projects' => $renamedGenericCount,
+        ];
+    }
+
+    private function targetedMultiPhaseSourceComponentIds(): array
+    {
+        return array_values(self::TARGETED_MULTI_PHASE_SOURCE_COMPONENT_IDS);
+    }
+
+    private function resolveTargetedMultiPhaseProjectCandidate(?string $seedRunId = null): ?array
+    {
+        $wpdb = $this->wpdb;
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $registryTable = $wpdb->prefix . 'pet_demo_seed_registry';
+
+        $projectScopeSql = 'p.source_quote_id IS NOT NULL';
+        if ($seedRunId !== null && $seedRunId !== '' && $this->tableExists($registryTable)) {
+            $seededProjectIds = array_values(array_filter(array_map('intval', (array)$wpdb->get_col($wpdb->prepare(
+                "SELECT row_id FROM $registryTable WHERE seed_run_id = %s AND table_name = %s ORDER BY id ASC",
+                $seedRunId,
+                $projectsTable
+            ))), static fn(int $id): bool => $id > 0));
+            if (!empty($seededProjectIds)) {
+                $projectScopeSql .= ' AND p.id IN (' . implode(',', $seededProjectIds) . ')';
+            }
+        }
+
+        $joinConditions = "t.project_id = p.id AND t.primary_container = 'project'";
+        if ($this->tableHasColumn($ticketsTable, 'source_component_id')) {
+            $phaseSourceIds = $this->targetedMultiPhaseSourceComponentIds();
+            if (!empty($phaseSourceIds)) {
+                $phaseSourceIdsCsv = implode(',', array_map('intval', $phaseSourceIds));
+                $joinConditions .= " AND (t.source_component_id IS NULL OR t.source_component_id NOT IN ($phaseSourceIdsCsv))";
+            }
+        }
+
+        $candidate = $wpdb->get_row(
+            "SELECT p.id, p.customer_id, p.source_quote_id, p.name,
+                    SUM(CASE WHEN t.id IS NOT NULL THEN 1 ELSE 0 END) AS non_phase_ticket_count
+             FROM $projectsTable p
+             LEFT JOIN $ticketsTable t
+               ON $joinConditions
+             WHERE $projectScopeSql
+             GROUP BY p.id, p.customer_id, p.source_quote_id, p.name
+             ORDER BY p.id ASC
+             LIMIT 1",
+            ARRAY_A
+        );
+        if (!is_array($candidate) || empty($candidate)) {
+            return null;
+        }
+
+        return [
+            'id' => (int)($candidate['id'] ?? 0),
+            'customer_id' => (int)($candidate['customer_id'] ?? 0),
+            'source_quote_id' => (int)($candidate['source_quote_id'] ?? 0),
+            'name' => (string)($candidate['name'] ?? ''),
+            'non_phase_ticket_count' => (int)($candidate['non_phase_ticket_count'] ?? 0),
+        ];
+    }
+
+    private function seedTargetedMultiPhaseProjectEnrichment(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+
+        if (
+            !$this->tableHasColumn($ticketsTable, 'source_component_id')
+            || !$this->tableHasColumn($ticketsTable, 'parent_ticket_id')
+        ) {
+            return [
+                'enriched' => 0,
+                'skipped' => true,
+                'reason' => 'required_ticket_hierarchy_columns_missing',
+            ];
+        }
+
+        $target = $this->resolveTargetedMultiPhaseProjectCandidate($seedRunId);
+        if (!is_array($target) || (int)($target['id'] ?? 0) <= 0) {
+            return [
+                'enriched' => 0,
+                'skipped' => true,
+                'reason' => 'no_quote_backed_project_candidate',
+            ];
+        }
+
+        $projectId = (int)$target['id'];
+        $customerId = (int)$target['customer_id'];
+        $quoteId = (int)$target['source_quote_id'];
+        $childTicketCount = (int)($target['non_phase_ticket_count'] ?? 0);
+        if ($projectId <= 0 || $customerId <= 0 || $quoteId <= 0) {
+            return [
+                'enriched' => 0,
+                'skipped' => true,
+                'reason' => 'invalid_target_project_identity',
+            ];
+        }
+
+        $phaseDefinitions = [
+            [
+                'key' => 'discovery_design',
+                'source_component_id' => (int)self::TARGETED_MULTI_PHASE_SOURCE_COMPONENT_IDS['discovery_design'],
+                'subject' => 'Discovery & Design',
+                'description' => 'Scope confirmation, solution design, and stakeholder sign-off.',
+                'status' => 'completed',
+            ],
+            [
+                'key' => 'build_implementation',
+                'source_component_id' => (int)self::TARGETED_MULTI_PHASE_SOURCE_COMPONENT_IDS['build_implementation'],
+                'subject' => 'Build & Implementation',
+                'description' => 'Delivery build-out, implementation activities, and active execution.',
+                'status' => 'in_progress',
+            ],
+            [
+                'key' => 'go_live_handover',
+                'source_component_id' => (int)self::TARGETED_MULTI_PHASE_SOURCE_COMPONENT_IDS['go_live_handover'],
+                'subject' => 'Go-Live & Handover',
+                'description' => 'Cutover readiness, go-live execution, and operational handover.',
+                'status' => 'planned',
+            ],
+        ];
+        $phaseSourceIdsCsv = implode(',', array_map('intval', $this->targetedMultiPhaseSourceComponentIds()));
+        $deduplicatedTicketCount = 0;
+
+        $duplicateSourceRows = $wpdb->get_results($wpdb->prepare(
+            "SELECT source_component_id, MIN(id) AS keep_id, GROUP_CONCAT(id ORDER BY id ASC) AS all_ids
+             FROM $ticketsTable
+             WHERE project_id = %d
+               AND primary_container = %s
+               AND source_type = %s
+               AND source_component_id IS NOT NULL
+               AND source_component_id NOT IN ($phaseSourceIdsCsv)
+             GROUP BY source_component_id
+             HAVING COUNT(*) > 1",
+            $projectId,
+            'project',
+            'quote_component'
+        ), ARRAY_A);
+        $duplicateTicketIdsToDelete = [];
+        foreach (is_array($duplicateSourceRows) ? $duplicateSourceRows : [] as $duplicateSourceRow) {
+            $keepId = (int)($duplicateSourceRow['keep_id'] ?? 0);
+            $allIds = array_values(array_filter(array_map('intval', explode(',', (string)($duplicateSourceRow['all_ids'] ?? ''))), static function (int $id) use ($keepId): bool {
+                return $id > 0 && $id !== $keepId;
+            }));
+            foreach ($allIds as $duplicateTicketId) {
+                $duplicateTicketIdsToDelete[$duplicateTicketId] = true;
+            }
+        }
+        if (!empty($duplicateTicketIdsToDelete)) {
+            $duplicateTicketIds = array_map('intval', array_keys($duplicateTicketIdsToDelete));
+            $duplicateIdsCsv = implode(',', $duplicateTicketIds);
+            $deduplicatedTicketCount = count($duplicateTicketIds);
+
+            $timeEntriesTable = $wpdb->prefix . 'pet_time_entries';
+            if ($this->tableExists($timeEntriesTable)) {
+                $wpdb->query("DELETE FROM $timeEntriesTable WHERE ticket_id IN ($duplicateIdsCsv)");
+            }
+
+            $slaClockTable = $wpdb->prefix . 'pet_sla_clock_state';
+            if ($this->tableExists($slaClockTable)) {
+                $wpdb->query("DELETE FROM $slaClockTable WHERE ticket_id IN ($duplicateIdsCsv)");
+            }
+
+            $ticketLinksTable = $wpdb->prefix . 'pet_ticket_links';
+            if ($this->tableExists($ticketLinksTable)) {
+                $wpdb->query("DELETE FROM $ticketLinksTable WHERE ticket_id IN ($duplicateIdsCsv)");
+                $wpdb->query("DELETE FROM $ticketLinksTable WHERE link_type = 'ticket' AND CAST(linked_id AS UNSIGNED) IN ($duplicateIdsCsv)");
+            }
+
+            $workItemsTable = $wpdb->prefix . 'pet_work_items';
+            if ($this->tableExists($workItemsTable)) {
+                $wpdb->query("DELETE FROM $workItemsTable WHERE source_type = 'ticket' AND CAST(source_id AS UNSIGNED) IN ($duplicateIdsCsv)");
+            }
+
+            $conversationsTable = $wpdb->prefix . 'pet_conversations';
+            $conversationEventsTable = $wpdb->prefix . 'pet_conversation_events';
+            $conversationParticipantsTable = $wpdb->prefix . 'pet_conversation_participants';
+            $conversationReadStateTable = $wpdb->prefix . 'pet_conversation_read_state';
+            $decisionsTable = $wpdb->prefix . 'pet_decisions';
+            $decisionEventsTable = $wpdb->prefix . 'pet_decision_events';
+            if ($this->tableExists($conversationsTable)) {
+                $conversationIds = array_map('intval', (array)$wpdb->get_col(
+                    "SELECT id
+                     FROM $conversationsTable
+                     WHERE context_type = 'ticket'
+                       AND CAST(context_id AS UNSIGNED) IN ($duplicateIdsCsv)"
+                ));
+                if (!empty($conversationIds)) {
+                    $conversationIdsCsv = implode(',', $conversationIds);
+                    if ($this->tableExists($conversationEventsTable)) {
+                        $wpdb->query("DELETE FROM $conversationEventsTable WHERE conversation_id IN ($conversationIdsCsv)");
+                    }
+                    if ($this->tableExists($conversationParticipantsTable)) {
+                        $wpdb->query("DELETE FROM $conversationParticipantsTable WHERE conversation_id IN ($conversationIdsCsv)");
+                    }
+                    if ($this->tableExists($conversationReadStateTable)) {
+                        $wpdb->query("DELETE FROM $conversationReadStateTable WHERE conversation_id IN ($conversationIdsCsv)");
+                    }
+                    if ($this->tableExists($decisionsTable)) {
+                        $decisionIds = array_map('intval', (array)$wpdb->get_col(
+                            "SELECT id FROM $decisionsTable WHERE conversation_id IN ($conversationIdsCsv)"
+                        ));
+                        if (!empty($decisionIds) && $this->tableExists($decisionEventsTable)) {
+                            $decisionIdsCsv = implode(',', $decisionIds);
+                            $wpdb->query("DELETE FROM $decisionEventsTable WHERE decision_id IN ($decisionIdsCsv)");
+                        }
+                        $wpdb->query("DELETE FROM $decisionsTable WHERE conversation_id IN ($conversationIdsCsv)");
+                    }
+                    $wpdb->query("DELETE FROM $conversationsTable WHERE id IN ($conversationIdsCsv)");
+                }
+            }
+
+            $wpdb->query("DELETE FROM $ticketsTable WHERE id IN ($duplicateIdsCsv)");
+            $refreshedTarget = $this->resolveTargetedMultiPhaseProjectCandidate($seedRunId);
+            if (is_array($refreshedTarget) && (int)($refreshedTarget['id'] ?? 0) === $projectId) {
+                $childTicketCount = (int)($refreshedTarget['non_phase_ticket_count'] ?? $childTicketCount);
+            }
+        }
+        if ($childTicketCount < 6 || $childTicketCount > 12) {
+            return [
+                'enriched' => 0,
+                'project_id' => $projectId,
+                'project_name' => (string)$target['name'],
+                'quote_id' => $quoteId,
+                'skipped' => true,
+                'reason' => 'target_project_ticket_count_out_of_range',
+                'non_phase_ticket_count' => $childTicketCount,
+                'deduplicated_tickets_removed' => $deduplicatedTicketCount,
+            ];
+        }
+
+        $childTicketRows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id
+             FROM $ticketsTable
+             WHERE project_id = %d
+               AND primary_container = %s
+               AND (source_component_id IS NULL OR source_component_id NOT IN ($phaseSourceIdsCsv))
+             ORDER BY id ASC",
+            $projectId,
+            'project'
+        ), ARRAY_A);
+        $childTicketIds = array_values(array_filter(array_map(static function ($row): int {
+            return (int)($row['id'] ?? 0);
+        }, is_array($childTicketRows) ? $childTicketRows : []), static fn(int $id): bool => $id > 0));
+        if (count($childTicketIds) < 6 || count($childTicketIds) > 12) {
+            return [
+                'enriched' => 0,
+                'project_id' => $projectId,
+                'project_name' => (string)$target['name'],
+                'quote_id' => $quoteId,
+                'skipped' => true,
+                'reason' => 'target_project_child_selection_out_of_range',
+                'selected_child_ticket_count' => count($childTicketIds),
+                'deduplicated_tickets_removed' => $deduplicatedTicketCount,
+            ];
+        }
+
+        $existingPhaseRollupsBefore = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*)
+             FROM $ticketsTable
+             WHERE project_id = %d
+               AND primary_container = %s
+               AND source_type = %s
+               AND source_component_id IN ($phaseSourceIdsCsv)",
+            $projectId,
+            'project',
+            'quote_component'
+        ));
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        /** @var \Pet\Application\Commercial\Command\CreateProjectTicketHandler $createProjectTicket */
+        $createProjectTicket = $c->get(\Pet\Application\Commercial\Command\CreateProjectTicketHandler::class);
+
+        $phaseTicketIds = [];
+        foreach ($phaseDefinitions as $definition) {
+            $phaseTicketId = (int)$createProjectTicket->handle(new \Pet\Application\Commercial\Command\CreateProjectTicketCommand(
+                $customerId,
+                $projectId,
+                $quoteId,
+                (string)$definition['subject'],
+                (string)$definition['description'],
+                0,
+                0,
+                0,
+                null,
+                null,
+                null,
+                null,
+                'quote_component',
+                (int)$definition['source_component_id'],
+                null,
+                true
+            ));
+            if ($phaseTicketId > 0) {
+                $phaseTicketIds[(string)$definition['key']] = $phaseTicketId;
+            }
+        }
+
+        if (count($phaseTicketIds) !== count($phaseDefinitions)) {
+            return [
+                'enriched' => 0,
+                'project_id' => $projectId,
+                'project_name' => (string)$target['name'],
+                'quote_id' => $quoteId,
+                'skipped' => true,
+                'reason' => 'phase_rollup_provisioning_incomplete',
+                'phase_ticket_ids' => $phaseTicketIds,
+                'deduplicated_tickets_removed' => $deduplicatedTicketCount,
+            ];
+        }
+
+        $hasUpdatedAt = $this->tableHasColumn($ticketsTable, 'updated_at');
+        $hasIsRollup = $this->tableHasColumn($ticketsTable, 'is_rollup');
+        $hasParentTicketKey = $this->tableHasColumn($ticketsTable, 'parent_ticket_key');
+        $hasRootTicketId = $this->tableHasColumn($ticketsTable, 'root_ticket_id');
+
+        foreach ($phaseDefinitions as $definition) {
+            $phaseKey = (string)$definition['key'];
+            $phaseTicketId = (int)$phaseTicketIds[$phaseKey];
+            $phaseUpdate = [
+                'subject' => (string)$definition['subject'],
+                'description' => (string)$definition['description'],
+                'status' => (string)$definition['status'],
+                'parent_ticket_id' => null,
+            ];
+            if ($hasParentTicketKey) {
+                $phaseUpdate['parent_ticket_key'] = 0;
+            }
+            if ($hasIsRollup) {
+                $phaseUpdate['is_rollup'] = 1;
+            }
+            if ($hasRootTicketId) {
+                $phaseUpdate['root_ticket_id'] = $phaseTicketId;
+            }
+            if ($hasUpdatedAt) {
+                $phaseUpdate['updated_at'] = $seededAt;
+            }
+            $wpdb->update($ticketsTable, $phaseUpdate, ['id' => $phaseTicketId]);
+            $this->registryAdd($seedRunId, $ticketsTable, (string)$phaseTicketId);
+        }
+
+        $phaseChildCounts = [
+            'discovery_design' => 2,
+            'build_implementation' => 2,
+            'go_live_handover' => 2,
+        ];
+        $remainingChildren = count($childTicketIds) - 6;
+        $expansionOrder = ['build_implementation', 'discovery_design', 'go_live_handover', 'build_implementation', 'discovery_design', 'go_live_handover'];
+        foreach ($expansionOrder as $phaseKey) {
+            if ($remainingChildren <= 0) {
+                break;
+            }
+            if (($phaseChildCounts[$phaseKey] ?? 0) >= 4) {
+                continue;
+            }
+            $phaseChildCounts[$phaseKey] += 1;
+            $remainingChildren -= 1;
+        }
+        if ($remainingChildren > 0) {
+            return [
+                'enriched' => 0,
+                'project_id' => $projectId,
+                'project_name' => (string)$target['name'],
+                'quote_id' => $quoteId,
+                'skipped' => true,
+                'reason' => 'unable_to_fit_phase_child_distribution',
+                'selected_child_ticket_count' => count($childTicketIds),
+                'phase_child_counts' => $phaseChildCounts,
+                'deduplicated_tickets_removed' => $deduplicatedTicketCount,
+            ];
+        }
+
+        $phaseOrder = ['discovery_design', 'build_implementation', 'go_live_handover'];
+        $phaseChildTicketIds = [
+            'discovery_design' => [],
+            'build_implementation' => [],
+            'go_live_handover' => [],
+        ];
+        $childStatusDistribution = [
+            'completed' => 0,
+            'in_progress' => 0,
+            'planned' => 0,
+        ];
+
+        $cursor = 0;
+        $childTicketsUpdated = 0;
+        foreach ($phaseOrder as $phaseKey) {
+            $phaseTicketId = (int)$phaseTicketIds[$phaseKey];
+            $targetCount = (int)$phaseChildCounts[$phaseKey];
+            for ($idx = 0; $idx < $targetCount; $idx++) {
+                $ticketId = (int)($childTicketIds[$cursor] ?? 0);
+                $cursor++;
+                if ($ticketId <= 0) {
+                    continue;
+                }
+
+                $childStatus = 'planned';
+                if ($phaseKey === 'discovery_design') {
+                    $childStatus = ($targetCount >= 3 && $idx === ($targetCount - 1)) ? 'in_progress' : 'completed';
+                } elseif ($phaseKey === 'build_implementation') {
+                    $childStatus = $idx < 2 ? 'in_progress' : 'planned';
+                } elseif ($phaseKey === 'go_live_handover') {
+                    $childStatus = 'planned';
+                }
+
+                $childUpdate = [
+                    'parent_ticket_id' => $phaseTicketId,
+                    'status' => $childStatus,
+                ];
+                if ($hasParentTicketKey) {
+                    $childUpdate['parent_ticket_key'] = $phaseTicketId;
+                }
+                if ($hasRootTicketId) {
+                    $childUpdate['root_ticket_id'] = $phaseTicketId;
+                }
+                if ($hasIsRollup) {
+                    $childUpdate['is_rollup'] = 0;
+                }
+                if ($hasUpdatedAt) {
+                    $childUpdate['updated_at'] = $seededAt;
+                }
+                $wpdb->update($ticketsTable, $childUpdate, ['id' => $ticketId]);
+
+                $phaseChildTicketIds[$phaseKey][] = $ticketId;
+                $childStatusDistribution[$childStatus] = (int)($childStatusDistribution[$childStatus] ?? 0) + 1;
+                $childTicketsUpdated++;
+            }
+        }
+
+        $phaseRollupsAfter = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*)
+             FROM $ticketsTable
+             WHERE project_id = %d
+               AND primary_container = %s
+               AND source_type = %s
+               AND source_component_id IN ($phaseSourceIdsCsv)",
+            $projectId,
+            'project',
+            'quote_component'
+        ));
+        $topLevelRollupCount = $hasIsRollup
+            ? (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*)
+                 FROM $ticketsTable
+                 WHERE project_id = %d
+                   AND primary_container = %s
+                   AND parent_ticket_id IS NULL
+                   AND is_rollup = 1",
+                $projectId,
+                'project'
+            ))
+            : (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*)
+                 FROM $ticketsTable
+                 WHERE project_id = %d
+                   AND primary_container = %s
+                   AND parent_ticket_id IS NULL
+                   AND source_component_id IN ($phaseSourceIdsCsv)",
+                $projectId,
+                'project'
+            ));
+
+        return [
+            'enriched' => 1,
+            'project_id' => $projectId,
+            'project_name' => (string)$target['name'],
+            'quote_id' => $quoteId,
+            'phase_ticket_ids' => $phaseTicketIds,
+            'phase_child_counts' => $phaseChildCounts,
+            'phase_child_ticket_ids' => $phaseChildTicketIds,
+            'child_tickets_updated' => $childTicketsUpdated,
+            'child_status_distribution' => $childStatusDistribution,
+            'phase_rollups_existing_before' => $existingPhaseRollupsBefore,
+            'phase_rollups_existing_after' => $phaseRollupsAfter,
+            'new_phase_rollups_created' => max(0, $phaseRollupsAfter - $existingPhaseRollupsBefore),
+            'duplicate_phase_rollups' => max(0, $phaseRollupsAfter - 3),
+            'top_level_rollup_count' => $topLevelRollupCount,
+            'deduplicated_tickets_removed' => $deduplicatedTicketCount,
+        ];
+    }
+
+    private function seedProjectTicketConversationEnrichment(string $seedRunId, string $seedProfile, string $seededAt): array
+    {
+        $wpdb = $this->wpdb;
+        $ticketsTable = $wpdb->prefix . 'pet_tickets';
+        $projectsTable = $wpdb->prefix . 'pet_projects';
+        $conversationsTable = $wpdb->prefix . 'pet_conversations';
+        $eventsTable = $wpdb->prefix . 'pet_conversation_events';
+        $empTable = $wpdb->prefix . 'pet_employees';
+
+        $c = \Pet\Infrastructure\DependencyInjection\ContainerFactory::create();
+        $createConversation = $c->get(\Pet\Application\Conversation\Command\CreateConversationHandler::class);
+        $postMessage = $c->get(\Pet\Application\Conversation\Command\PostMessageHandler::class);
+        $reopenHandler = $c->get(\Pet\Application\Conversation\Command\ReopenConversationHandler::class);
+
+        $currentUserId = (int)get_current_user_id();
+        $miaId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Mia' LIMIT 1") ?: $currentUserId;
+        $ethanId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Ethan' LIMIT 1") ?: $currentUserId;
+        $noahId = (int)$wpdb->get_var("SELECT wp_user_id FROM $empTable WHERE first_name='Noah' LIMIT 1") ?: $currentUserId;
+
+        $inProgressTicket = $wpdb->get_row($wpdb->prepare(
+            "SELECT t.id, t.subject, t.status, p.id AS project_id, p.name AS project_name
+             FROM $ticketsTable t
+             INNER JOIN $projectsTable p ON p.id = t.project_id
+             WHERE t.primary_container = 'project'
+               AND p.source_quote_id IS NOT NULL
+               AND (t.is_rollup = 0 OR t.is_rollup IS NULL)
+               AND t.status = %s
+             ORDER BY p.id ASC, t.id ASC
+             LIMIT 1",
+            'in_progress'
+        ), ARRAY_A);
+
+        $completedTicket = null;
+        if ($inProgressTicket) {
+            $completedTicket = $wpdb->get_row($wpdb->prepare(
+                "SELECT t.id, t.subject, t.status, p.id AS project_id, p.name AS project_name
+                 FROM $ticketsTable t
+                 INNER JOIN $projectsTable p ON p.id = t.project_id
+                 WHERE t.primary_container = 'project'
+                   AND p.source_quote_id IS NOT NULL
+                   AND (t.is_rollup = 0 OR t.is_rollup IS NULL)
+                   AND t.status = %s
+                   AND t.id <> %d
+                 ORDER BY p.id ASC, t.id ASC
+                 LIMIT 1",
+                'completed',
+                (int)$inProgressTicket['id']
+            ), ARRAY_A);
+        } else {
+            $completedTicket = $wpdb->get_row($wpdb->prepare(
+                "SELECT t.id, t.subject, t.status, p.id AS project_id, p.name AS project_name
+                 FROM $ticketsTable t
+                 INNER JOIN $projectsTable p ON p.id = t.project_id
+                 WHERE t.primary_container = 'project'
+                   AND p.source_quote_id IS NOT NULL
+                   AND (t.is_rollup = 0 OR t.is_rollup IS NULL)
+                   AND t.status = %s
+                 ORDER BY p.id ASC, t.id ASC
+                 LIMIT 1",
+                'completed'
+            ), ARRAY_A);
+        }
+
+        $selectedTickets = [];
+        if (is_array($inProgressTicket)) {
+            $selectedTickets[] = $inProgressTicket;
+        }
+        if (is_array($completedTicket)) {
+            $selectedTickets[] = $completedTicket;
+        }
+
+        $insertedMessages = 0;
+        $insertedTickets = 0;
+        $skippedExistingMessages = 0;
+        $selectedTicketIds = [];
+        $selectedTicketDetails = [];
+
+        foreach ($selectedTickets as $ticketRow) {
+            $ticketId = (int)($ticketRow['id'] ?? 0);
+            if ($ticketId <= 0) {
+                continue;
+            }
+            $selectedTicketIds[] = $ticketId;
+            $selectedTicketDetails[] = [
+                'ticket_id' => $ticketId,
+                'project_id' => (int)($ticketRow['project_id'] ?? 0),
+                'project_name' => (string)($ticketRow['project_name'] ?? ''),
+                'status' => (string)($ticketRow['status'] ?? ''),
+            ];
+
+            $existingMessageCount = (int)$wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*)
+                 FROM $eventsTable e
+                 INNER JOIN $conversationsTable c ON c.id = e.conversation_id
+                 WHERE c.context_type = 'ticket'
+                   AND c.context_id = %s
+                   AND e.event_type = 'MessagePosted'",
+                (string)$ticketId
+            ));
+            if ($existingMessageCount > 0) {
+                $skippedExistingMessages++;
+                continue;
+            }
+
+            $conversationUuid = $createConversation->handle(new \Pet\Application\Conversation\Command\CreateConversationCommand(
+                'ticket',
+                (string)$ticketId,
+                'Ticket #' . $ticketId . ': ' . (string)($ticketRow['subject'] ?? ''),
+                'ticket:' . $ticketId,
+                $currentUserId
+            ));
+            $state = (string)$wpdb->get_var($wpdb->prepare(
+                "SELECT state FROM $conversationsTable WHERE uuid = %s LIMIT 1",
+                $conversationUuid
+            ));
+            if ($state === 'resolved') {
+                try {
+                    $reopenHandler->handle(new \Pet\Application\Conversation\Command\ReopenConversationCommand($conversationUuid, $currentUserId));
+                } catch (\Throwable $e) {
+                    // no-op
+                }
+            }
+
+            $messages = [];
+            if (($ticketRow['status'] ?? '') === 'in_progress') {
+                $messages = [
+                    [
+                        'actor' => $ethanId,
+                        'body' => 'Provisioning is underway; we are waiting on client network access confirmation before final cutover.',
+                    ],
+                    [
+                        'actor' => $currentUserId,
+                        'body' => 'No engineering blockers at this stage. I will post the next update after access validation.',
+                    ],
+                ];
+            } else {
+                $messages = [
+                    [
+                        'actor' => $noahId,
+                        'body' => 'Architecture review completed and documented, with one latency risk flagged for the migration phase.',
+                    ],
+                    [
+                        'actor' => $miaId,
+                        'body' => 'Acceptance criteria confirmed with the project lead. This ticket can remain completed.',
+                    ],
+                ];
+            }
+
+            foreach ($messages as $message) {
+                $postMessage->handle(new \Pet\Application\Conversation\Command\PostMessageCommand(
+                    $conversationUuid,
+                    (string)$message['body'],
+                    [],
+                    [],
+                    (int)$message['actor']
+                ));
+                $insertedMessages++;
+            }
+            $insertedTickets++;
+        }
+
+        return [
+            'selected_ticket_ids' => $selectedTicketIds,
+            'selected_tickets' => $selectedTicketDetails,
+            'inserted_tickets' => $insertedTickets,
+            'inserted_messages' => $insertedMessages,
+            'skipped_existing_message_threads' => $skippedExistingMessages,
+        ];
     }
 
     private function seedBilling(string $seedRunId, string $seedProfile, string $seededAt): array
@@ -6785,6 +8172,254 @@ final class DemoSeedService
         return ['catalog_products' => count($products)];
     }
 
+    /**
+     * @return array{groups:int,deleted_rows:int,remapped_references:int}
+     */
+    private function normalizeDuplicateEmployeeEmails(): array
+    {
+        $table = $this->wpdb->prefix . 'pet_employees';
+        if (!$this->tableExists($table) || !$this->tableHasColumn($table, 'email')) {
+            return ['groups' => 0, 'deleted_rows' => 0, 'remapped_references' => 0];
+        }
+
+        $duplicateEmails = $this->wpdb->get_col(
+            "SELECT email
+             FROM $table
+             WHERE email IS NOT NULL AND LENGTH(email) > 0
+             GROUP BY email
+             HAVING COUNT(*) > 1"
+        );
+        if (!is_array($duplicateEmails) || empty($duplicateEmails)) {
+            return ['groups' => 0, 'deleted_rows' => 0, 'remapped_references' => 0];
+        }
+
+        $deletedRows = 0;
+        $remappedReferences = 0;
+        foreach ($duplicateEmails as $email) {
+            $rows = $this->wpdb->get_results(
+                $this->wpdb->prepare(
+                    "SELECT id, wp_user_id, first_name, last_name, hire_date, created_at
+                     FROM $table
+                     WHERE email = %s
+                     ORDER BY id ASC",
+                    [$email]
+                ),
+                ARRAY_A
+            );
+            if (!is_array($rows) || count($rows) <= 1) {
+                continue;
+            }
+
+            $keepId = 0;
+            $bestScore = -1;
+            foreach ($rows as $row) {
+                $score = 0;
+                if ((int)($row['wp_user_id'] ?? 0) > 0) {
+                    $score += 4;
+                }
+                if (trim((string)($row['first_name'] ?? '')) !== '') {
+                    $score += 2;
+                }
+                if (trim((string)($row['last_name'] ?? '')) !== '') {
+                    $score += 1;
+                }
+                $hireDate = (string)($row['hire_date'] ?? '');
+                if ($hireDate !== '' && $hireDate !== '0000-00-00') {
+                    $score += 1;
+                }
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId <= 0) {
+                    continue;
+                }
+                if ($score > $bestScore || ($score === $bestScore && ($keepId <= 0 || $rowId < $keepId))) {
+                    $bestScore = $score;
+                    $keepId = $rowId;
+                }
+            }
+            if ($keepId <= 0) {
+                $keepId = (int)($rows[0]['id'] ?? 0);
+            }
+            if ($keepId <= 0) {
+                continue;
+            }
+
+            foreach ($rows as $row) {
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId <= 0 || $rowId === $keepId) {
+                    continue;
+                }
+                $remappedReferences += $this->remapEmployeeReferences($rowId, $keepId);
+                $deletedRows += (int)$this->wpdb->query($this->wpdb->prepare(
+                    "DELETE FROM $table WHERE id = %d",
+                    [$rowId]
+                ));
+            }
+        }
+
+        return [
+            'groups' => count($duplicateEmails),
+            'deleted_rows' => $deletedRows,
+            'remapped_references' => $remappedReferences,
+        ];
+    }
+
+    /**
+     * @return array{groups:int,deleted_rows:int}
+     */
+    private function normalizeDuplicatePersonSkillPairs(): array
+    {
+        $table = $this->wpdb->prefix . 'pet_person_skills';
+        if (!$this->tableExists($table)) {
+            return ['groups' => 0, 'deleted_rows' => 0];
+        }
+        $duplicates = $this->wpdb->get_results(
+            "SELECT employee_id, skill_id
+             FROM $table
+             GROUP BY employee_id, skill_id
+             HAVING COUNT(*) > 1",
+            ARRAY_A
+        );
+        if (!is_array($duplicates) || empty($duplicates)) {
+            return ['groups' => 0, 'deleted_rows' => 0];
+        }
+
+        $deletedRows = 0;
+        foreach ($duplicates as $dup) {
+            $employeeId = (int)($dup['employee_id'] ?? 0);
+            $skillId = (int)($dup['skill_id'] ?? 0);
+            if ($employeeId <= 0 || $skillId <= 0) {
+                continue;
+            }
+            $rows = $this->wpdb->get_results(
+                $this->wpdb->prepare(
+                    "SELECT id
+                     FROM $table
+                     WHERE employee_id = %d AND skill_id = %d
+                     ORDER BY
+                        manager_rating DESC,
+                        self_rating DESC,
+                        CASE WHEN effective_date IS NULL OR effective_date = '0000-00-00' THEN 1 ELSE 0 END ASC,
+                        id ASC",
+                    [$employeeId, $skillId]
+                ),
+                ARRAY_A
+            );
+            if (!is_array($rows) || count($rows) <= 1) {
+                continue;
+            }
+            $keepId = (int)($rows[0]['id'] ?? 0);
+            if ($keepId <= 0) {
+                continue;
+            }
+            foreach (array_slice($rows, 1) as $row) {
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId <= 0 || $rowId === $keepId) {
+                    continue;
+                }
+                $deletedRows += (int)$this->wpdb->query($this->wpdb->prepare(
+                    "DELETE FROM $table WHERE id = %d",
+                    [$rowId]
+                ));
+            }
+        }
+
+        return ['groups' => count($duplicates), 'deleted_rows' => $deletedRows];
+    }
+
+    /**
+     * @return array{groups:int,deleted_rows:int}
+     */
+    private function normalizeDuplicatePersonCertificationPairs(): array
+    {
+        $table = $this->wpdb->prefix . 'pet_person_certifications';
+        if (!$this->tableExists($table)) {
+            return ['groups' => 0, 'deleted_rows' => 0];
+        }
+        $duplicates = $this->wpdb->get_results(
+            "SELECT employee_id, certification_id
+             FROM $table
+             GROUP BY employee_id, certification_id
+             HAVING COUNT(*) > 1",
+            ARRAY_A
+        );
+        if (!is_array($duplicates) || empty($duplicates)) {
+            return ['groups' => 0, 'deleted_rows' => 0];
+        }
+
+        $deletedRows = 0;
+        foreach ($duplicates as $dup) {
+            $employeeId = (int)($dup['employee_id'] ?? 0);
+            $certificationId = (int)($dup['certification_id'] ?? 0);
+            if ($employeeId <= 0 || $certificationId <= 0) {
+                continue;
+            }
+            $rows = $this->wpdb->get_results(
+                $this->wpdb->prepare(
+                    "SELECT id
+                     FROM $table
+                     WHERE employee_id = %d AND certification_id = %d
+                     ORDER BY
+                        CASE WHEN obtained_date IS NULL OR obtained_date = '0000-00-00' THEN 1 ELSE 0 END ASC,
+                        id ASC",
+                    [$employeeId, $certificationId]
+                ),
+                ARRAY_A
+            );
+            if (!is_array($rows) || count($rows) <= 1) {
+                continue;
+            }
+            $keepId = (int)($rows[0]['id'] ?? 0);
+            if ($keepId <= 0) {
+                continue;
+            }
+            foreach (array_slice($rows, 1) as $row) {
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId <= 0 || $rowId === $keepId) {
+                    continue;
+                }
+                $deletedRows += (int)$this->wpdb->query($this->wpdb->prepare(
+                    "DELETE FROM $table WHERE id = %d",
+                    [$rowId]
+                ));
+            }
+        }
+
+        return ['groups' => count($duplicates), 'deleted_rows' => $deletedRows];
+    }
+
+    private function remapEmployeeReferences(int $fromEmployeeId, int $toEmployeeId): int
+    {
+        if ($fromEmployeeId <= 0 || $toEmployeeId <= 0 || $fromEmployeeId === $toEmployeeId) {
+            return 0;
+        }
+
+        $referenceMap = [
+            [$this->wpdb->prefix . 'pet_team_members', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_person_skills', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_person_certifications', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_person_role_assignments', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_person_kpis', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_leave_requests', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_leave_requests', 'decided_by_employee_id'],
+            [$this->wpdb->prefix . 'pet_capacity_overrides', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_time_entries', 'employee_id'],
+            [$this->wpdb->prefix . 'pet_projects', 'project_manager_employee_id'],
+            [$this->wpdb->prefix . 'pet_escalations', 'assigned_to_employee_id'],
+        ];
+
+        $updated = 0;
+        foreach ($referenceMap as [$table, $column]) {
+            if (!$this->tableExists($table) || !$this->tableHasColumn($table, $column)) {
+                continue;
+            }
+            $updated += (int)$this->wpdb->query($this->wpdb->prepare(
+                "UPDATE $table SET $column = %d WHERE $column = %d",
+                [$toEmployeeId, $fromEmployeeId]
+            ));
+        }
+
+        return $updated;
+    }
     private function upsertSeededPersonSkill(
         string $seedRunId,
         int $employeeId,

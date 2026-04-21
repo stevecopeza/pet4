@@ -11,7 +11,7 @@ namespace Pet\Tests\Integration\Support;
  * migration definitions, and MigrationRunner so integration tests
  * can run without a full WordPress/MySQL environment.
  */
-class WpdbStub
+class WpdbStub extends \wpdb
 {
     public string $prefix = 'wp_';
     public int $insert_id = 0;
@@ -143,9 +143,15 @@ class WpdbStub
     public function get_col(string $sql, int $col = 0): array
     {
         $this->last_error = '';
-        $sql = $this->translateSql($sql);
+        $translatedSql = $this->translateSql($sql);
+        $sql = $translatedSql;
 
         try {
+            if (preg_match('/^PRAGMA table_info\\(/i', $translatedSql) === 1 && $col === 0) {
+                // WordPress `DESCRIBE table` + get_col(..., 0) returns column names.
+                // SQLite `PRAGMA table_info(table)` column 0 is `cid`; column 1 is `name`.
+                $col = 1;
+            }
             $stmt = $this->pdo->query($sql);
             $values = [];
             while (($val = $stmt->fetchColumn($col)) !== false) {

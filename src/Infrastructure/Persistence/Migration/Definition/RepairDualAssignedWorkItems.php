@@ -22,20 +22,11 @@ class RepairDualAssignedWorkItems implements Migration
         if ($tableExists !== $table) {
             return;
         }
-
-        $this->wpdb->query(
-            "UPDATE $table
-             SET assigned_team_id = NULL
-             WHERE assigned_team_id IS NOT NULL
-               AND assigned_team_id <> ''
-               AND assigned_user_id IS NOT NULL
-               AND assigned_user_id <> ''"
-        );
     }
 
     public function getDescription(): string
     {
-        return 'Repair invalid work items by clearing assigned_team_id when assigned_user_id is set.';
+        return 'Legacy no-op: dual-assigned work items are valid and should not be rewritten.';
     }
 }
 

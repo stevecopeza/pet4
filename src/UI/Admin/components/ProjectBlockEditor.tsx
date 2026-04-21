@@ -16,6 +16,10 @@ interface CatalogItem {
 interface PhaseDraft {
   id: number | string | null;
   name: string;
+  phaseTotalCost?: number | null;
+  marginAmount?: number | null;
+  marginPercentage?: number | null;
+  hasMarginData?: boolean;
   units: UnitDraft[];
 }
 
@@ -147,6 +151,8 @@ const ProjectBlockEditor: React.FC<ProjectBlockEditorProps> = ({
           (sum, u) => sum + (Number(u.totalValue) || 0),
           0
         );
+        const phaseMarginAmount = typeof (phase as any).marginAmount === 'number' ? (phase as any).marginAmount : null;
+        const phaseMarginPercentage = typeof (phase as any).marginPercentage === 'number' ? (phase as any).marginPercentage : null;
         const totalHours = phase.units.reduce(
           (sum, u) => sum + (u.unit === 'hours' ? Number(u.quantity) || 0 : 0),
           0
@@ -242,14 +248,15 @@ const ProjectBlockEditor: React.FC<ProjectBlockEditorProps> = ({
                 {phase.units.length > 0 ? (
                   <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                      <col style={{ width: '25%' }} />
+                      <col style={{ width: '24%' }} />
                       <col style={{ width: '10%' }} />
-                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '11%' }} />
                       <col style={{ width: '6%' }} />
                       <col style={{ width: '7%' }} />
                       <col style={{ width: '10%' }} />
+                      <col style={{ width: '10%' }} />
                       <col style={{ width: '12%' }} />
-                      <col style={{ width: '8%' }} />
+                      <col style={{ width: '10%' }} />
                     </colgroup>
                     <tbody>
                       {phase.units.map((unit, unitIndex) => (
@@ -287,6 +294,22 @@ const ProjectBlockEditor: React.FC<ProjectBlockEditorProps> = ({
                         <td style={{ padding: '6px 10px' }} />
                         <td style={{ padding: '6px 10px', textAlign: 'right' }}>
                           ${phaseTotal.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                          {phaseMarginAmount !== null ? (
+                            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                              <span style={{ color: phaseMarginAmount < 0 ? '#b32d2e' : undefined }}>
+                                ${phaseMarginAmount.toFixed(2)}
+                              </span>
+                              {phaseMarginPercentage !== null && (
+                                <span style={{ fontSize: '10px', color: '#666' }}>
+                                  {phaseMarginPercentage.toFixed(1)}%
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#999' }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: '6px 10px' }} />
                       </tr>

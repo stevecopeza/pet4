@@ -42,7 +42,8 @@ final class NotificationIngestionService
     /**
      * Run a single poll cycle for all active integrations.
      *
-     * @return array<string, mixed> Summary per integration keyed by integration ID.
+     * @return array<int|string, mixed> Summary per integration keyed by integration ID,
+     *                                  or array{'skipped': string} when the feature is disabled.
      */
     public function pollAll(): array
     {

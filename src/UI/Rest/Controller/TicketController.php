@@ -73,9 +73,10 @@ class TicketController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getTickets'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
                 'args' => [
                     'customer_id' => V::optionalIntArg(),
+                    'project_id' => V::optionalIntArg(),
                     'status' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'ticket_mode' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
                     'lifecycle_owner' => ['required' => false, 'sanitize_callback' => [V::class, 'sanitizeString']],
@@ -138,7 +139,7 @@ class TicketController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getStatusOptions'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
                 'args' => [
                     'lifecycle_owner' => [
                         'required' => false,
@@ -200,6 +201,15 @@ class TicketController implements RestController
                 'permission_callback' => [$this, 'checkPermission'],
             ],
         ]);
+
+        // Close action — sets ticket status to 'resolved' preserving all other fields.
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/close', [
+            [
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => [$this, 'closeTicket'],
+                'permission_callback' => [$this, 'checkPermission'],
+            ],
+        ]);
     }
 
     public function checkPermission(): bool
@@ -207,10 +217,16 @@ class TicketController implements RestController
         return current_user_can('manage_options');
     }
 
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
+    }
+
     public function getTickets(WP_REST_Request $request): WP_REST_Response
     {
         $profileToken = $this->beginBenchmarkWorkloadProfile('ticket.list');
         $customerId = $request->get_param('customer_id');
+        $projectId = $request->get_param('project_id');
         $status = $request->get_param('status');
         if (is_string($status)) {
             $status = trim($status);
@@ -230,6 +246,13 @@ class TicketController implements RestController
             $tickets = $this->ticketRepository->findActive();
         } else {
             $tickets = $this->ticketRepository->findAll();
+        }
+
+        if ($projectId) {
+            $projectId = (int) $projectId;
+            $tickets = array_filter($tickets, function ($ticket) use ($projectId) {
+                return $ticket->projectId() === $projectId;
+            });
         }
 
         if ($status && $status !== 'active') {
@@ -598,7 +621,7 @@ class TicketController implements RestController
 
             return new WP_REST_Response($options, 200);
         } catch (\InvalidArgumentException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -693,6 +716,50 @@ class TicketController implements RestController
             return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to pull ticket', 'details' => []]], 500);
+        }
+    }
+
+    /**
+     * POST /pet/v1/tickets/{id}/close
+     *
+     * Resolves a ticket without requiring the caller to re-supply all ticket
+     * fields. Fetches the current state, sets status → 'resolved', and saves.
+     * Body: { resolution?: string }  (stored as malleable data, optional)
+     */
+    public function closeTicket(WP_REST_Request $request): WP_REST_Response
+    {
+        $id = (int) $request->get_param('id');
+
+        try {
+            $ticket = $this->ticketRepository->findById($id);
+            if (!$ticket) {
+                return new WP_REST_Response(['error' => 'Ticket not found'], 404);
+            }
+
+            $params = $request->get_json_params() ?? [];
+            $malleableData = $ticket->malleableData();
+            if (!empty($params['resolution'])) {
+                $malleableData['resolution'] = (string) $params['resolution'];
+            }
+
+            $command = new UpdateTicketCommand(
+                $id,
+                $ticket->siteId(),
+                $ticket->slaId(),
+                $ticket->subject(),
+                $ticket->description(),
+                $ticket->priority(),
+                'resolved',
+                $malleableData
+            );
+
+            $this->updateTicketHandler->handle($command);
+
+            return new WP_REST_Response(['message' => 'Ticket resolved', 'id' => $id], 200);
+        } catch (\DomainException $e) {
+            return new WP_REST_Response(['error' => ['code' => 'DOMAIN_ERROR', 'message' => $e->getMessage(), 'details' => []]], 422);
+        } catch (\Throwable $e) {
+            return new WP_REST_Response(['error' => ['code' => 'INTERNAL_ERROR', 'message' => 'Failed to close ticket', 'details' => []]], 500);
         }
     }
 }

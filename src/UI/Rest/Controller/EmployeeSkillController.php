@@ -33,7 +33,7 @@ class EmployeeSkillController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getEmployeeSkills'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
@@ -46,6 +46,11 @@ class EmployeeSkillController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getEmployeeSkills(WP_REST_Request $request): WP_REST_Response
@@ -106,7 +111,7 @@ class EmployeeSkillController implements RestController
             $this->rateEmployeeSkillHandler->handle($command);
             return new WP_REST_Response(['message' => 'Skill rating recorded successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 }

@@ -222,6 +222,233 @@ final class DemoSeedPurgeDeterminismTest extends TestCase
         $this->assertSame(0, $duplicateCertPairs);
     }
 
+    public function testSeedEmployeesCollapsesDuplicateEmailRowsAndRemapsEmployeeReferences(): void
+    {
+        $employeesTable = $this->wpdb->prefix . 'pet_employees';
+        $skillsTable = $this->wpdb->prefix . 'pet_person_skills';
+        $registryTable = $this->wpdb->prefix . 'pet_demo_seed_registry';
+
+        $this->wpdb->query(
+            "CREATE TABLE $employeesTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wp_user_id INTEGER,
+                first_name TEXT,
+                last_name TEXT,
+                email TEXT,
+                status TEXT,
+                hire_date TEXT,
+                manager_id INTEGER,
+                created_at TEXT,
+                archived_at TEXT
+            )"
+        );
+        $this->wpdb->query(
+            "CREATE TABLE $skillsTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER,
+                skill_id INTEGER,
+                review_cycle_id INTEGER,
+                self_rating INTEGER,
+                manager_rating INTEGER,
+                effective_date TEXT,
+                created_at TEXT
+            )"
+        );
+        $this->wpdb->query(
+            "CREATE TABLE {$this->wpdb->prefix}pet_person_certifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER,
+                certification_id INTEGER,
+                obtained_date TEXT,
+                expiry_date TEXT,
+                evidence_url TEXT,
+                status TEXT,
+                created_at TEXT
+            )"
+        );
+        $this->wpdb->query(
+            "CREATE TABLE $registryTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seed_run_id TEXT,
+                table_name TEXT,
+                row_id TEXT,
+                created_at TEXT,
+                purge_status TEXT DEFAULT 'ACTIVE',
+                purged_at TEXT
+            )"
+        );
+
+        // Intentional duplicate email pair where second row is low-fidelity.
+        $this->wpdb->insert($employeesTable, [
+            'wp_user_id' => 1,
+            'first_name' => 'Admin',
+            'last_name' => 'User',
+            'email' => 'admin@cope.zone',
+            'status' => 'active',
+            'hire_date' => null,
+            'manager_id' => null,
+            'created_at' => '2026-03-23 21:43:24',
+            'archived_at' => null,
+        ]);
+        $keepId = (int)$this->wpdb->insert_id;
+        $this->wpdb->insert($employeesTable, [
+            'wp_user_id' => 0,
+            'first_name' => '',
+            'last_name' => '',
+            'email' => 'admin@cope.zone',
+            'status' => 'active',
+            'hire_date' => null,
+            'manager_id' => null,
+            'created_at' => '2026-03-23 22:52:37',
+            'archived_at' => null,
+        ]);
+        $duplicateId = (int)$this->wpdb->insert_id;
+
+        // Reference the duplicate row to verify remapping during normalization.
+        $this->wpdb->insert($skillsTable, [
+            'employee_id' => $duplicateId,
+            'skill_id' => 99,
+            'review_cycle_id' => null,
+            'self_rating' => 1,
+            'manager_rating' => 1,
+            'effective_date' => '2026-03-23',
+            'created_at' => '2026-03-23 22:52:37',
+        ]);
+
+        $seedService = new DemoSeedService($this->wpdb);
+        $seedEmployees = new \ReflectionMethod($seedService, 'seedEmployees');
+        $seedEmployees->setAccessible(true);
+
+        $seedEmployees->invoke($seedService, 'seed-run-a', 'demo_full', '2026-03-24 10:00:00');
+        $seedEmployees->invoke($seedService, 'seed-run-b', 'demo_full', '2026-03-24 10:00:00');
+
+        $duplicateEmailCount = (int)$this->wpdb->get_var(
+            "SELECT COUNT(*) FROM (
+                SELECT email, COUNT(*) AS c
+                FROM $employeesTable
+                WHERE email IS NOT NULL AND LENGTH(email) > 0
+                GROUP BY email
+                HAVING COUNT(*) > 1
+            ) x"
+        );
+        $this->assertSame(0, $duplicateEmailCount);
+
+        $this->assertSame(0, (int)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM $employeesTable WHERE id = %d",
+            $duplicateId
+        )));
+        $this->assertSame(1, (int)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM $employeesTable WHERE id = %d",
+            $keepId
+        )));
+        $this->assertSame(0, (int)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM $skillsTable WHERE employee_id = %d",
+            $duplicateId
+        )));
+        $this->assertSame(1, (int)$this->wpdb->get_var($this->wpdb->prepare(
+            "SELECT COUNT(*) FROM $skillsTable WHERE employee_id = %d",
+            $keepId
+        )));
+    }
+
+    public function testCapabilityLevelDuplicateNormalizationCollapsesOutOfBandStaffPairs(): void
+    {
+        $skillsTable = $this->wpdb->prefix . 'pet_person_skills';
+        $certsTable = $this->wpdb->prefix . 'pet_person_certifications';
+
+        $this->wpdb->query(
+            "CREATE TABLE $skillsTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER,
+                skill_id INTEGER,
+                review_cycle_id INTEGER,
+                self_rating INTEGER,
+                manager_rating INTEGER,
+                effective_date TEXT,
+                created_at TEXT
+            )"
+        );
+        $this->wpdb->query(
+            "CREATE TABLE $certsTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER,
+                certification_id INTEGER,
+                obtained_date TEXT,
+                expiry_date TEXT,
+                evidence_url TEXT,
+                status TEXT,
+                created_at TEXT
+            )"
+        );
+
+        $this->wpdb->insert($skillsTable, [
+            'employee_id' => 3,
+            'skill_id' => 5,
+            'review_cycle_id' => null,
+            'self_rating' => 3,
+            'manager_rating' => 4,
+            'effective_date' => '2026-03-23',
+            'created_at' => '2026-03-23 19:21:10',
+        ]);
+        $this->wpdb->insert($skillsTable, [
+            'employee_id' => 3,
+            'skill_id' => 5,
+            'review_cycle_id' => null,
+            'self_rating' => 0,
+            'manager_rating' => 0,
+            'effective_date' => '0000-00-00',
+            'created_at' => '2026-03-23 22:52:37',
+        ]);
+        $this->wpdb->insert($certsTable, [
+            'employee_id' => 3,
+            'certification_id' => 1,
+            'obtained_date' => '2026-03-23',
+            'expiry_date' => null,
+            'evidence_url' => null,
+            'status' => 'valid',
+            'created_at' => '2026-03-23 19:21:10',
+        ]);
+        $this->wpdb->insert($certsTable, [
+            'employee_id' => 3,
+            'certification_id' => 1,
+            'obtained_date' => '0000-00-00',
+            'expiry_date' => null,
+            'evidence_url' => null,
+            'status' => 'valid',
+            'created_at' => '2026-03-23 22:52:37',
+        ]);
+
+        $seedService = new DemoSeedService($this->wpdb);
+        $skillsNormalize = new \ReflectionMethod($seedService, 'normalizeDuplicatePersonSkillPairs');
+        $skillsNormalize->setAccessible(true);
+        $certNormalize = new \ReflectionMethod($seedService, 'normalizeDuplicatePersonCertificationPairs');
+        $certNormalize->setAccessible(true);
+
+        $skillsNormalize->invoke($seedService);
+        $certNormalize->invoke($seedService);
+
+        $duplicateSkillPairs = (int)$this->wpdb->get_var(
+            "SELECT COUNT(*) FROM (
+                SELECT employee_id, skill_id, COUNT(*) AS c
+                FROM $skillsTable
+                GROUP BY employee_id, skill_id
+                HAVING COUNT(*) > 1
+            ) x"
+        );
+        $duplicateCertPairs = (int)$this->wpdb->get_var(
+            "SELECT COUNT(*) FROM (
+                SELECT employee_id, certification_id, COUNT(*) AS c
+                FROM $certsTable
+                GROUP BY employee_id, certification_id
+                HAVING COUNT(*) > 1
+            ) x"
+        );
+        $this->assertSame(0, $duplicateSkillPairs);
+        $this->assertSame(0, $duplicateCertPairs);
+        $this->assertSame(1, (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $skillsTable WHERE employee_id = 3 AND skill_id = 5"));
+        $this->assertSame(1, (int)$this->wpdb->get_var("SELECT COUNT(*) FROM $certsTable WHERE employee_id = 3 AND certification_id = 1"));
+    }
+
     public function testPurgeRemovesStaffJoinRowsAndCleansRegistryForRun(): void
     {
         $skillsTable = $this->wpdb->prefix . 'pet_person_skills';

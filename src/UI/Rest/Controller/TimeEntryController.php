@@ -170,7 +170,7 @@ class TimeEntryController implements RestController
 
             return new WP_REST_Response(['message' => 'Time logged', 'id' => $entryId], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -201,9 +201,9 @@ class TimeEntryController implements RestController
                 'correctsEntryId' => $original->id(),
             ], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -222,7 +222,7 @@ class TimeEntryController implements RestController
 
             return new WP_REST_Response(['message' => 'Time entry archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -244,9 +244,9 @@ class TimeEntryController implements RestController
 
             return new WP_REST_Response(['message' => 'Draft entry updated'], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

@@ -386,6 +386,22 @@
   background: var(--sc-accent);
   color: #fff;
 }
+.sc-action-btn--success {
+  border-color: #28a745;
+  color: #28a745;
+}
+.sc-action-btn--success:hover {
+  background: #28a745;
+  color: #fff;
+}
+.sc-action-btn--danger {
+  border-color: #dc3545;
+  color: #dc3545;
+}
+.sc-action-btn--danger:hover {
+  background: #dc3545;
+  color: #fff;
+}
 
 /* ================================================================
    KNOWLEDGE BASE

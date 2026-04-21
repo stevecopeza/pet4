@@ -16,6 +16,7 @@ use Pet\Domain\Delivery\Entity\Project;
 final class ProjectHealthTransitionEmitter
 {
     private $wpdb;
+    private ?array $ticketColumns = null;
 
     private const EVENT_MAP = [
         'green' => 'project.health_green',
@@ -47,7 +48,7 @@ final class ProjectHealthTransitionEmitter
     /**
      * Evaluate the project's current health and emit a transition event if changed.
      *
-     * @param Project $project The project entity (must have tasks loaded)
+     * @param Project $project The project entity
      * @param float   $hoursUsed Current hours used (from malleable data or time entries)
      */
     public function evaluate(Project $project, float $hoursUsed = 0.0): void
@@ -122,15 +123,27 @@ final class ProjectHealthTransitionEmitter
         }
 
         $soldH = $project->soldHours();
-        $tasks = $project->tasks();
-        $taskCount = count($tasks);
-        $completedCount = 0;
-        foreach ($tasks as $task) {
-            if ($task->isCompleted()) {
-                $completedCount++;
+        [$deliveryTicketTotal, $deliveryTicketCompleted] = $this->deliveryTicketCompletionCounts((int)$project->id());
+        $progressSource = 'tickets';
+
+        if ($deliveryTicketTotal > 0) {
+            $progressPct = (int) round(($deliveryTicketCompleted / $deliveryTicketTotal) * 100);
+        } else {
+            // Backstop for very old projects created before ticket-only provisioning.
+            // Ticket model is authoritative for active delivery execution.
+            $tasks = $project->tasks();
+            $taskCount = count($tasks);
+            $completedCount = 0;
+            foreach ($tasks as $task) {
+                if ($task->isCompleted()) {
+                    $completedCount++;
+                }
             }
+            $progressPct = $taskCount > 0 ? (int) round(($completedCount / $taskCount) * 100) : 0;
+            $progressSource = 'legacy_tasks';
+            $deliveryTicketTotal = $taskCount;
+            $deliveryTicketCompleted = $completedCount;
         }
-        $progressPct = $taskCount > 0 ? (int) round(($completedCount / $taskCount) * 100) : 0;
         $burnPct = $soldH > 0 ? (int) round(($hoursUsed / $soldH) * 100) : 0;
 
         $reasons = [];
@@ -174,11 +187,78 @@ final class ProjectHealthTransitionEmitter
                 'reason_codes' => $reasonCodes,
                 'burn_pct' => $burnPct,
                 'progress_pct' => $progressPct,
+                'progress_source' => $progressSource,
+                'delivery_ticket_total' => $deliveryTicketTotal,
+                'delivery_ticket_completed' => $deliveryTicketCompleted,
                 'hours_used' => round($hoursUsed, 2),
                 'sold_hours' => round($soldH, 2),
                 'thresholds' => self::THRESHOLDS,
             ],
         ];
+    }
+
+    /**
+     * Return [total_leaf_delivery_tickets, completed_leaf_delivery_tickets]
+     * for the given project.
+     */
+    private function deliveryTicketCompletionCounts(int $projectId): array
+    {
+        $table = $this->wpdb->prefix . 'pet_tickets';
+        if (!$this->tableExists($table)) {
+            return [0, 0];
+        }
+        if (!$this->hasTicketColumn('project_id') || !$this->hasTicketColumn('status')) {
+            return [0, 0];
+        }
+
+        $where = 'project_id = %d';
+        $params = [$projectId];
+
+        if ($this->hasTicketColumn('lifecycle_owner')) {
+            $where .= ' AND lifecycle_owner = %s';
+            $params[] = 'project';
+        }
+        if ($this->hasTicketColumn('is_rollup')) {
+            $where .= ' AND (is_rollup = 0 OR is_rollup IS NULL)';
+        }
+
+        $rows = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT status, COUNT(*) AS c FROM $table WHERE $where GROUP BY status",
+            ...$params
+        ));
+
+        $total = 0;
+        $completed = 0;
+        foreach ($rows ?: [] as $row) {
+            $status = (string)($row->status ?? '');
+            $count = (int)($row->c ?? 0);
+            $total += $count;
+            if (in_array($status, ['completed', 'resolved', 'closed'], true)) {
+                $completed += $count;
+            }
+        }
+
+        return [$total, $completed];
+    }
+
+    private function tableExists(string $table): bool
+    {
+        return $this->wpdb->get_var("SHOW TABLES LIKE '$table'") === $table;
+    }
+
+    private function hasTicketColumn(string $column): bool
+    {
+        $table = $this->wpdb->prefix . 'pet_tickets';
+        if (!$this->tableExists($table)) {
+            return false;
+        }
+
+        if ($this->ticketColumns === null) {
+            $columns = $this->wpdb->get_col("DESCRIBE $table", 0);
+            $this->ticketColumns = is_array($columns) ? array_map('strval', $columns) : [];
+        }
+
+        return in_array($column, $this->ticketColumns, true);
     }
 
     /**

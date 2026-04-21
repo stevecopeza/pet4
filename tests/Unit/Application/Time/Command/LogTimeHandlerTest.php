@@ -61,6 +61,7 @@ final class LogTimeHandlerTest extends TestCase
             public function countActiveUnassigned(): int { return 0; }
             public function delete(int $id): void {}
             public function findByQuoteId(int $quoteId): array { return []; }
+            public function findByProvisioningKey(int $projectId, int $sourceComponentId, ?int $parentTicketId): ?\Pet\Domain\Support\Entity\Ticket { return null; }
         };
 
         $handler = new LogTimeHandler(

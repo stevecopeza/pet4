@@ -326,6 +326,8 @@ const Settings = () => {
             <p>These settings are stored in the database and affect plugin behavior globally.</p>
           </div>
 
+          <QuoteApprovalSettings />
+
           <div style={{ marginTop: '20px', padding: '15px', background: '#fff', border: '1px solid #ccd0d4' }}>
             <h3>Demo Installer</h3>
             <p>Seed announcements and feed events for demo purposes.</p>
@@ -402,6 +404,119 @@ const Settings = () => {
         onCancel={() => setConfirmRunDemo(false)}
         onConfirm={handleRunDemoInstaller}
       />
+    </div>
+  );
+};
+
+/* ================================================================
+   Quote Approval Settings sub-component
+   ================================================================ */
+const QuoteApprovalSettings: React.FC = () => {
+  const [valueThreshold, setValueThreshold] = useState('0');
+  const [discountThreshold, setDiscountThreshold] = useState('0');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${window.petSettings.apiUrl}/settings`, {
+          headers: { 'X-WP-Nonce': window.petSettings.nonce },
+        });
+        const data: { key: string; value: string }[] = await res.json();
+        const vt = data.find(d => d.key === 'pet_quote_approval_value_threshold');
+        const dt = data.find(d => d.key === 'pet_quote_approval_discount_threshold_pct');
+        if (vt) setValueThreshold(vt.value);
+        if (dt) setDiscountThreshold(dt.value);
+      } catch (_) {
+        // Keep defaults
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch(`${window.petSettings.apiUrl}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.petSettings.nonce },
+        body: JSON.stringify({ key: 'pet_quote_approval_value_threshold', value: valueThreshold, type: 'number', description: 'Quote total value at or above which manager approval is required before sending (0 = disabled)' }),
+      });
+      await fetch(`${window.petSettings.apiUrl}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': window.petSettings.nonce },
+        body: JSON.stringify({ key: 'pet_quote_approval_discount_threshold_pct', value: discountThreshold, type: 'number', description: 'Maximum line-item discount % before manager approval is required (0 = disabled)' }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      toast.success('Quote approval thresholds saved');
+    } catch (err) {
+      toast.error('Failed to save approval thresholds');
+    }
+    setSaving(false);
+  };
+
+  if (loading) return <LoadingState label="Loading approval settings…" />;
+
+  return (
+    <div style={{ marginTop: '24px', padding: '16px', background: '#fff', border: '1px solid #ccd0d4', borderRadius: '4px' }}>
+      <h3 style={{ marginTop: 0 }}>Quote Approval Thresholds</h3>
+      <p style={{ color: '#666', marginBottom: '16px', fontSize: '13px' }}>
+        When either threshold is exceeded, the quote must be submitted for manager approval before it can be sent to the customer.
+        Set to <strong>0</strong> to disable that threshold.
+      </p>
+
+      <table className="form-table" style={{ maxWidth: '600px' }}>
+        <tbody>
+          <tr>
+            <th scope="row" style={{ width: '220px' }}>
+              <label htmlFor="qa-value-threshold">Value threshold</label>
+            </th>
+            <td>
+              <input
+                id="qa-value-threshold"
+                type="number"
+                min="0"
+                step="1"
+                value={valueThreshold}
+                onChange={e => setValueThreshold(e.target.value)}
+                style={{ width: '140px' }}
+              />
+              <p className="description">Quote total ≥ this amount requires approval. 0 = disabled.</p>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <label htmlFor="qa-discount-threshold">Max discount %</label>
+            </th>
+            <td>
+              <input
+                id="qa-discount-threshold"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={discountThreshold}
+                onChange={e => setDiscountThreshold(e.target.value)}
+                style={{ width: '140px' }}
+              />
+              <p className="description">Any line-item discount ≥ this % requires approval. 0 = disabled.</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button className="button button-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save Approval Settings'}
+        </button>
+        {saved && <span style={{ color: '#28a745', fontWeight: 600 }}>Saved!</span>}
+      </div>
     </div>
   );
 };

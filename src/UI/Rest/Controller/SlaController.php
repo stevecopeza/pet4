@@ -109,7 +109,7 @@ class SlaController
             $this->slaRepository->save($sla);
             return new \WP_REST_Response($this->serializeSla($sla), 201);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -132,7 +132,7 @@ class SlaController
             $this->slaRepository->save($sla);
             return new \WP_REST_Response($this->serializeSla($sla), 200);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -166,7 +166,7 @@ class SlaController
             
             return new \WP_REST_Response($this->serializeSla($sla), 200);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -207,7 +207,7 @@ class SlaController
                 'reason' => $reason,
             ], 200);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

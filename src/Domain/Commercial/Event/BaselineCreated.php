@@ -34,6 +34,11 @@ class BaselineCreated implements DomainEvent, SourcedEvent
         return (int)$this->baseline->contractId();
     }
 
+    public function name(): string
+    {
+        return 'baseline.created';
+    }
+
     public function aggregateType(): string
     {
         return 'contract';

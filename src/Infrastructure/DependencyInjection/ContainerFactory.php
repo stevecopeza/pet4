@@ -39,10 +39,6 @@ class ContainerFactory
                 global $wpdb;
                 return $wpdb;
             },
-            'wpdb' => function () {
-                global $wpdb;
-                return $wpdb;
-            },
             \Pet\Application\Performance\Port\PerformanceRunStore::class => function () {
                 global $wpdb;
                 return new \Pet\Infrastructure\Persistence\Repository\SqlPerformanceRunStore($wpdb);
@@ -267,8 +263,7 @@ class ContainerFactory
                 return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementRepository();
             },
             \Pet\Domain\Feed\Repository\AnnouncementAcknowledgementRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementAcknowledgementRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\SqlAnnouncementAcknowledgementRepository();
             },
             \Pet\Domain\Feed\Repository\FeedReactionRepository::class => function () {
                 return new \Pet\Infrastructure\Persistence\Repository\SqlFeedReactionRepository();
@@ -424,12 +419,10 @@ class ContainerFactory
 
             // Conversation & Decision Repositories
             \Pet\Domain\Conversation\Repository\ConversationRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\Conversation\SqlConversationRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\Conversation\SqlConversationRepository();
             },
             \Pet\Domain\Conversation\Repository\DecisionRepository::class => function () {
-                global $wpdb;
-                return new \Pet\Infrastructure\Persistence\Repository\Conversation\SqlDecisionRepository($wpdb);
+                return new \Pet\Infrastructure\Persistence\Repository\Conversation\SqlDecisionRepository();
             },
             \Pet\Application\Conversation\Service\ActionGatingService::class => \DI\autowire(\Pet\Application\Conversation\Service\ActionGatingService::class),
             \Pet\Domain\Conversation\Service\ConversationAccessControl::class => \DI\autowire(\Pet\Domain\Conversation\Service\ConversationAccessControl::class),
@@ -445,7 +438,6 @@ class ContainerFactory
 
             // Application Handlers
             \Pet\Application\Delivery\Command\CreateProjectHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\CreateProjectHandler::class),
-            \Pet\Application\Delivery\Command\AddTaskHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\AddTaskHandler::class),
             \Pet\Application\Delivery\Command\UpdateProjectHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\UpdateProjectHandler::class),
             \Pet\Application\Delivery\Command\ArchiveProjectHandler::class => \DI\autowire(\Pet\Application\Delivery\Command\ArchiveProjectHandler::class),
             
@@ -453,6 +445,11 @@ class ContainerFactory
             \Pet\Application\Commercial\Command\UpdateQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\UpdateQuoteHandler::class),
             \Pet\Application\Commercial\Command\SendQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\SendQuoteHandler::class),
             \Pet\Application\Commercial\Command\AcceptQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AcceptQuoteHandler::class),
+            // Approval workflow
+            \Pet\Application\Commercial\Command\SubmitQuoteForApprovalHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\SubmitQuoteForApprovalHandler::class),
+            \Pet\Application\Commercial\Command\ApproveQuoteHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\ApproveQuoteHandler::class),
+            \Pet\Application\Commercial\Command\RejectQuoteApprovalHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\RejectQuoteApprovalHandler::class),
+            \Pet\Application\Commercial\Service\QuoteApprovalRulesService::class => \DI\autowire(\Pet\Application\Commercial\Service\QuoteApprovalRulesService::class),
             \Pet\Application\Commercial\Command\CreateProjectTicketHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\CreateProjectTicketHandler::class),
             \Pet\Application\Commercial\Command\SetPaymentScheduleHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\SetPaymentScheduleHandler::class),
             \Pet\Application\Commercial\Command\AddQuoteLineHandler::class => \DI\autowire(\Pet\Application\Commercial\Command\AddQuoteLineHandler::class),
@@ -604,6 +601,7 @@ class ContainerFactory
 
             \Pet\UI\Rest\Controller\ProjectController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\QuoteController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\QuotePdfController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\LeadController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\TimeEntryController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\StaffTimeCaptureController::class => \DI\autowire(),
@@ -647,10 +645,6 @@ class ContainerFactory
             \Pet\Application\System\Service\DemoPurgeService::class => function () {
                 global $wpdb;
                 return new \Pet\Application\System\Service\DemoPurgeService($wpdb);
-            },
-            \Pet\Application\System\Service\TouchedTracker::class => function () {
-                global $wpdb;
-                return new \Pet\Application\System\Service\TouchedTracker($wpdb);
             },
 
             // ── Pulseway RMM Integration ──

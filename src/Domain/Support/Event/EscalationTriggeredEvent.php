@@ -47,6 +47,11 @@ class EscalationTriggeredEvent implements DomainEvent, SourcedEvent
         return $this->ticketId;
     }
 
+    public function name(): string
+    {
+        return 'ticket.escalation_triggered';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

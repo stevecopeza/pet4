@@ -40,6 +40,11 @@ class TicketWarningEvent implements DomainEvent, SourcedEvent
         return $this->ticketId;
     }
 
+    public function name(): string
+    {
+        return 'ticket.sla_warning';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

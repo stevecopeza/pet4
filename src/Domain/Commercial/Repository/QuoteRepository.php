@@ -29,6 +29,13 @@ interface QuoteRepository
     public function findByLeadId(int $leadId): ?Quote;
 
     /**
+     * Returns all quotes currently in 'pending_approval' state.
+     *
+     * @return Quote[]
+     */
+    public function findPendingApproval(): array;
+
+    /**
      * @return array<string, int>
      */
     public function countByState(): array;

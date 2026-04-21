@@ -11,6 +11,7 @@ use Pet\Domain\Conversation\Entity\Decision;
 
 class ActionGatingService
 {
+    private const CLEAN_BASELINE_QUOTE_ACTION_GATING_BYPASS_TRANSIENT = 'pet_clean_baseline_quote_action_gating_bypass';
     private ConversationRepository $conversationRepository;
     private DecisionRepository $decisionRepository;
 
@@ -29,6 +30,9 @@ class ActionGatingService
 
     public function check(string $contextType, string $contextId, string $action, ?int $versionId = null): void
     {
+        if ($this->shouldBypassDuringCleanBaseline($contextType, $action)) {
+            return;
+        }
         // 1. Check if action requires any decisions
         $requiredTypes = self::REQUIRED_DECISIONS[$action] ?? [];
 
@@ -95,5 +99,17 @@ class ActionGatingService
         });
 
         return $matching[0];
+    }
+
+    private function shouldBypassDuringCleanBaseline(string $contextType, string $action): bool
+    {
+        if ($contextType !== 'quote' || !in_array($action, ['send_quote', 'accept_quote'], true)) {
+            return false;
+        }
+        if (!function_exists('get_transient')) {
+            return false;
+        }
+
+        return (bool) get_transient(self::CLEAN_BASELINE_QUOTE_ACTION_GATING_BYPASS_TRANSIENT);
     }
 }

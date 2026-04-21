@@ -20,11 +20,13 @@ composer.phar
 
 # Environment
 .env
+.env.local
 
 # Test cache
 .phpunit.result.cache
 
 # Playwright
 .auth/
+.auth/admin.json
 playwright-report/
 test-results/

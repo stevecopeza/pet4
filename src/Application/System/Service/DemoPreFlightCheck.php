@@ -32,7 +32,6 @@ class DemoPreFlightCheck
         $checks[] = $this->checkEventRegistryItem();
         $checks[] = $this->checkDomainDryRunCapabilities();
         $checks[] = $this->checkLeaveCapacitySchemaItem();
-        $this->ensureDemoSeedData();
 
         $overall = 'PASS';
         foreach ($checks as $item) {

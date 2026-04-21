@@ -8,6 +8,7 @@ use Pet\Domain\Commercial\Event\QuoteAccepted;
 use Pet\Application\Delivery\Command\CreateProjectCommand;
 use Pet\Application\Delivery\Command\CreateProjectHandler;
 use Pet\Domain\Commercial\Entity\Component\ImplementationComponent;
+use Pet\Domain\Commercial\Entity\Component\OnceOffServiceComponent;
 use Pet\Domain\Delivery\Repository\ProjectRepository;
 
 class CreateProjectFromQuoteListener
@@ -37,24 +38,31 @@ class CreateProjectFromQuoteListener
         // via CreateProjectTicketHandler — do NOT create legacy Task entities here.
         $soldHours = 0.0;
         $implementationValue = 0.0;
-        $hasImplementation = false;
+        $hasDeliveryComponents = false;
 
         foreach ($quote->components() as $component) {
             if ($component instanceof ImplementationComponent) {
-                $hasImplementation = true;
+                $hasDeliveryComponents = true;
                 $implementationValue += $component->sellValue();
                 foreach ($component->milestones() as $milestone) {
                     foreach ($milestone->tasks() as $task) {
                         $soldHours += $task->durationHours();
                     }
                 }
+            } elseif ($component instanceof OnceOffServiceComponent) {
+                $hasDeliveryComponents = true;
+                $implementationValue += $component->sellValue();
             }
         }
 
-        if ($hasImplementation) {
+        if ($hasDeliveryComponents) {
+            $projectName = trim($quote->title());
+            if ($projectName === '') {
+                $projectName = 'Project for Quote #' . $quote->id();
+            }
             $command = new CreateProjectCommand(
                 $quote->customerId(),
-                'Project for Quote #' . $quote->id(),
+                $projectName,
                 $soldHours,
                 $quote->id(),
                 $implementationValue,

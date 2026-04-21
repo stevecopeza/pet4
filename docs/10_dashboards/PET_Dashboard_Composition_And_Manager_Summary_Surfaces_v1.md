@@ -247,6 +247,7 @@ Complete manager-facing surfaces for:
 - advisory summary
 - support/workload summary
 - delivery summary where source data exists
+- delivery project drill-through that opens Delivery project detail workspace using `?page=pet-delivery#project=<id>`
 
 ### C. Role/scoped dashboard access
 Implement structural access control for dashboard views based on existing role/team/manager relationships.

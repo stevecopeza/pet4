@@ -11,6 +11,7 @@ use Pet\Application\Identity\Command\UpdateEmployeeCommand;
 use Pet\Application\Identity\Command\UpdateEmployeeHandler;
 use Pet\Application\Identity\Command\ArchiveEmployeeCommand;
 use Pet\Application\Identity\Command\ArchiveEmployeeHandler;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -43,12 +44,24 @@ class EmployeeController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getEmployees'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createEmployee'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
+            ],
+        ]);
+
+        // Provision endpoint: create a WP user account + employee record in one call.
+        // Accepts: firstName, lastName, email, portalRole (pet_sales|pet_hr|pet_manager),
+        //          hireDate, managerId, status.
+        // If a WP user already exists with that email, it is reused.
+        register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/provision', [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'provisionEmployee'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -56,12 +69,12 @@ class EmployeeController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateEmployee'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'archiveEmployee'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -69,14 +82,24 @@ class EmployeeController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getAvailableUsers'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
         ]);
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_hr', 'pet_manager');
     }
 
     public function getAvailableUsers(WP_REST_Request $request): WP_REST_Response
@@ -161,7 +184,7 @@ class EmployeeController implements RestController
 
             return new WP_REST_Response(['message' => 'Employee created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -192,7 +215,7 @@ class EmployeeController implements RestController
 
             return new WP_REST_Response(['message' => 'Employee updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -206,7 +229,93 @@ class EmployeeController implements RestController
 
             return new WP_REST_Response(['message' => 'Employee archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
+        }
+    }
+
+    /**
+     * provisionEmployee
+     *
+     * Creates (or reuses) a WP user account and links it to a new Employee record.
+     * Grants the requested portal capability to the WP user.
+     *
+     * Required body fields: firstName, lastName, email
+     * Optional: portalRole (pet_sales|pet_hr|pet_manager), hireDate, managerId, status
+     */
+    public function provisionEmployee(WP_REST_Request $request): WP_REST_Response
+    {
+        $params = $request->get_json_params();
+
+        $firstName = trim($params['firstName'] ?? '');
+        $lastName  = trim($params['lastName'] ?? '');
+        $email     = sanitize_email($params['email'] ?? '');
+
+        if (!$firstName || !$lastName || !$email) {
+            return new WP_REST_Response(['message' => 'firstName, lastName and email are required.'], 400);
+        }
+
+        // ── Step 1: Resolve or create WP user ────────────────
+        $existingUserId = email_exists($email);
+        if ($existingUserId) {
+            $wpUserId = (int) $existingUserId;
+        } else {
+            $username  = sanitize_user(strtolower($firstName . '.' . $lastName), true);
+            $base      = $username;
+            $suffix    = 1;
+            while (username_exists($username)) {
+                $username = $base . $suffix++;
+            }
+
+            $newUserId = wp_create_user($username, wp_generate_password(16, true, true), $email);
+            if (is_wp_error($newUserId)) {
+                return new WP_REST_Response(['message' => $newUserId->get_error_message()], 422);
+            }
+
+            // Set display name
+            wp_update_user([
+                'ID'           => $newUserId,
+                'display_name' => $firstName . ' ' . $lastName,
+                'first_name'   => $firstName,
+                'last_name'    => $lastName,
+            ]);
+
+            $wpUserId = (int) $newUserId;
+        }
+
+        // ── Step 2: Grant portal capability ──────────────────
+        $allowedCaps = ['pet_sales', 'pet_hr', 'pet_manager', 'pet_staff'];
+        $portalRole  = $params['portalRole'] ?? '';
+        if (in_array($portalRole, $allowedCaps, true)) {
+            $wpUser = get_user_by('id', $wpUserId);
+            if ($wpUser) {
+                $wpUser->add_cap($portalRole);
+            }
+        }
+
+        // ── Step 3: Create the Employee record ────────────────
+        try {
+            $command = new CreateEmployeeCommand(
+                $wpUserId,
+                $firstName,
+                $lastName,
+                $email,
+                $params['status'] ?? 'active',
+                !empty($params['hireDate']) ? new \DateTimeImmutable($params['hireDate']) : null,
+                !empty($params['managerId']) ? (int) $params['managerId'] : null,
+                $params['malleableData'] ?? [],
+                $params['teamIds'] ?? []
+            );
+
+            $this->createEmployeeHandler->handle($command);
+
+            return new WP_REST_Response([
+                'message'    => 'Employee provisioned successfully.',
+                'wpUserId'   => $wpUserId,
+                'isNewUser'  => !$existingUserId,
+                'portalRole' => $portalRole ?: null,
+            ], 201);
+        } catch (\Exception $e) {
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 }

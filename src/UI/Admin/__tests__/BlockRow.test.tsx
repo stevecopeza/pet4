@@ -75,6 +75,29 @@ describe('BlockRow', () => {
     expect(screen.getByText('$200.00')).toBeInTheDocument();
   });
 
+  it('shows margin amount and percentage when backend margin data exists', () => {
+    renderRow(
+      makeBlock({
+        marginAmount: 80,
+        marginPercentage: 40,
+        hasMarginData: true,
+      })
+    );
+    expect(screen.getByText('$80.00')).toBeInTheDocument();
+    expect(screen.getByText('40.0%')).toBeInTheDocument();
+  });
+
+  it('shows em dash when margin data is unavailable', () => {
+    renderRow(
+      makeBlock({
+        marginAmount: null,
+        marginPercentage: null,
+        hasMarginData: false,
+      })
+    );
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
   it('calls onEdit when row is clicked (not editing)', () => {
     const cbs = makeCallbacks();
     renderRow(makeBlock(), cbs);

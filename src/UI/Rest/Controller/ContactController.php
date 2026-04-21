@@ -11,6 +11,7 @@ use Pet\Application\Identity\Command\UpdateContactCommand;
 use Pet\Application\Identity\Command\UpdateContactHandler;
 use Pet\Application\Identity\Command\ArchiveContactCommand;
 use Pet\Application\Identity\Command\ArchiveContactHandler;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -43,12 +44,12 @@ class ContactController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getContacts'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => [$this, 'createContact'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
 
@@ -56,12 +57,12 @@ class ContactController implements RestController
             [
                 'methods' => WP_REST_Server::EDITABLE,
                 'callback' => [$this, 'updateContact'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
             [
                 'methods' => WP_REST_Server::DELETABLE,
                 'callback' => [$this, 'archiveContact'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkPortalPermission'],
             ],
         ]);
     }
@@ -69,6 +70,11 @@ class ContactController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getContacts(WP_REST_Request $request): WP_REST_Response
@@ -135,7 +141,7 @@ class ContactController implements RestController
 
             return new WP_REST_Response(['message' => 'Contact created successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -159,7 +165,7 @@ class ContactController implements RestController
 
             return new WP_REST_Response(['message' => 'Contact updated successfully'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -173,7 +179,7 @@ class ContactController implements RestController
 
             return new WP_REST_Response(['message' => 'Contact archived successfully'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 }

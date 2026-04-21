@@ -34,6 +34,11 @@ class ContractCreated implements DomainEvent, SourcedEvent
         return (int)$this->contract->id();
     }
 
+    public function name(): string
+    {
+        return 'contract.created';
+    }
+
     public function aggregateType(): string
     {
         return 'contract';

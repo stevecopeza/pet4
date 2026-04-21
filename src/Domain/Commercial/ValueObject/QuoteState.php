@@ -6,11 +6,13 @@ namespace Pet\Domain\Commercial\ValueObject;
 
 class QuoteState
 {
-    public const DRAFT = 'draft';
-    public const SENT = 'sent';
-    public const ACCEPTED = 'accepted';
-    public const REJECTED = 'rejected';
-    public const ARCHIVED = 'archived';
+    public const DRAFT            = 'draft';
+    public const PENDING_APPROVAL = 'pending_approval';
+    public const APPROVED         = 'approved';
+    public const SENT             = 'sent';
+    public const ACCEPTED         = 'accepted';
+    public const REJECTED         = 'rejected';   // customer rejection
+    public const ARCHIVED         = 'archived';
 
     private string $value;
 
@@ -19,36 +21,30 @@ class QuoteState
         $this->value = $value;
     }
 
-    public static function draft(): self
-    {
-        return new self(self::DRAFT);
-    }
-
-    public static function sent(): self
-    {
-        return new self(self::SENT);
-    }
-
-    public static function accepted(): self
-    {
-        return new self(self::ACCEPTED);
-    }
-
-    public static function rejected(): self
-    {
-        return new self(self::REJECTED);
-    }
-
-    public static function archived(): self
-    {
-        return new self(self::ARCHIVED);
-    }
+    public static function draft(): self            { return new self(self::DRAFT); }
+    public static function pendingApproval(): self  { return new self(self::PENDING_APPROVAL); }
+    public static function approved(): self         { return new self(self::APPROVED); }
+    public static function sent(): self             { return new self(self::SENT); }
+    public static function accepted(): self         { return new self(self::ACCEPTED); }
+    public static function rejected(): self         { return new self(self::REJECTED); }
+    public static function archived(): self         { return new self(self::ARCHIVED); }
 
     public static function fromString(string $status): self
     {
-        if (!in_array($status, [self::DRAFT, self::SENT, self::ACCEPTED, self::REJECTED, self::ARCHIVED], true)) {
+        $valid = [
+            self::DRAFT,
+            self::PENDING_APPROVAL,
+            self::APPROVED,
+            self::SENT,
+            self::ACCEPTED,
+            self::REJECTED,
+            self::ARCHIVED,
+        ];
+
+        if (!in_array($status, $valid, true)) {
             throw new \InvalidArgumentException("Invalid quote state: $status");
         }
+
         return new self($status);
     }
 
@@ -59,22 +55,58 @@ class QuoteState
 
     public function canTransitionTo(self $newState): bool
     {
-        // Transitions from Draft
-        if ($this->value === self::DRAFT) {
-            return in_array($newState->value, [self::SENT, self::ARCHIVED], true);
-        }
+        return match ($this->value) {
+            // Draft: submit for approval OR send directly (if no approval required) OR archive
+            self::DRAFT => in_array($newState->value, [
+                self::PENDING_APPROVAL,
+                self::SENT,
+                self::ARCHIVED,
+            ], true),
 
-        // Transitions from Sent
-        if ($this->value === self::SENT) {
-            return in_array($newState->value, [self::ACCEPTED, self::REJECTED, self::ARCHIVED, self::DRAFT], true); // Allow revert to draft?
-        }
+            // Pending approval: manager approves, manager rejects (returns to draft), or archived
+            self::PENDING_APPROVAL => in_array($newState->value, [
+                self::APPROVED,
+                self::DRAFT,     // rejection — returns to draft with a note
+                self::ARCHIVED,
+            ], true),
 
-        // Terminal states
-        return false;
+            // Approved: sales person sends, or reverts to draft if they want to make changes
+            self::APPROVED => in_array($newState->value, [
+                self::SENT,
+                self::DRAFT,
+                self::ARCHIVED,
+            ], true),
+
+            // Sent: customer accepts, customer rejects, revert to draft, or archive
+            self::SENT => in_array($newState->value, [
+                self::ACCEPTED,
+                self::REJECTED,
+                self::DRAFT,
+                self::ARCHIVED,
+            ], true),
+
+            // Terminal states — no further transitions
+            default => false,
+        };
     }
 
     public function isTerminal(): bool
     {
         return in_array($this->value, [self::ACCEPTED, self::REJECTED, self::ARCHIVED], true);
+    }
+
+    public function requiresApprovalStep(): bool
+    {
+        return $this->value === self::PENDING_APPROVAL;
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->value === self::APPROVED;
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->value === self::PENDING_APPROVAL;
     }
 }

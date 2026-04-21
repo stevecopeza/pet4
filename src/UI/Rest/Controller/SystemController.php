@@ -452,7 +452,13 @@ class SystemController implements RestController
         $upload = wp_upload_dir();
         $backupDir = trailingslashit($upload['basedir']) . 'pet-backups';
         wp_mkdir_p($backupDir);
-        $backupPath = $backupDir . '/pet-only-reset-' . date('Ymd-His') . '.sql';
+        // Deny web access on Apache; random token defends against enumeration on nginx.
+        $htaccess = $backupDir . '/.htaccess';
+        if (!file_exists($htaccess)) {
+            file_put_contents($htaccess, "Deny from all\n");
+        }
+        $token = bin2hex(random_bytes(8));
+        $backupPath = $backupDir . '/pet-only-reset-' . date('Ymd-His') . '-' . $token . '.sql';
         $resp['backup']['attempted'] = true;
         try {
             $fp = fopen($backupPath, 'w');

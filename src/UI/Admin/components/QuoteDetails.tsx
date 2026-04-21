@@ -110,6 +110,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     confirmLabel: string;
     resolve: (confirmed: boolean) => void;
   } | null>(null);
+  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [rejectNoteInput, setRejectNoteInput] = useState('');
 
   const requestConfirmation = (title: string, description: string, confirmLabel: string) => new Promise<boolean>((resolve) => {
     setPendingConfirmation({ title, description, confirmLabel, resolve });
@@ -696,6 +698,82 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
     }
   };
 
+  const handleSubmitForApproval = async () => {
+    const confirmed = await requestConfirmation(
+      'Submit for approval?',
+      'This will send the quote to a manager for review before it can be sent to the customer.',
+      'Submit'
+    );
+    if (!confirmed) return;
+    try {
+      setLoading(true);
+      const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/submit-for-approval`, {
+        method: 'POST',
+        headers: { 'X-WP-Nonce': window.petSettings.nonce },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || 'Failed to submit for approval');
+      if (data) setQuote(data);
+      toast.success('Quote submitted for manager approval.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error submitting for approval');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveQuote = async () => {
+    const confirmed = await requestConfirmation(
+      'Approve quote?',
+      'This will approve the quote and allow it to be sent to the customer.',
+      'Approve'
+    );
+    if (!confirmed) return;
+    try {
+      setLoading(true);
+      const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/approve`, {
+        method: 'POST',
+        headers: { 'X-WP-Nonce': window.petSettings.nonce },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || 'Failed to approve quote');
+      if (data) setQuote(data);
+      toast.success('Quote approved — ready to send.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error approving quote');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectApproval = async () => {
+    if (!rejectNoteInput.trim()) {
+      toast.error('Please enter a rejection note so the sales person knows what to fix.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await fetch(`${window.petSettings.apiUrl}/quotes/${quoteId}/reject-approval`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': window.petSettings.nonce,
+        },
+        body: JSON.stringify({ note: rejectNoteInput }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.error) || 'Failed to reject approval');
+      if (data) setQuote(data);
+      setShowRejectForm(false);
+      setRejectNoteInput('');
+      toast.success('Quote returned to draft with rejection note.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error rejecting quote');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAdjustmentAdded = (quoteData?: any) => {
     setShowAdjustmentForm(false);
     if (quoteData && typeof quoteData === 'object') {
@@ -1055,6 +1133,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         ownerId: payload.ownerId ?? null,
         teamId: payload.teamId ?? null,
         totalValue: payload.totalValue ?? payload.sellValue ?? 0,
+        unitCost: payload.unitCost ?? null,
+        totalCost: payload.totalCost ?? null,
         type: block.type,
       };
 
@@ -1070,11 +1150,13 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           payload.unit_price ??
           payload.sellValue ??
           0;
-    } else if (block.type === 'OnceOffSimpleServiceBlock') {
+        draft.unitCost = payload.unitCost ?? null;
+      } else if (block.type === 'OnceOffSimpleServiceBlock') {
         draft.catalogItemId = payload.catalogItemId ?? null;
         draft.roleId = payload.roleId ?? null;
         draft.unit = payload.unit ?? 'hours';
         draft.price_override = payload.price_override ?? false;
+        draft.unitCost = payload.unitCost ?? null;
       } else if (block.type === 'OnceOffProjectBlock') {
         draft.phases = Array.isArray(payload.phases) ? payload.phases : [];
       }
@@ -1111,7 +1193,15 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       const sellValue = Number.isFinite(Number(draft.sellValue))
         ? Number(draft.sellValue)
         : 0;
+      const unitCost = Number.isFinite(Number(draft.unitCost))
+        ? Number(draft.unitCost)
+        : null;
       const totalValue = quantity * sellValue;
+      const totalCost = unitCost !== null
+        ? unitCost * quantity
+        : Number.isFinite(Number(draft.totalCost))
+        ? Number(draft.totalCost)
+        : null;
       normalizedPayload = {
         description: draft.description ?? '',
         quantity,
@@ -1134,9 +1224,12 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           typeof draft.roleId === 'number' && Number.isFinite(draft.roleId)
             ? draft.roleId
             : null,
+        ...(unitCost !== null ? { unitCost } : {}),
+        ...(totalCost !== null ? { totalCost } : {}),
       };
     } else if (block.type === 'OnceOffProjectBlock') {
       const rawPhases = Array.isArray(draft.phases) ? draft.phases : [];
+      let totalCost: number | null = 0;
 
       const phases = rawPhases.map((phase: any, index: number) => {
         const phaseId =
@@ -1146,6 +1239,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
 
         const unitsRaw = Array.isArray(phase.units) ? phase.units : [];
         let phaseTotalValue = 0;
+        let phaseTotalCost: number | null = 0;
 
         const units = unitsRaw.map((unit: any, unitIndex: number) => {
           const unitId =
@@ -1160,6 +1254,21 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
             : 0;
           const totalValue = quantity * unitPrice;
           phaseTotalValue += totalValue;
+          const unitCost = Number.isFinite(Number(unit.unitCost))
+            ? Number(unit.unitCost)
+            : null;
+          const totalCost = unitCost !== null
+            ? unitCost * quantity
+            : Number.isFinite(Number(unit.totalCost))
+            ? Number(unit.totalCost)
+            : null;
+          if (phaseTotalCost !== null) {
+            if (totalCost === null) {
+              phaseTotalCost = null;
+            } else {
+              phaseTotalCost += totalCost;
+            }
+          }
 
           return {
             id: unitId,
@@ -1185,16 +1294,36 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
               typeof unit.roleId === 'number' && Number.isFinite(unit.roleId)
                 ? unit.roleId
                 : null,
+            ...(unitCost !== null ? { unitCost } : {}),
+            ...(totalCost !== null ? { totalCost } : {}),
           };
         });
 
-        return {
+        const phasePayload: Record<string, any> = {
           id: phaseId,
           name: phase.name ?? '',
           order: typeof phase.order === 'number' ? phase.order : index,
           units,
           phaseTotalValue,
         };
+        if (phaseTotalCost !== null) {
+          phasePayload.phaseTotalCost = phaseTotalCost;
+        } else if (Number.isFinite(Number(phase.phaseTotalCost))) {
+          phasePayload.phaseTotalCost = Number(phase.phaseTotalCost);
+        }
+
+        const phaseCostForTotal = typeof phasePayload.phaseTotalCost === 'number'
+          ? phasePayload.phaseTotalCost
+          : null;
+        if (totalCost !== null) {
+          if (phaseCostForTotal === null) {
+            totalCost = null;
+          } else {
+            totalCost += phaseCostForTotal;
+          }
+        }
+
+        return phasePayload;
       });
 
       const totalValue = phases.reduce(
@@ -1206,6 +1335,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         description: draft.description ?? '',
         phases,
         totalValue,
+        ...(totalCost !== null
+          ? { totalCost }
+          : Number.isFinite(Number(draft.totalCost))
+          ? { totalCost: Number(draft.totalCost) }
+          : {}),
       };
     } else if (block.type === 'HardwareBlock') {
       const quantity = Number.isFinite(Number(draft.quantity))
@@ -1214,7 +1348,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
       const unitPrice = Number.isFinite(Number(draft.unitPrice))
         ? Number(draft.unitPrice)
         : 0;
+      const unitCost = Number.isFinite(Number(draft.unitCost))
+        ? Number(draft.unitCost)
+        : null;
       const totalValue = quantity * unitPrice;
+      const totalCost = unitCost !== null ? unitCost * quantity : null;
       normalizedPayload = {
         catalogItemId:
           draft.catalogItemId !== undefined ? draft.catalogItemId : null,
@@ -1222,6 +1360,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
         quantity,
         unitPrice,
         totalValue,
+        ...(unitCost !== null ? { unitCost } : {}),
+        ...(totalCost !== null ? { totalCost } : {}),
       };
     } else if (block.type === 'PriceAdjustmentBlock') {
       const amount = Number.isFinite(Number(draft.amount)) ? Number(draft.amount) : 0;
@@ -1816,15 +1956,51 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           {quote.state === 'draft' && (
             <>
               <button className="button" onClick={handleSaveDraft} disabled={loading}>Save Draft</button>
-              <button
-                className="button button-primary"
-                onClick={handleSend}
-                disabled={!isReady}
-                title={!isReady ? readinessIssues.join('\n') : 'Send to customer'}
-              >
-                Send Quote
-              </button>
+              {quote.approvalState?.requiresApprovalForSend ? (
+                <button
+                  className="button button-primary"
+                  onClick={handleSubmitForApproval}
+                  disabled={!isReady || loading}
+                  title={!isReady ? readinessIssues.join('\n') : 'Submit to manager for approval before sending'}
+                >
+                  Submit for Approval
+                </button>
+              ) : (
+                <button
+                  className="button button-primary"
+                  onClick={handleSend}
+                  disabled={!isReady || loading}
+                  title={!isReady ? readinessIssues.join('\n') : 'Send to customer'}
+                >
+                  Send Quote
+                </button>
+              )}
             </>
+          )}
+          {quote.state === 'pending_approval' && (
+            <>
+              <span style={{ color: '#856404', background: '#fff3cd', border: '1px solid #ffc107', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', fontWeight: 500 }}>
+                ⏳ Awaiting Manager Approval
+              </span>
+              <button className="button button-primary" onClick={handleApproveQuote} disabled={loading}>
+                Approve
+              </button>
+              {!showRejectForm && (
+                <button className="button" onClick={() => setShowRejectForm(true)} disabled={loading}>
+                  Reject
+                </button>
+              )}
+            </>
+          )}
+          {quote.state === 'approved' && (
+            <button
+              className="button button-primary"
+              onClick={handleSend}
+              disabled={!isReady || loading}
+              title={!isReady ? readinessIssues.join('\n') : 'Send approved quote to customer'}
+            >
+              Send Quote
+            </button>
           )}
           {quote.state === 'sent' && (
             <button className="button button-primary" onClick={handleAccept}>Accept Quote</button>
@@ -1853,6 +2029,42 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
           })()}
         </div>
       </div>
+
+      {/* Inline reject form — shown when manager clicks Reject in pending_approval */}
+      {quote.state === 'pending_approval' && showRejectForm && (
+        <div style={{ margin: '12px 0', padding: '14px 16px', background: '#fff8f0', border: '1px solid #f5c6cb', borderRadius: '4px' }}>
+          <strong style={{ display: 'block', marginBottom: '8px', color: '#842029' }}>Rejection note</strong>
+          <p style={{ margin: '0 0 8px', fontSize: '13px', color: '#555' }}>
+            Explain what needs to change before this quote can be approved. This note will be visible to the sales person.
+          </p>
+          <textarea
+            rows={3}
+            style={{ width: '100%', maxWidth: '700px', boxSizing: 'border-box', marginBottom: '8px' }}
+            placeholder="e.g. Discount exceeds 20% on line 3 — please reduce or get sign-off from the director first."
+            value={rejectNoteInput}
+            onChange={(e) => setRejectNoteInput(e.target.value)}
+          />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="button button-primary" onClick={handleRejectApproval} disabled={loading}>
+              Confirm Rejection
+            </button>
+            <button className="button" onClick={() => { setShowRejectForm(false); setRejectNoteInput(''); }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection note banner — shown when quote returns to draft after being rejected */}
+      {quote.state === 'draft' && quote.approvalState?.rejectionNote && (
+        <div style={{ margin: '12px 0', padding: '12px 16px', background: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '4px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          <span style={{ fontSize: '18px', lineHeight: 1 }}>⚠️</span>
+          <div>
+            <strong style={{ display: 'block', marginBottom: '4px', color: '#842029' }}>This quote was returned for revision</strong>
+            <span style={{ fontSize: '13px', color: '#555' }}>{quote.approvalState.rejectionNote}</span>
+          </div>
+        </div>
+      )}
 
       {/* Metadata strip */}
       <div className="pet-quote-meta">
@@ -2334,14 +2546,15 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                   >
                     <thead>
                       <tr>
-                        <th style={{ textAlign: 'left', padding: '10px', width: '25%' }}>Description</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '23%' }}>Description</th>
                         <th style={{ textAlign: 'left', padding: '10px', width: '10%' }}>Role</th>
-                        <th style={{ textAlign: 'left', padding: '10px', width: '12%' }}>Owner/Team</th>
+                        <th style={{ textAlign: 'left', padding: '10px', width: '11%' }}>Owner/Team</th>
                         <th style={{ textAlign: 'right', padding: '10px', width: '6%' }}>Qty</th>
                         <th style={{ textAlign: 'center', padding: '10px', width: '7%' }}>Unit</th>
                         <th style={{ textAlign: 'right', padding: '10px', width: '10%' }}>Unit Price</th>
-                        <th style={{ textAlign: 'right', padding: '10px', width: '12%' }}>Total</th>
-                        <th style={{ textAlign: 'right', padding: '10px', width: '8%' }}>Actions</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '10%' }}>Total</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '13%' }}>Margin</th>
+                        <th style={{ textAlign: 'right', padding: '10px', width: '10%' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2385,6 +2598,8 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                 quantity: draft.quantity ?? 1,
                                 unit: draft.unit ?? 'hours',
                                 sellValue: draft.sellValue ?? 0,
+                                unitCost: draft.unitCost ?? null,
+                                totalCost: draft.totalCost ?? null,
                                 price_override: draft.price_override ?? false,
                               }}
                               onDraftChange={(field, value) => updateBlockDraft(block.id, field, value)}
@@ -2397,6 +2612,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                               employees={employees}
                               teams={teams}
                               ownerOptions={draft.roleId ? ownerOptionsCache[draft.roleId] ?? null : null}
+                              onCatalogItemCreated={(item) => setCatalogItems((prev) => [...prev, item])}
                               onRoleChange={(roleId) => {
                                 if (roleId) fetchOwnerOptions(roleId);
                                 // Prepopulate price from rate card
@@ -2436,13 +2652,17 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                 }}
                               />
                               <tr>
-                                <td colSpan={8} style={{ padding: 0, background: '#f8f9fa', borderLeft: projectDirty ? '3px solid #46b450' : '3px solid transparent' }}>
+                                <td colSpan={9} style={{ padding: 0, background: '#f8f9fa', borderLeft: projectDirty ? '3px solid #46b450' : '3px solid transparent' }}>
                                       <ProjectBlockEditor
                                         draft={{
                                           description: projectDraft.description ?? '',
                                           phases: (Array.isArray(projectDraft.phases) ? projectDraft.phases : []).map((phase: any) => ({
                                             id: phase.id ?? null,
                                             name: phase.name ?? '',
+                                            phaseTotalCost: phase.phaseTotalCost ?? null,
+                                            marginAmount: phase.marginAmount ?? null,
+                                            marginPercentage: phase.marginPercentage ?? null,
+                                            hasMarginData: phase.hasMarginData ?? false,
                                             units: (Array.isArray(phase.units) ? phase.units : []).map((unit: any) => ({
                                               id: unit.id ?? null,
                                               title: unit.description ?? '',
@@ -2458,6 +2678,11 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                               unit: unit.unit ?? 'hours',
                                               unitPrice: unit.unitPrice ?? 0,
                                               totalValue: unit.totalValue ?? 0,
+                                              unitCost: unit.unitCost ?? null,
+                                              totalCost: unit.totalCost ?? null,
+                                              marginAmount: unit.marginAmount ?? null,
+                                              marginPercentage: unit.marginPercentage ?? null,
+                                              hasMarginData: unit.hasMarginData ?? false,
                                               price_override: unit.price_override ?? false,
                                             })),
                                           })),
@@ -2512,7 +2737,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                                   </tr>
                                   {projectDirty && (
                                   <tr>
-                                    <td colSpan={8} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450', textAlign: 'right' }}>
+                                    <td colSpan={9} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450', textAlign: 'right' }}>
                                       <button
                                         className="button button-primary"
                                         onClick={() => saveBlock(block)}
@@ -2571,7 +2796,7 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
                             />
                             {isExpanded && (
                               <tr>
-                                <td colSpan={8} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450' }}>
+                                <td colSpan={9} style={{ padding: '10px', background: '#f8f9fa', borderLeft: '3px solid #46b450' }}>
                                   {block.type === 'HardwareBlock' && (
                                     <div
                                       style={{

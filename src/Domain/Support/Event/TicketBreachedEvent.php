@@ -40,6 +40,11 @@ class TicketBreachedEvent implements DomainEvent, SourcedEvent
         return $this->ticketId;
     }
 
+    public function name(): string
+    {
+        return 'ticket.sla_breached';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

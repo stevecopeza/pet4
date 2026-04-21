@@ -32,6 +32,7 @@ Forbidden:
 Allowed:
 - view dashboard panels and KPI summaries
 - drill into underlying records in their owning surfaces
+- in Project Manager persona, open Delivery project detail by clicking a project card (`?page=pet-delivery#project=<id>`)
 
 Forbidden:
 - direct mutation from dashboard panels
@@ -156,6 +157,8 @@ Forbidden:
 Allowed:
 - view and manage delivery records within domain constraints
 - drill into project/task context
+- open a specific project directly in detail workspace via URL hash (`#project=<id>`)
+- return from detail workspace to project list using explicit back navigation
 
 Forbidden:
 - mutation paths that bypass sold/baseline governance constraints

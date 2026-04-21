@@ -20,6 +20,9 @@ class TicketCreatedListener
     public function __invoke(TicketCreated $event): void
     {
         $ticket = $event->ticket();
+        if ($ticket->lifecycleOwner() === 'project' && $ticket->quoteId() !== null) {
+            return;
+        }
         
         // Idempotency Guard
         $existingLogs = $this->activityLogRepository->findByRelatedEntity('ticket', $ticket->id());

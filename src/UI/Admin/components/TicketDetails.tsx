@@ -207,7 +207,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
     fetchActivity();
   }, [ticket.id]);
 
-  const handleSave = async () => {
+  const handleSave = async (overrides?: { status?: string; priority?: string }) => {
     try {
       setSaving(true);
       const apiUrl = (window as any).petSettings?.apiUrl;
@@ -222,8 +222,10 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
           'X-WP-Nonce': nonce,
         },
         body: JSON.stringify({
-          status,
-          priority,
+          subject: ticket.subject,
+          description: ticket.description,
+          status: overrides?.status ?? status,
+          priority: overrides?.priority ?? priority,
         }),
       });
 
@@ -239,6 +241,28 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleReply = () => {
+    openConversation({
+      contextType: 'ticket',
+      contextId: String(ticket.id),
+      subject: `Reply: Ticket #${ticket.id}: ${ticket.subject}`,
+      subjectKey: `ticket_reply:${ticket.id}`,
+    });
+  };
+
+  const handleCloseTicket = async () => {
+    const allowedStatuses = new Set(
+      statusOptions.map((opt) => String(opt.value).toLowerCase())
+    );
+    const nextStatus = allowedStatuses.has('resolved')
+      ? 'resolved'
+      : allowedStatuses.has('closed')
+      ? 'closed'
+      : status;
+    await handleSave({ status: nextStatus });
+    setStatus(nextStatus);
   };
 
   const getSlaStatusColor = (status?: string) => {
@@ -449,7 +473,7 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
         )}
         {isEditing && (
           <>
-            <button type="button" className="button button-primary" onClick={handleSave} disabled={saving} style={{ marginLeft: '10px' }}>
+            <button type="button" className="button button-primary" onClick={() => { void handleSave(); }} disabled={saving} style={{ marginLeft: '10px' }}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <button type="button" className="button" onClick={() => setIsEditing(false)} disabled={saving} style={{ marginLeft: '10px' }}>Cancel</button>
@@ -687,10 +711,21 @@ const TicketDetails: React.FC<TicketDetailsProps> = ({ ticket, onBack }) => {
                 <div style={{ fontSize: '0.78em', color: '#888', marginTop: '4px', textAlign: 'center' }}>Requires Pulseway agent access</div>
               </div>
             )}
-            <button type="button" className="button button-large" disabled style={{ width: '100%', marginBottom: '10px' }}>
+            <button
+              type="button"
+              className="button button-large"
+              style={{ width: '100%', marginBottom: '10px' }}
+              onClick={handleReply}
+            >
               Reply
             </button>
-            <button type="button" className="button button-large" disabled style={{ width: '100%' }}>
+            <button
+              type="button"
+              className="button button-large"
+              style={{ width: '100%' }}
+              onClick={handleCloseTicket}
+              disabled={saving}
+            >
               Close Ticket
             </button>
           </div>

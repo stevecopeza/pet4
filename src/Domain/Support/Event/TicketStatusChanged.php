@@ -60,6 +60,11 @@ class TicketStatusChanged implements DomainEvent, SourcedEvent
         return (int)$this->ticket->id();
     }
 
+    public function name(): string
+    {
+        return 'ticket.status_changed';
+    }
+
     public function aggregateType(): string
     {
         return 'ticket';

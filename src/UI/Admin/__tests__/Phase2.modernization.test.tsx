@@ -118,7 +118,7 @@ describe('Phase 2 modernization regression guards - Projects', () => {
     });
 
     renderWithToast(<Projects />);
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText('No projects found.')).not.toBeInTheDocument();
 
     deferredProjects.resolve(new Response(JSON.stringify([]), { status: 200 }));
     await screen.findByText('No projects found.');

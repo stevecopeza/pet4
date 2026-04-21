@@ -910,6 +910,13 @@
   border-color: #d9e7f7;
 }
 
+.pet-projects-filters-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
 .pet-projects-filters-grid,
 .pet-employees-filters-grid {
   display: grid;
@@ -948,6 +955,32 @@
   display: flex;
   justify-content: flex-start;
   align-items: end;
+}
+
+.pet-projects-filter-field--search {
+  flex: 1 1 320px;
+}
+
+.pet-projects-filter-field--state {
+  flex: 0 1 220px;
+}
+
+.pet-projects-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  background: #f8fbff;
+  color: #294a6a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pet-projects-filter-toggle input[type='checkbox'] {
+  margin: 0;
 }
 
 .pet-projects-preset-bar,
@@ -1029,6 +1062,16 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
+.pet-projects-list-panel {
+  overflow: hidden;
+}
+
+.pet-projects-selector-shell {
+  background: #f8fafc;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 10px;
+}
 
 .pet-projects-table-header,
 .pet-employees-table-header {
@@ -1068,6 +1111,213 @@
   background: #f1f7ff;
 }
 
+.pet-projects-table-panel .pet-project-row--selected > th,
+.pet-projects-table-panel .pet-project-row--selected > td {
+  background: #eaf3ff !important;
+}
+
+.pet-projects-table-panel .pet-project-row--selected > *:first-child {
+  box-shadow: inset 3px 0 0 #2271b1;
+}
+
+.pet-projects-table-panel .pet-project-row--selected .pet-project-row-link {
+  color: #0f4f80;
+  font-weight: 700;
+}
+
+.pet-projects-workspace-panel {
+  padding: 10px;
+}
+
+.pet-projects-detail-view-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  border-color: #cfe0f4;
+}
+
+.pet-projects-detail-back-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.pet-projects-back-button {
+  font-weight: 700;
+}
+
+.pet-projects-workspace-empty {
+  text-align: left;
+  padding: 14px;
+}
+
+.pet-project-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pet-project-workspace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: start;
+  border: 1px solid #bfd6ff;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  padding: 12px 14px;
+}
+
+.pet-project-workspace-title {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #101828;
+  line-height: 1.25;
+}
+
+.pet-project-workspace-subtitle {
+  margin: 5px 0 0;
+  color: #344054;
+  font-size: 12px;
+}
+
+.pet-project-workspace-attention {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pet-project-workspace-metrics {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.pet-project-workspace-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid #d7e6f8;
+}
+
+.pet-projects-ticket-panel {
+  border: 1px solid #d7e1ed;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.pet-project-ticket-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.pet-project-ticket-workspace--drawer-open {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+}
+
+.pet-project-ticket-drawer {
+  border: 1px solid #d7e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
+  padding: 12px;
+  position: sticky;
+  top: 10px;
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+}
+
+.pet-project-ticket-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.pet-project-ticket-drawer-title {
+  margin: 0;
+  color: #101828;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.pet-project-ticket-drawer-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #667085;
+}
+
+.pet-project-ticket-drawer-close {
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
+.pet-project-ticket-drawer-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.pet-project-ticket-drawer-section {
+  margin-bottom: 12px;
+}
+
+.pet-project-ticket-drawer-section h5 {
+  margin: 0 0 6px;
+  color: #1f2f45;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.pet-project-ticket-drawer-description {
+  white-space: pre-wrap;
+  color: #344054;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.pet-project-ticket-drawer-context-grid {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #344054;
+}
+
+.pet-project-ticket-drawer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid #e4edf8;
+  padding-top: 10px;
+}
+
+.pet-project-details .pet-project-ticket-row--selected > th,
+.pet-project-details .pet-project-ticket-row--selected > td {
+  background: #eaf3ff !important;
+}
+
+.pet-project-details .pet-project-ticket-row--selected > *:first-child {
+  box-shadow: inset 3px 0 0 #2271b1;
+}
+
+.pet-project-details-ticket-table--embedded .pet-data-table-container {
+  padding: 0;
+}
+
 .pet-project-row-primary,
 .pet-employee-row-primary {
   display: inline-flex;
@@ -1080,6 +1330,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.pet-project-row-primary .pet-project-row-title-line {
+  align-items: flex-start;
 }
 
 .pet-project-row-link,
@@ -1096,6 +1350,12 @@
 .pet-project-row-link:hover,
 .pet-employee-row-link:hover {
   text-decoration: underline;
+}
+
+.pet-project-row-link--wrap {
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.3;
 }
 
 .pet-project-row-meta,
@@ -1145,6 +1405,21 @@
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.pet-project-row-signal-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pet-project-row-signals--compact {
+  gap: 5px;
+}
+
+.pet-project-row-signal-meta {
+  font-size: 11px;
+  color: #6a7f97;
 }
 
 .pet-project-health-dot {
@@ -2137,9 +2412,38 @@
   .pet-employee-journey-step-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
+  .pet-projects-filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pet-projects-filter-field--search,
+  .pet-projects-filter-field--state {
+    flex: 1 1 auto;
+  }
+  .pet-projects-filter-toggle {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 34px;
+  }
+  .pet-project-workspace-actions {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1200px) {
+  .pet-project-workspace-header {
+    grid-template-columns: 1fr;
+  }
+  .pet-project-workspace-metrics {
+    justify-content: flex-start;
+  }
+  .pet-project-ticket-workspace--drawer-open {
+    grid-template-columns: 1fr;
+  }
+  .pet-project-ticket-drawer {
+    position: static;
+    max-height: none;
+  }
   .pet-employees-summary-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }

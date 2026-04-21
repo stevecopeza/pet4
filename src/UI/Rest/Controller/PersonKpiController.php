@@ -110,7 +110,7 @@ class PersonKpiController implements RestController
             $this->generatePersonKpisHandler->handle($command);
             return new WP_REST_Response(['message' => 'Person KPIs generated successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -133,7 +133,7 @@ class PersonKpiController implements RestController
             $this->updatePersonKpiHandler->handle($command);
             return new WP_REST_Response(['message' => 'Person KPI updated successfully'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 

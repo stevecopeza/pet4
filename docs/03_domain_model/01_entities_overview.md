@@ -99,7 +99,7 @@ Responsibilities:
 - May convert into a Quote via explicit conversion action
 
 Notes:
-- Requires a Customer
+- **Currently requires a Customer** (code-level constraint; docs intend this to be optional — known gap)
 - Carries optional `estimatedValue` and `source`
 - Supports malleable data fields
 - May link to a Quote via `lead_id` on the Quote (nullable — quotes may also be created directly)
@@ -144,7 +144,7 @@ Notes:
 - Immutable once accepted
 - May originate from a Lead (`lead_id`) or be created directly for a Customer
 - Contains payment schedule, cost adjustments, and malleable data
-- Acceptance triggers: Contract, Baseline, Project, Forecast, execution Tickets
+- Acceptance triggers: Contract, Baseline, Project (via `CreateProjectFromQuoteListener`), Forecast, and Tickets with `lifecycle_owner='project'` (via `AcceptQuoteHandler → CreateProjectTicketHandler`)
 
 ---
 
@@ -183,16 +183,20 @@ Responsibilities:
 ---
 
 ### Task
-Represents a unit of planned project work (quote builder artifact).
+**STATUS: DEAD CODE — being decommissioned (Phase 8)**
+
+Represents a unit of planned project work within the quote builder.
 
 Responsibilities:
-- Define scope and effort estimates within quote components
+- Define scope and effort estimates within quote components (`ImplementationComponent` milestones)
 - Carry role-based costing snapshots
 
 Notes:
-- Tasks exist within the quote builder (`wp_pet_quote_tasks`) and project delivery domain
-- At quote acceptance, tasks become **Tickets** which anchor time tracking
-- The Task entity itself does not receive time entries
+- `QuoteTask` entities exist within the quote builder (`wp_pet_quote_tasks`) — these are quote planning artifacts only
+- `Domain\Delivery\Entity\Task` exists as a file but is dead code: `AddTaskHandler` throws `DomainException` if called
+- At quote acceptance, each sold labour item becomes a **Ticket** (lifecycle_owner='project') via `CreateProjectTicketHandler`
+- The Task entity itself never receives time entries; Tickets do
+- `wp_pet_tasks` table still exists but is not written to by any active handler. Scheduled for decommission in Phase 8.
 
 ---
 
@@ -221,7 +225,8 @@ Responsibilities:
 - Mirror assignment, SLA state, and commercial context from source entity
 
 Notes:
-- Source types: `ticket`, `project_task`, `escalation`, `admin`
+- Source types: `ticket` (support and project delivery), `escalation`, `admin`
+- ~~`project_task`~~ source type is no longer created — `WorkItemProjector::onTicketCreated()` handles both support and delivery tickets
 - Statuses: `active`, `waiting`, `completed`
 - Projected (not source-of-truth) — rebuilt from domain events
 

@@ -16,6 +16,7 @@ export default defineConfig({
   timeout: 30_000,
 
   globalSetup: './tests/e2e/helpers/global-setup.ts',
+  globalTeardown: './tests/e2e/helpers/global-teardown.ts',
 
   use: {
     baseURL,

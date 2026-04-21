@@ -9,7 +9,6 @@ use Pet\Application\System\Service\TransactionManager;
 use Pet\Domain\Delivery\Entity\Task;
 use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Domain\Event\EventBus;
-use Pet\Domain\Delivery\Event\ProjectTaskCreated;
 
 class AddTaskHandler
 {
@@ -26,26 +25,8 @@ class AddTaskHandler
 
     public function handle(AddTaskCommand $command): void
     {
-        $this->transactionManager->transactional(function () use ($command) {
-        $project = $this->projectRepository->findById($command->projectId());
-        if (!$project) {
-            throw new \DomainException("Project not found: {$command->projectId()}");
-        }
-
-        $task = new Task(
-            $command->name(),
-            $command->estimatedHours(),
-            false,
-            null,
-            $command->roleId()
+        throw new \DomainException(
+            'Legacy project task creation is disabled in tickets-only delivery execution. Use project tickets.'
         );
-
-        $project->addTask($task);
-
-        $this->projectRepository->save($project);
-
-        $this->eventBus->dispatch(new ProjectTaskCreated($project, $task));
-    
-        });
     }
 }

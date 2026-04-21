@@ -53,24 +53,29 @@ class SqlQuoteRepository implements QuoteRepository
     public function save(Quote $quote): void
     {
         $data = [
-            'customer_id' => $quote->customerId(),
-            'lead_id' => $quote->leadId(),
-            'contract_id' => $quote->contractId(),
-            'title' => $quote->title(),
-            'description' => $quote->description(),
-            'state' => $quote->state()->toString(),
-            'version' => $quote->version(),
-            'total_value' => $quote->totalValue(),
-            'total_internal_cost' => $quote->totalInternalCost(),
-            'currency' => $quote->currency(),
-            'accepted_at' => $quote->acceptedAt() ? $quote->acceptedAt()->format('Y-m-d H:i:s') : null,
-            'malleable_data' => json_encode($quote->malleableData()),
-            'created_at' => $this->formatDate($quote->createdAt()),
-            'updated_at' => $this->formatDate($quote->updatedAt()),
-            'archived_at' => $this->formatDate($quote->archivedAt()),
+            'customer_id'              => $quote->customerId(),
+            'lead_id'                  => $quote->leadId(),
+            'contract_id'              => $quote->contractId(),
+            'title'                    => $quote->title(),
+            'description'              => $quote->description(),
+            'state'                    => $quote->state()->toString(),
+            'version'                  => $quote->version(),
+            'total_value'              => $quote->totalValue(),
+            'total_internal_cost'      => $quote->totalInternalCost(),
+            'currency'                 => $quote->currency(),
+            'accepted_at'              => $quote->acceptedAt() ? $quote->acceptedAt()->format('Y-m-d H:i:s') : null,
+            'malleable_data'           => json_encode($quote->malleableData()),
+            'created_at'               => $this->formatDate($quote->createdAt()),
+            'updated_at'               => $this->formatDate($quote->updatedAt()),
+            'archived_at'              => $this->formatDate($quote->archivedAt()),
+            // Approval fields
+            'rejection_note'           => $quote->rejectionNote(),
+            'submitted_for_approval_at'=> $this->formatDate($quote->submittedForApprovalAt()),
+            'approved_at'              => $this->formatDate($quote->approvedAt()),
+            'approved_by_user_id'      => $quote->approvedByUserId(),
         ];
 
-        $format = ['%d', '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s'];
+        $format = ['%d', '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'];
 
         if ($quote->id()) {
             $this->wpdb->update(
@@ -97,7 +102,9 @@ class SqlQuoteRepository implements QuoteRepository
         }
 
         if ($quoteId) {
-            $this->saveComponents((int)$quoteId, $quote->components());
+            if ($this->shouldPersistComponents((int)$quoteId, $quote->components())) {
+                $this->saveComponents((int)$quoteId, $quote->components());
+            }
             $this->savePaymentSchedule((int)$quoteId, $quote->paymentSchedule());
             
             // Save adjustments
@@ -155,6 +162,18 @@ class SqlQuoteRepository implements QuoteRepository
         $sql = "SELECT * FROM {$this->quotesTable} WHERE archived_at IS NULL ORDER BY created_at DESC";
         $results = $this->wpdb->get_results($sql);
 
+        return array_map([$this, 'hydrate'], $results);
+    }
+
+    public function findPendingApproval(): array
+    {
+        $sql = $this->wpdb->prepare(
+            "SELECT * FROM {$this->quotesTable}
+             WHERE state = %s AND archived_at IS NULL
+             ORDER BY submitted_for_approval_at ASC",
+            QuoteState::PENDING_APPROVAL
+        );
+        $results = $this->wpdb->get_results($sql);
         return array_map([$this, 'hydrate'], $results);
     }
 
@@ -278,6 +297,103 @@ class SqlQuoteRepository implements QuoteRepository
         }
     }
 
+    private function shouldPersistComponents(int $quoteId, array $components): bool
+    {
+        $existingIds = $this->wpdb->get_col($this->wpdb->prepare(
+            "SELECT id FROM {$this->componentsTable} WHERE quote_id = %d ORDER BY id ASC",
+            $quoteId
+        ));
+        $existingIds = array_map('intval', is_array($existingIds) ? $existingIds : []);
+
+        if (empty($components)) {
+            return !empty($existingIds);
+        }
+
+        $componentIds = [];
+        foreach ($components as $component) {
+            if (!$component instanceof QuoteComponent) {
+                return true;
+            }
+
+            $componentId = (int)$component->id();
+            if ($componentId <= 0) {
+                return true;
+            }
+
+            if (!$this->hasPersistedComponentChildren($component)) {
+                return true;
+            }
+
+            $componentIds[] = $componentId;
+        }
+
+        sort($existingIds);
+        sort($componentIds);
+
+        if (count($existingIds) !== count($componentIds)) {
+            return true;
+        }
+
+        return $existingIds !== $componentIds;
+    }
+
+    private function hasPersistedComponentChildren(QuoteComponent $component): bool
+    {
+        if ($component instanceof ImplementationComponent) {
+            foreach ($component->milestones() as $milestone) {
+                if ((int)$milestone->id() <= 0) {
+                    return false;
+                }
+
+                foreach ($milestone->tasks() as $task) {
+                    if ((int)$task->id() <= 0) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        if ($component instanceof CatalogComponent) {
+            foreach ($component->items() as $item) {
+                if ((int)$item->id() <= 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($component instanceof OnceOffServiceComponent) {
+            if ($component->topology() === OnceOffServiceComponent::TOPOLOGY_SIMPLE) {
+                foreach ($component->units() as $unit) {
+                    if ((int)$unit->id() <= 0) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            foreach ($component->phases() as $phase) {
+                if ((int)$phase->id() <= 0) {
+                    return false;
+                }
+
+                foreach ($phase->units() as $unit) {
+                    if ((int)$unit->id() <= 0) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        return true;
+    }
+
     private function deleteComponents(int $quoteId): void
     {
         // Get component IDs
@@ -287,19 +403,16 @@ class SqlQuoteRepository implements QuoteRepository
         foreach ($rows as $row) {
             $id = (int) $row->id;
             // Delete child data first
-            $this->wpdb->delete($this->milestonesTable, ['component_id' => $id], ['%d']);
-            // Note: Tasks are linked to milestones, but if we delete milestones, we should cascade delete tasks or rely on cleanup
-            // Ideally we delete tasks for these milestones.
-            // Let's do it properly.
             if ($row->type === 'implementation') {
                 // Find milestones to delete tasks
                 $mSql = $this->wpdb->prepare("SELECT id FROM {$this->milestonesTable} WHERE component_id = %d", $id);
                 $mIds = $this->wpdb->get_col($mSql);
                 if (!empty($mIds)) {
-                    $mIdsStr = implode(',', $mIds);
+                    $mIdsStr = implode(',', array_map('intval', $mIds));
                     $this->wpdb->query("DELETE FROM {$this->tasksTable} WHERE milestone_id IN ($mIdsStr)");
                 }
             }
+            $this->wpdb->delete($this->milestonesTable, ['component_id' => $id], ['%d']);
             
             $this->wpdb->delete($this->recurringTable, ['component_id' => $id], ['%d']);
             $this->wpdb->delete($this->catalogTable, ['component_id' => $id], ['%d']);
@@ -437,7 +550,7 @@ class SqlQuoteRepository implements QuoteRepository
 
         return new Quote(
             (int)$row->customer_id,
-            $row->title ?? '', // Handle potential null/missing for existing records
+            $row->title ?? '',
             $row->description ?? null,
             QuoteState::fromString($row->state),
             (int)$row->version,
@@ -454,7 +567,12 @@ class SqlQuoteRepository implements QuoteRepository
             $costAdjustments,
             $paymentSchedule,
             isset($row->lead_id) && $row->lead_id ? (int)$row->lead_id : null,
-            isset($row->contract_id) && $row->contract_id ? (int)$row->contract_id : null
+            isset($row->contract_id) && $row->contract_id ? (int)$row->contract_id : null,
+            // Approval fields
+            $row->rejection_note ?? null,
+            !empty($row->submitted_for_approval_at) ? new \DateTimeImmutable($row->submitted_for_approval_at) : null,
+            !empty($row->approved_at) ? new \DateTimeImmutable($row->approved_at) : null,
+            isset($row->approved_by_user_id) && $row->approved_by_user_id ? (int)$row->approved_by_user_id : null
         );
     }
 

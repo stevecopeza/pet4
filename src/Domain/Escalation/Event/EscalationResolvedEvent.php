@@ -44,6 +44,7 @@ class EscalationResolvedEvent implements DomainEvent, SourcedEvent
     public function occurredAt(): \DateTimeImmutable { return $this->occurredAt; }
 
     public function aggregateId(): int { return $this->sourceEntityId; }
+    public function name(): string { return 'escalation.resolved'; }
     public function aggregateType(): string { return 'escalation'; }
     public function aggregateVersion(): int { return 1; }
 

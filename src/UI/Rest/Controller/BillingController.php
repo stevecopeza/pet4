@@ -146,7 +146,7 @@ final class BillingController implements RestController
             );
             return new WP_REST_Response(['id' => $id], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to create export'], 500);
         }
@@ -182,7 +182,7 @@ final class BillingController implements RestController
             );
             return new WP_REST_Response(['id' => $itemId], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to add export item'], 500);
         }
@@ -195,7 +195,7 @@ final class BillingController implements RestController
             $this->queueHandler->handle(new QueueBillingExportForQuickBooksCommand($exportId));
             return new WP_REST_Response(['status' => 'queued'], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to queue export'], 500);
         }
@@ -208,7 +208,7 @@ final class BillingController implements RestController
             $status = $this->confirmHandler->handle(new ConfirmBillingExportCommand($exportId));
             return new WP_REST_Response(['status' => $status], 200);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to confirm export'], 500);
         }

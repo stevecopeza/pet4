@@ -154,7 +154,6 @@ const App = () => {
           <div className="pet-admin-dashboard" style={{ padding: '20px', background: '#fff', marginTop: '20px' }}>
             <header style={{ marginBottom: '30px', borderBottom: '1px solid #eee', paddingBottom: '20px' }}>
               <h1 style={{ margin: 0 }}>PET - {getPageTitle(currentPage)}</h1>
-              <p style={{ margin: '10px 0 0', color: '#666' }}>Welcome to the PET (Plan. Execute. Track).</p>
             </header>
             
             <main>

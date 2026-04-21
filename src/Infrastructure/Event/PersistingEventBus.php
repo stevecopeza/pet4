@@ -48,7 +48,7 @@ class PersistingEventBus implements EventBus
             $aggregateType,
             $aggregateId,
             $version,
-            get_class($event),
+            $event->name(),
             $payload
         );
     }

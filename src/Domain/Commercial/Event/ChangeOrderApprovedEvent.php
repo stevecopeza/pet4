@@ -34,6 +34,11 @@ class ChangeOrderApprovedEvent implements DomainEvent, SourcedEvent
         return (int)$this->costAdjustment->quoteId();
     }
 
+    public function name(): string
+    {
+        return 'quote.change_order_approved';
+    }
+
     public function aggregateType(): string
     {
         return 'quote';

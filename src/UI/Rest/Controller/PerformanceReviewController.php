@@ -117,7 +117,7 @@ class PerformanceReviewController implements RestController
             $id = $this->createHandler->handle($command);
             return new WP_REST_Response(['id' => $id, 'message' => 'Review created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -136,7 +136,7 @@ class PerformanceReviewController implements RestController
             $this->updateHandler->handle($command);
             return new WP_REST_Response(['message' => 'Review updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 

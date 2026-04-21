@@ -88,11 +88,6 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerId) {
-      setError('Please select a customer');
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
@@ -101,13 +96,13 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
       const apiUrl = window.petSettings.apiUrl;
       // @ts-ignore
       const nonce = window.petSettings.nonce;
-      
-      const url = isEditMode 
+
+      const url = isEditMode
         ? `${apiUrl}/leads/${initialData!.id}`
         : `${apiUrl}/leads`;
 
-      const body: any = { 
-        customerId: parseInt(customerId, 10),
+      const body: any = {
+        customerId: customerId ? parseInt(customerId, 10) : null,
         subject,
         description,
         source: source || null,
@@ -178,10 +173,9 @@ const LeadForm: React.FC<LeadFormProps> = ({ initialData, onSuccess, onCancel })
               className="regular-text"
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              required
               disabled={isEditMode}
             >
-              <option value="">Select Customer</option>
+              <option value="">— No customer yet —</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}

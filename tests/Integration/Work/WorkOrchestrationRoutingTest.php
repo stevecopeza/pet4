@@ -17,7 +17,6 @@ use Pet\Domain\Configuration\Repository\SettingRepository;
 use Pet\Domain\Identity\Repository\CustomerRepository;
 use Pet\Domain\Identity\Entity\Customer;
 use Pet\Domain\Support\Event\TicketAssigned;
-use Pet\Domain\Work\Repository\RoleTeamRepository;
 use Pet\Domain\Work\Service\DepartmentResolver;
 use Pet\Domain\Work\Service\PriorityScoringService;
 use Pet\Domain\Work\Service\SlaClockCalculator;
@@ -47,6 +46,7 @@ final class WorkOrchestrationRoutingTest extends TestCase
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             customer_id INTEGER NOT NULL,
             site_id INTEGER NULL,
+            sla_id INTEGER NULL,
             subject TEXT NOT NULL,
             description TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -117,11 +117,6 @@ final class WorkOrchestrationRoutingTest extends TestCase
             public function findAll(): array { return []; }
         };
 
-        $roleTeamRepo = new class implements RoleTeamRepository {
-            public function findByRoleId(int $roleId): array { return []; }
-            public function replaceForRole(int $roleId, array $mappings): void {}
-            public function findByTeamId(int $teamId): array { return []; }
-        };
 
         $advisoryRepo = new class implements AdvisorySignalRepository {
             public function save(AdvisorySignal $signal): void {}
@@ -153,7 +148,6 @@ final class WorkOrchestrationRoutingTest extends TestCase
             $departmentResolver,
             $slaCalc,
             $customerRepo,
-            $roleTeamRepo,
             $featureFlags
         );
 
@@ -282,6 +276,7 @@ final class WorkOrchestrationRoutingTest extends TestCase
             subject TEXT NOT NULL,
             customer_id INTEGER NOT NULL,
             site_id INTEGER NULL,
+            sla_id INTEGER NULL,
             status TEXT NOT NULL,
             priority TEXT NOT NULL,
             resolution_due_at TEXT NULL
@@ -291,6 +286,7 @@ final class WorkOrchestrationRoutingTest extends TestCase
             'subject' => 'Example ticket',
             'customer_id' => 1,
             'site_id' => null,
+            'sla_id' => null,
             'status' => 'open',
             'priority' => 'high',
             'resolution_due_at' => null,
@@ -325,6 +321,7 @@ final class WorkOrchestrationRoutingTest extends TestCase
         $this->wpdb->insert($this->wpdb->prefix . 'pet_tickets', [
             'customer_id' => 1,
             'site_id' => null,
+            'sla_id' => null,
             'subject' => 'Seed ticket',
             'description' => 'Test',
             'status' => 'open',

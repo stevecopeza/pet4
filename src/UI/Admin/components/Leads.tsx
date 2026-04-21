@@ -165,7 +165,7 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote }) => {
       ) : null;
       return <>{dot}{String(val)}</>;
     }},
-    { key: 'customerId', header: 'Customer', render: (val) => val ? val.toString() : '' },
+    { key: 'customerName', header: 'Customer', render: (val) => val ? String(val) : <span style={{ color: '#999', fontStyle: 'italic' }}>No customer yet</span> },
     { key: 'status', header: 'Status', render: (val) => {
       const statusRaw = val as string;
       const status = statusRaw === 'lost' ? 'disqualified' : statusRaw;

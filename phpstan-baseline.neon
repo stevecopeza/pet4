@@ -1,0 +1,451 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Strict comparison using \!\=\= between non\-falsy\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Application/Activity/Service/ActivityEventTransformer.php
+
+		-
+			message: '#^Constructor of class Pet\\Application\\Commercial\\Command\\AcceptQuoteHandler has an unused parameter \$ticketRepository\.$#'
+			identifier: constructor.unusedParameter
+			count: 1
+			path: src/Application/Commercial/Command/AcceptQuoteHandler.php
+
+		-
+			message: '#^Property wpdb\:\:\$insert_id \(int\) in isset\(\) is not nullable\.$#'
+			identifier: isset.property
+			count: 1
+			path: src/Application/Commercial/Command/CreateCatalogProductHandler.php
+
+		-
+			message: '#^Property wpdb\:\:\$insert_id \(int\) in isset\(\) is not nullable\.$#'
+			identifier: isset.property
+			count: 1
+			path: src/Application/Commercial/Command/CreateRateCardHandler.php
+
+		-
+			message: '#^Property wpdb\:\:\$insert_id \(int\) in isset\(\) is not nullable\.$#'
+			identifier: isset.property
+			count: 1
+			path: src/Application/Commercial/Command/CreateServiceTypeHandler.php
+
+		-
+			message: '#^Comparison operation "\<\=" between 1\.0\|3\.0\|12\.0 and 0\.0 is always false\.$#'
+			identifier: smallerOrEqual.alwaysFalse
+			count: 1
+			path: src/Application/Commercial/Service/QuoteBlockCostSnapshotEnricher.php
+
+		-
+			message: '#^Comparison operation "\<\=" between 1\.0\|3\.0\|12\.0 and 0\.0 is always false\.$#'
+			identifier: smallerOrEqual.alwaysFalse
+			count: 1
+			path: src/Application/Commercial/Service/QuoteBlockMarginCalculator.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\AddTaskHandler\:\:\$eventBus is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/AddTaskHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\AddTaskHandler\:\:\$projectRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/AddTaskHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\AddTaskHandler\:\:\$transactionManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/AddTaskHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\MarkMilestoneCompleteHandler\:\:\$eventBus is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/MarkMilestoneCompleteHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\MarkMilestoneCompleteHandler\:\:\$healthEmitter is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/MarkMilestoneCompleteHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\MarkMilestoneCompleteHandler\:\:\$projectRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/MarkMilestoneCompleteHandler.php
+
+		-
+			message: '#^Property Pet\\Application\\Delivery\\Command\\MarkMilestoneCompleteHandler\:\:\$transactionManager is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/Delivery/Command/MarkMilestoneCompleteHandler.php
+
+		-
+			message: '#^Right side of && is always false\.$#'
+			identifier: booleanAnd.rightAlwaysFalse
+			count: 3
+			path: src/Application/Support/Service/SlaCheckService.php
+
+		-
+			message: '#^Call to function method_exists\(\) with ''Pet\\\\Domain\\\\Commercial\\\\Entity\\\\Quote'' and ''accept'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Application/System/Service/DemoPreFlightCheck.php
+
+		-
+			message: '#^Call to function method_exists\(\) with ''Pet\\\\Domain\\\\Commercial\\\\Entity\\\\Quote'' and ''validateReadiness'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Application/System/Service/DemoPreFlightCheck.php
+
+		-
+			message: '#^Method Pet\\Application\\System\\Service\\DemoPreFlightCheck\:\:checkProjectionHandlers\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/Application/System/Service/DemoPreFlightCheck.php
+
+		-
+			message: '#^Path in require_once\(\) "/wp\-admin/includes/upgrade\.php" is not a file or it does not exist\.$#'
+			identifier: requireOnce.fileNotFound
+			count: 2
+			path: src/Application/System/Service/DemoPreFlightCheck.php
+
+		-
+			message: '#^Property Pet\\Application\\System\\Service\\DemoPreFlightCheck\:\:\$slaRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Application/System/Service/DemoPreFlightCheck.php
+
+		-
+			message: '#^Offset ''seed_run_id'' on array\{seed_run_id\: string, registry_rows\: int, first_seen_at\: string\|null, last_seen_at\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoPurgeService.php
+
+		-
+			message: '#^Left side of && is always true\.$#'
+			identifier: booleanAnd.leftAlwaysTrue
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''Acme Manufacturing''\|''Government Digital…''\|''Nexus Startup Labs''\|''RPM Resources'' on array\{''RPM Resources''\: ''\#1a56db'', ''Acme Manufacturing''\: ''\#dc3545'', ''Nexus Startup Labs''\: ''\#28a745'', ''Government Digital Services''\: ''\#6f42c1''\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''actor_name'' on \(array\{actor_name\: ''Mia Manager'', entries_count\: 8\}\|array\{actor_name\: ''System''\}\|array\{actor_name\: ''Zoe Finance''\}\|array\{customer_name\: ''Acme Manufacturing'', actor_name\: ''Noah Support''\}\|array\{customer_name\: ''RPM Resources'', actor_name\: ''System'', tags\: array\{''Escalation''\}\}\|array\{customer_name\?\: ''Government Digital…'', actor_name\: ''Isabella Analyst''\}\|array\{project_id\: string, customer_id\: string, customer_name\: ''Acme Manufacturing'', actor_name\: ''System'', tags\: array\{''Overdue'', ''Over Budget''\}\}\|array\{project_id\?\: string, customer_id\?\: string, customer_name\?\: ''Acme Manufacturing''\|''Nexus Startup Labs''\|''RPM Resources'', actor_name\: ''Ava Consultant''\|''Ethan DevOps''\|''Liam Lead Tech''\|''Mia Manager''\|''Steve Admin''\}\|array\{quote_id\: string, customer_id\: string, customer_name\: ''RPM Resources'', actor_name\: ''Priya Patel''\|''System''\}\|array\{quote_id\: string, customer_id\: string, customer_name\: ''RPM Resources'', actor_name\: ''Steve Admin'', total_value\: 15400\}\|array\{ticket_id\: mixed, customer_id\?\: string, customer_name\: ''RPM Resources'', actor_name\: ''Noah Support''\}\|array\{ticket_id\: mixed, customer_name\: ''RPM Resources'', actor_name\: ''Noah Support'', sla\: array\{clock_state\: ''active'', seconds_remaining\: 3300, kind\: ''resolution''\}\}\|array\{ticket_id\: mixed, customer_name\: ''RPM Resources'', actor_name\: ''System'', sla\: array\{clock_state\: ''active'', seconds_remaining\: 7200, kind\: ''response''\}\}\|array\{ticket_id\: mixed, customer_name\: ''RPM Resources'', actor_name\: ''System'', sla\: array\{clock_state\: ''active'', seconds_remaining\: 900, kind\: ''resolution''\}, tags\: array\{''SLA Risk''\}\}\|array\{ticket_id\: mixed, customer_name\: ''RPM Resources'', actor_name\: ''System'', sla\: array\{clock_state\: ''breached'', seconds_remaining\: \-2700, kind\: ''resolution''\}, tags\: array\{''SLA Breach''\}\}\|\(literal\-string&non\-falsy\-string\)\|null\) on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''base_internal_rate'' on array\{name\: ''Consultant'', level\: ''Senior'', desc\: ''Advisory and…'', criteria\: ''Delivers advisory…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 3, importance_weight\: 2\}\|array\{min_proficiency_level\: 4, importance_weight\: 3\}\>, base_internal_rate\: 120\.0\}\|array\{name\: ''Developer'', level\: ''Senior'', desc\: ''Full\-stack…'', criteria\: ''Delivers clean,…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 3, importance_weight\: 2\}\|array\{min_proficiency_level\: 4, importance_weight\: 3\}\>, base_internal_rate\: 110\.0\}\|array\{name\: ''DevOps Engineer'', level\: ''Mid'', desc\: ''Infrastructure…'', criteria\: ''Maintains uptime…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 2, importance_weight\: 1\}\|array\{min_proficiency_level\: 3, importance_weight\: 2\}\>, base_internal_rate\: 95\.0\}\|array\{name\: ''Project Manager'', level\: ''Senior'', desc\: ''Manages project…'', criteria\: ''Meets scope,…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 2, importance_weight\: 1\}\|array\{min_proficiency_level\: 3, importance_weight\: 2\}\>, base_internal_rate\: 100\.0\}\|array\{name\: ''Security Analyst'', level\: ''Senior'', desc\: ''Security audits,…'', criteria\: ''Identifies and…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 3, importance_weight\: 2\}\|array\{min_proficiency_level\: 4, importance_weight\: 3\}\>, base_internal_rate\: 115\.0\}\|array\{name\: ''Support Technician'', level\: ''Mid'', desc\: ''Frontline support…'', criteria\: ''Resolves incidents…'', skills\: non\-empty\-array\<int, array\{min_proficiency_level\: 2, importance_weight\: 2\}\|array\{min_proficiency_level\: 3, importance_weight\: 3\}\>, base_internal_rate\: 80\.0\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''build_implementation''\|''discovery_design''\|''go_live_handover'' on array\{discovery_design\: int\<2, max\>, build_implementation\: int\<2, max\>, go_live_handover\: int\<2, max\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''complete_first_n…'' on array\{name\: ''Acme Security &…'', state\: ''active'', start_days\: \-21, end_days\: 35, sold_hours\: 26\.0, hours_used\: 8\.0, pm\: ''Mia Manager'', health\: ''on_track'', \.\.\.\}\|array\{name\: ''RPM Website Revamp …'', state\: ''active'', start_days\: \-42, end_days\: 14, sold_hours\: 82\.0, hours_used\: 24\.0, pm\: ''Mia Manager'', health\: ''on_track'', \.\.\.\}\|array\{state\: ''active'', start_days\: \-21, end_days\: \-4, sold_hours\: 35\.0, hours_used\: 38\.0, pm\: ''Ava Consultant'', health\: ''at_risk'', complete_first_n_tickets\: 3, \.\.\.\}\|array\{state\: ''active'', start_days\: \-35, end_days\: 21, sold_hours\: 106\.0, hours_used\: 52\.0, pm\: ''Ethan DevOps'', health\: ''on_track'', complete_first_n_tickets\: 1, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''completed''\|''in_progress''\|''planned'' on array\{completed\: int\<0, max\>, in_progress\: int\<0, max\>, planned\: int\<0, max\>\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''in_progress_first_n…'' on array\{name\: ''Acme Security &…'', state\: ''active'', start_days\: \-21, end_days\: 35, sold_hours\: 26\.0, hours_used\: 8\.0, pm\: ''Mia Manager'', health\: ''on_track'', \.\.\.\}\|array\{name\: ''RPM Website Revamp …'', state\: ''active'', start_days\: \-42, end_days\: 14, sold_hours\: 82\.0, hours_used\: 24\.0, pm\: ''Mia Manager'', health\: ''on_track'', \.\.\.\}\|array\{state\: ''active'', start_days\: \-21, end_days\: \-4, sold_hours\: 35\.0, hours_used\: 38\.0, pm\: ''Ava Consultant'', health\: ''at_risk'', complete_first_n_tickets\: 3, \.\.\.\}\|array\{state\: ''active'', start_days\: \-35, end_days\: 21, sold_hours\: 106\.0, hours_used\: 52\.0, pm\: ''Ethan DevOps'', health\: ''on_track'', complete_first_n_tickets\: 1, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''manager'' on array\{name\: ''Delivery Engineering'', parent\: ''Delivery'', manager\: ''Liam'', escalation_manager\: ''Mia''\}\|array\{name\: ''Delivery'', parent\: ''Executive'', manager\: ''Mia'', escalation_manager\: ''Steve''\}\|array\{name\: ''Executive'', parent\: null, manager\: ''Steve'', escalation_manager\: null\}\|array\{name\: ''Support'', parent\: ''Executive'', manager\: ''Noah'', escalation_manager\: ''Mia''\} in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''mentions'' on array\{actor\: mixed, body\: ''5 days for firewall…''\|''Acme specifically…''\|''Don\\''t forget to…''\|''Network review at 3…''\|''Security…''\|''The 3\-phase…''\|''VM Provisioning and…''\|''Vulnerability…''\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''mentions'' on array\{actor\: mixed, body\: ''8 days might be…''\|''Approved\. This is a…''\|''Confirmed\. Make…''\|''Frontend…''\|''Good point\. Let\\''s…''\|''I can assist with…''\|''I can handle this…''\|''Make sure we…''\|''Project block with…''\|''Requirements…''\|''Support setup at 6…''\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''mentions'' on array\{actor\: mixed, body\: ''Agreed\. I\\''ll add…''\|''Firewall rule…''\|''Let\\''s keep it at 3…''\|''Make sure the…''\|''The pen testing…''\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''mentions'' on array\{actor\: mixed, body\: ''Agreed\. I\\''ve…''\|''Professional…''\|''Project Delivery…''\|''The catalog links…''\|''Website Rebuild…''\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset ''mentions'' on array\{actor\: mixed, body\: ''Can we revisit the…''\|''Fair enough\. Let\\''s…''\|''Good catch\. I\\''ll…''\|''It\\''s based on the…''\|''Noted\. I\\''ve padded…''\|''The hours on this…''\|''This block should…''\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<int\> in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset 0\|1\|2\|3\|4 on array\{array\{\-30, \-20, \-11\}, array\{\-12, \-6, \-2\}, array\{\-8, \-4, \-0\.5\}, array\{\-96, \-72, \-48\}, array\{\-8, \-4, \-1\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset 0\|1\|2\|3\|4 on array\{array\{array\{actor\: mixed, body\: ''Block\-based quote…''\}, array\{actor\: mixed, body\: ''The project block…''\}, array\{actor\: mixed, body\: non\-falsy\-string, mentions\: array\{array\{type\: ''user'', id\: mixed\}\}\}\}, array\{array\{actor\: mixed, body\: ''Security assessment…''\}, array\{actor\: mixed, body\: ''Infrastructure…''\}, array\{actor\: mixed, body\: ''I\\''ve reviewed the…''\}\}, array\{array\{actor\: mixed, body\: ''Two project blocks…''\}, array\{actor\: mixed, body\: ''Advisory section…''\}, array\{actor\: mixed, body\: ''Nexus is happy with…''\}\}, array\{array\{actor\: mixed, body\: ''Government security…''\}, array\{actor\: mixed, body\: ''Policy framework…''\}, array\{actor\: mixed, body\: ''Quote accepted by…''\}\}, array\{array\{actor\: mixed, body\: ''Support package…''\}, array\{actor\: mixed, body\: ''The runbook project…''\}, array\{actor\: mixed, body\: ''Emergency callout…''\}\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Offset 2\|3\|4 on array\{2\: array\{\-14, \-13, \-10\}, 3\: array\{\-3, \-1\}, 4\: array\{\-5, \-0\.5\}\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Variable \$offsets in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 2
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Variable \$projects in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: src/Application/System/Service/DemoSeedService.php
+
+		-
+			message: '#^Right side of && is always false\.$#'
+			identifier: booleanAnd.rightAlwaysFalse
+			count: 1
+			path: src/Application/System/Service/FeatureFlagService.php
+
+		-
+			message: '#^Offset ''registry_rows'' on array\{seed_run_id\: string, registry_rows\: int, first_seen_at\: string\|null, last_seen_at\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/SeedRegistryDiagnosticsService.php
+
+		-
+			message: '#^Offset ''run_id'' on array\{run_id\: string, created_at\: string\|null, last_seen_at\: string\|null, status\: string, registry_row_count\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/SeedRegistryDiagnosticsService.php
+
+		-
+			message: '#^Offset ''seed_run_id'' on array\{seed_run_id\: string, registry_rows\: int, first_seen_at\: string\|null, last_seen_at\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Application/System/Service/SeedRegistryDiagnosticsService.php
+
+		-
+			message: '#^Property wpdb\:\:\$insert_id \(int\) in isset\(\) is not nullable\.$#'
+			identifier: isset.property
+			count: 1
+			path: src/Application/Work/Command/CreateRoleHandler.php
+
+		-
+			message: '#^Right side of && is always false\.$#'
+			identifier: booleanAnd.rightAlwaysFalse
+			count: 3
+			path: src/Application/Work/Cron/WorkItemPriorityUpdateJob.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
+			count: 1
+			path: src/Application/Work/Projection/WorkItemProjector.php
+
+		-
+			message: '#^Right side of && is always false\.$#'
+			identifier: booleanAnd.rightAlwaysFalse
+			count: 3
+			path: src/Application/Work/Projection/WorkItemProjector.php
+
+		-
+			message: '#^Method Pet\\Application\\Work\\Service\\WorkQueueQueryService\:\:tableHasColumn\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/Application/Work/Service/WorkQueueQueryService.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 6
+			path: src/Application/Work/Service/WorkQueueQueryService.php
+
+		-
+			message: '#^Property Pet\\Domain\\Commercial\\Entity\\Forecast\:\:\$createdAt is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Domain/Commercial/Entity/Forecast.php
+
+		-
+			message: '#^Property Pet\\Domain\\Commercial\\Entity\\Quote\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Commercial/Entity/Quote.php
+
+		-
+			message: '#^Property Pet\\Domain\\Configuration\\Entity\\SchemaDefinition\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Configuration/Entity/SchemaDefinition.php
+
+		-
+			message: '#^Property Pet\\Domain\\Conversation\\Service\\ConversationAccessControl\:\:\$contactRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Domain/Conversation/Service/ConversationAccessControl.php
+
+		-
+			message: '#^Property Pet\\Domain\\Conversation\\Service\\ConversationAccessControl\:\:\$quoteRepository is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Domain/Conversation/Service/ConversationAccessControl.php
+
+		-
+			message: '#^Property Pet\\Domain\\Delivery\\Entity\\Project\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Delivery/Entity/Project.php
+
+		-
+			message: '#^Property Pet\\Domain\\Identity\\Entity\\Contact\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Identity/Entity/Contact.php
+
+		-
+			message: '#^Property Pet\\Domain\\Identity\\Entity\\Customer\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Identity/Entity/Customer.php
+
+		-
+			message: '#^Property Pet\\Domain\\Identity\\Entity\\Employee\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Identity/Entity/Employee.php
+
+		-
+			message: '#^Property Pet\\Domain\\Identity\\Entity\\Site\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Identity/Entity/Site.php
+
+		-
+			message: '#^Property Pet\\Domain\\Sla\\Service\\TierEvaluator\:\:\$timeCalculator is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Domain/Sla/Service/TierEvaluator.php
+
+		-
+			message: '#^Property Pet\\Domain\\Support\\Entity\\SlaClockState\:\:\$id is unused\.$#'
+			identifier: property.unused
+			count: 1
+			path: src/Domain/Support/Entity/SlaClockState.php
+
+		-
+			message: '#^Property Pet\\Domain\\Team\\Entity\\Team\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Team/Entity/Team.php
+
+		-
+			message: '#^Property Pet\\Domain\\Time\\Entity\\TimeEntry\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Time/Entity/TimeEntry.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\Assignment\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/Assignment.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\Capability\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/Capability.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\KpiDefinition\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/KpiDefinition.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\PersonKpi\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/PersonKpi.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\ProficiencyLevel\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/ProficiencyLevel.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\Role\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/Role.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\RoleKpi\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/RoleKpi.php
+
+		-
+			message: '#^Property Pet\\Domain\\Work\\Entity\\Skill\:\:\$createdAt \(DateTimeImmutable\|null\) is never assigned null so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Domain/Work/Entity/Skill.php
+
+		-
+			message: '#^Call to function property_exists\(\) with wpdb and ''num_queries'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Infrastructure/Performance/PetWorkloadProfiler.php
+
+		-
+			message: '#^Call to function property_exists\(\) with wpdb and ''queries'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Infrastructure/Performance/PetWorkloadProfiler.php

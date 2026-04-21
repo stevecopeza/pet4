@@ -81,6 +81,9 @@ class SlaCheckService
         }
 
         foreach ($activeTickets as $ticket) {
+            if ($ticket->lifecycleOwner() !== 'support') {
+                continue;
+            }
             $this->evaluate($ticket);
         }
     }

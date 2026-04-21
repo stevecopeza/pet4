@@ -1,19 +1,27 @@
-STATUS: PARTIALLY STALE — SEE UPDATES
+STATUS: UPDATED 2026-04-20
 SCOPE: Ticket Backbone Correction
-VERSION: v2
-SUPERSEDES: v1
+VERSION: v3
+SUPERSEDES: v2
 DATE: 2026-03-06
+UPDATED: 2026-04-20 — Phase 4 (quote acceptance → tickets) is now COMPLETE.
 
-# Ticket Backbone – Planning State (v2)
+# Ticket Backbone – Planning State (v3)
 
 > Governed by `00_foundations/02_Ticket_Architecture_Decisions_v1.md`.
 
-## Current state
+## Current state (as of 2026-04-20)
 
 - Documentation pack for Ticket Backbone is integrated into the main docs hierarchy and has been updated to v2 (2026-03-06).
 - Architecture decisions have been formally recorded in `00_foundations/02_Ticket_Architecture_Decisions_v1.md`.
 - Schema migrations for Phase 1 (M1–M5) have been implemented. The database is ready for ticket-first operation.
-- Application layer (quote acceptance → ticket creation) is NOT yet implemented. The listener still creates Tasks, not Tickets.
+- **Application layer (quote acceptance → ticket creation) is NOW IMPLEMENTED.**
+  `AcceptQuoteHandler` calls `CreateProjectTicketHandler` which creates `Domain\Support\Entity\Ticket`
+  records with all backbone fields (`soldMinutes`, `estimatedMinutes`, `isBaselineLocked=true`,
+  `projectId`, `quoteId`, `isRollup`, `lifecycleOwner='project'`, `primaryContainer='project'`).
+- `AddTaskHandler` is disabled — throws `DomainException('Legacy project task creation is disabled')`.
+- `CreateProjectFromQuoteListener` creates the Project record only (no Tasks).
+- `LogTimeHandler` enforces `canAcceptTimeEntries()` against Tickets.
+- `WorkItemProjector::onTicketCreated()` handles project ticket work item projection.
 
 ## Key architecture decisions (binding)
 
@@ -26,33 +34,35 @@ DATE: 2026-03-06
 
 See decision record for full details.
 
-## Drift summary
+## Drift summary (updated 2026-04-20)
 
-- Current production implementation still uses tasks as primary work units for project delivery.
-- Time entries have `ticket_id` column (populated for support tickets, not for project tasks).
-- Quote acceptance currently creates projects/tasks without ticket linkage.
-- Work orchestration supports tickets and project tasks but is not yet normalized to tickets as the primary source.
+- ~~Current production implementation still uses tasks as primary work units for project delivery.~~ **RESOLVED.**
+- ~~Quote acceptance currently creates projects/tasks without ticket linkage.~~ **RESOLVED.**
+- ~~Work orchestration supports tickets and project tasks but is not yet normalized.~~ **RESOLVED** — `WorkItemProjector` now handles `onTicketCreated` only; no `onProjectTaskCreated` handler remains.
+- `wp_pet_tasks` table still exists but is never written to by active code. `ticket_id` bridge column exists but backfill (Phase 2) is not complete for historical rows.
+- Admin project UI (`types.ts Project.tasks: Task[]`) still references the legacy Task shape — needs Phase 7 cutover.
+- `Domain\Delivery\Entity\Task` class remains as dead code (Phase 8 cleanup pending).
 
-## Approved roadmap phases (updated)
+## Approved roadmap phases (updated 2026-04-20)
 
 - Phase 0: ✅ Pre-implementation guardrails and documentation freeze.
 - Phase 1: ✅ Additive schema foundation for tickets, time entries, tasks, and quote labour tables.
-- Phase 2: Safe backfill and bridging between tasks, tickets, and time entries.
-- Phase 3: Time submission enforcement gate using ticket_id and leaf-only logging.
-- Phase 4: Quote acceptance ticket creation (one ticket per sold item, sold_minutes locked). **Replaces old Phase 4 (draft tickets) + Phase 5 (baseline/execution clone).**
-- Phase 5: WorkItem projection alignment.
-- Phase 6: SLA agreement and entitlement integration (if in scope).
-- Phase 7: UI cutover to ticket-first workflows and gradual decommissioning of task-only mode.
+- Phase 2: ⚠️ Backfill of `wp_pet_tasks.ticket_id` for historical rows not yet done. New rows are not written. Low priority since `AddTaskHandler` is disabled.
+- Phase 3: ✅ Time submission enforcement gate — `LogTimeHandler` enforces `canAcceptTimeEntries()` against Tickets.
+- Phase 4: ✅ **COMPLETE (2026-04-20)** — Quote acceptance creates Tickets via `CreateProjectTicketHandler`. Sold minutes locked. Rollup + child pattern implemented. Idempotent (duplicate-safe via `findByProvisioningKey`).
+- Phase 5: ✅ WorkItem projection alignment — `WorkItemProjector::onTicketCreated()` handles project tickets.
+- Phase 6: ❌ SLA agreement and entitlement integration for delivery tickets — not started.
+- Phase 7: ❌ Admin UI cutover — `types.ts Project.tasks: Task[]` needs replacing with Tickets; admin project view needs update.
+- Phase 8: ❌ Legacy decommission — remove `Domain\Delivery\Entity\Task`, `AddTaskHandler`, `AddTaskCommand`, eventually drop `wp_pet_tasks`.
 
 ## Development status
 
-- Schema migrations (Phase 1) are complete.
-- Application layer changes (Phases 2–4) have NOT been started.
-- No code changes have been made to the quote acceptance path or time submission enforcement.
+- Phases 0, 1, 3, 4, 5: ✅ Complete.
+- Phase 2: ⚠️ Partial — new writes disabled, historical backfill not run.
+- Phases 6, 7, 8: ❌ Not started.
 
-## Gating conditions before further development
+## Gating conditions for remaining phases
 
-- Architecture decisions document (`02_Ticket_Architecture_Decisions_v1.md`) is approved.
-- Implementation scope is confirmed to be additive-only with forward-only migrations.
-- Dedicated execution capacity is allocated.
-- A clear rollback and incident response plan exists for enforcement changes.
+- Phase 6 (SLA for delivery): Requires agreement on entitlement model. Not blocking.
+- Phase 7 (UI cutover): Can proceed independently. Low risk — admin panel change only.
+- Phase 8 (legacy cleanup): Gate on Phase 7 being stable. Requires migration to drop `wp_pet_tasks`.

@@ -49,12 +49,37 @@ class SqlEmployeeRepository implements EmployeeRepository
             );
             $employeeId = $employee->id();
         } else {
-            $this->wpdb->insert(
-                $this->tableName,
-                $data,
-                $format
-            );
-            $employeeId = $this->wpdb->insert_id;
+            $existingId = 0;
+            if ($employee->email() !== '') {
+                $existingId = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                    "SELECT id FROM {$this->tableName} WHERE email = %s ORDER BY id ASC LIMIT 1",
+                    $employee->email()
+                ));
+            }
+            if ($existingId <= 0 && $employee->wpUserId() > 0) {
+                $existingId = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                    "SELECT id FROM {$this->tableName} WHERE wp_user_id = %d ORDER BY id ASC LIMIT 1",
+                    $employee->wpUserId()
+                ));
+            }
+
+            if ($existingId > 0) {
+                $this->wpdb->update(
+                    $this->tableName,
+                    $data,
+                    ['id' => $existingId],
+                    $format,
+                    ['%d']
+                );
+                $employeeId = $existingId;
+            } else {
+                $this->wpdb->insert(
+                    $this->tableName,
+                    $data,
+                    $format
+                );
+                $employeeId = $this->wpdb->insert_id;
+            }
         }
 
         $this->updateTeamMemberships($employeeId, $employee->teamIds());

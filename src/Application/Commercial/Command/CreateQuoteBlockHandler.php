@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Pet\Application\Commercial\Command;
 
 use Pet\Application\System\Service\TransactionManager;
+use Pet\Application\Commercial\Service\QuoteBlockCostSnapshotEnricher;
 
 use Pet\Domain\Commercial\Entity\Block\QuoteBlock;
 use Pet\Domain\Commercial\Repository\QuoteBlockRepository;
 use Pet\Domain\Commercial\Repository\QuoteRepository;
 use Pet\Domain\Commercial\Repository\QuoteSectionRepository;
+use Pet\Domain\Commercial\ValueObject\QuoteState;
 
 final class CreateQuoteBlockHandler
 {
@@ -17,16 +19,19 @@ final class CreateQuoteBlockHandler
     private QuoteRepository $quoteRepository;
     private QuoteSectionRepository $quoteSectionRepository;
     private QuoteBlockRepository $quoteBlockRepository;
+    private QuoteBlockCostSnapshotEnricher $costSnapshotEnricher;
 
     public function __construct(TransactionManager $transactionManager, 
         QuoteRepository $quoteRepository,
         QuoteSectionRepository $quoteSectionRepository,
-        QuoteBlockRepository $quoteBlockRepository
+        QuoteBlockRepository $quoteBlockRepository,
+        QuoteBlockCostSnapshotEnricher $costSnapshotEnricher
     ) {
         $this->transactionManager = $transactionManager;
         $this->quoteRepository = $quoteRepository;
         $this->quoteSectionRepository = $quoteSectionRepository;
         $this->quoteBlockRepository = $quoteBlockRepository;
+        $this->costSnapshotEnricher = $costSnapshotEnricher;
     }
 
     public function handle(CreateQuoteBlockCommand $command): QuoteBlock
@@ -36,6 +41,9 @@ final class CreateQuoteBlockHandler
 
         if ($quote === null) {
             throw new \DomainException('Quote not found');
+        }
+        if ($quote->state()->toString() === QuoteState::ACCEPTED) {
+            throw new \DomainException('Cannot create blocks on an accepted quote.');
         }
 
         $sectionId = $command->sectionId();
@@ -62,15 +70,29 @@ final class CreateQuoteBlockHandler
 
         $position = $maxPosition + 1000;
 
+        $payload = $this->costSnapshotEnricher->enrichPayload($command->type(), $command->payload());
+
+        $sellValue = 0.0;
+        if (isset($payload['totalValue']) && is_numeric($payload['totalValue'])) {
+            $sellValue = (float) $payload['totalValue'];
+        } elseif (isset($payload['sellValue']) && is_numeric($payload['sellValue'])) {
+            $sellValue = (float) $payload['sellValue'];
+        }
+
+        $internalCost = 0.0;
+        if (isset($payload['totalCost']) && is_numeric($payload['totalCost'])) {
+            $internalCost = (float) $payload['totalCost'];
+        }
+
         $block = new QuoteBlock(
             $position,
             $command->type(),
             null,
-            0.0,
-            0.0,
+            $sellValue,
+            $internalCost,
             true,
             $sectionId,
-            $command->payload()
+            $payload
         );
 
         return $this->quoteBlockRepository->insert($block, $command->quoteId());

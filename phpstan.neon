@@ -1,0 +1,19 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+    excludePaths:
+        # UI layer calls WP REST helpers directly — excluded until
+        # a separate phpstan config with WP-REST stubs is added.
+        - src/UI
+        # Persistence layer requires WP schema introspection — excluded.
+        - src/Infrastructure/Persistence
+    bootstrapFiles:
+        # WordPress function/class stubs
+        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        # Additional WP constants not covered by the stubs package
+        - phpstan-bootstrap.php
+    treatPhpDocTypesAsCertain: false

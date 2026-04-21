@@ -62,10 +62,9 @@ class WorkItem
     ): self {
         $hasUserAssignment = $assignedUserId !== null && $assignedUserId !== '';
         $hasTeamAssignment = $assignedTeamId !== null && $assignedTeamId !== '';
-        if ($hasUserAssignment && $hasTeamAssignment) {
-            throw new InvalidArgumentException('Work item cannot be both team-queued and user-assigned.');
-        }
-        $assignmentMode = $assignedUserId ? self::ASSIGNMENT_MODE_USER_ASSIGNED : ($assignedTeamId ? self::ASSIGNMENT_MODE_TEAM_QUEUE : self::ASSIGNMENT_MODE_UNROUTED);
+        $assignmentMode = $hasUserAssignment
+            ? self::ASSIGNMENT_MODE_USER_ASSIGNED
+            : ($hasTeamAssignment ? self::ASSIGNMENT_MODE_TEAM_QUEUE : self::ASSIGNMENT_MODE_UNROUTED);
 
         return new self(
             $id,
@@ -75,7 +74,7 @@ class WorkItem
             $departmentId,
             $assignedTeamId,
             $assignmentMode,
-            self::buildQueueKey($sourceType, $assignmentMode, $assignedTeamId, $assignedUserId),
+            self::buildQueueKey($sourceType, $departmentId, $assignmentMode, $assignedTeamId, $assignedUserId),
             $routingReason,
             $requiredRoleId,
             null,
@@ -194,7 +193,7 @@ class WorkItem
     // Validation
     private function validateSourceType(string $type): void
     {
-        $allowed = ['ticket', 'project_task', 'escalation', 'admin'];
+        $allowed = ['ticket', 'escalation', 'admin'];
         if (!in_array($type, $allowed)) {
             throw new InvalidArgumentException("Invalid source type: $type");
         }
@@ -212,10 +211,6 @@ class WorkItem
     {
         $hasUserAssignment = $this->assignedUserId !== null && $this->assignedUserId !== '';
         $hasTeamAssignment = $this->assignedTeamId !== null && $this->assignedTeamId !== '';
-
-        if ($hasUserAssignment && $hasTeamAssignment) {
-            throw new InvalidArgumentException('Work item cannot be both team-queued and user-assigned.');
-        }
         if ($hasUserAssignment) {
             $this->assignmentMode = self::ASSIGNMENT_MODE_USER_ASSIGNED;
         } elseif ($hasTeamAssignment) {
@@ -228,14 +223,25 @@ class WorkItem
             throw new InvalidArgumentException('Unrouted assignment mode is not allowed for this source type.');
         }
 
-        $this->queueKey = self::buildQueueKey($this->sourceType, $this->assignmentMode, $this->assignedTeamId, $this->assignedUserId);
+        $this->queueKey = self::buildQueueKey(
+            $this->sourceType,
+            $this->departmentId,
+            $this->assignmentMode,
+            $this->assignedTeamId,
+            $this->assignedUserId
+        );
     }
 
-    private static function buildQueueKey(string $sourceType, string $assignmentMode, ?string $assignedTeamId, ?string $assignedUserId): string
+    private static function buildQueueKey(
+        string $sourceType,
+        string $departmentId,
+        string $assignmentMode,
+        ?string $assignedTeamId,
+        ?string $assignedUserId
+    ): string
     {
         $prefix = match ($sourceType) {
-            'ticket' => 'support',
-            'project_task' => 'delivery',
+            'ticket' => self::ticketDomainFromDepartment($departmentId),
             default => $sourceType,
         };
 
@@ -244,6 +250,15 @@ class WorkItem
             self::ASSIGNMENT_MODE_USER_ASSIGNED => "{$prefix}:user:{$assignedUserId}",
             self::ASSIGNMENT_MODE_UNROUTED => "{$prefix}:unrouted",
             default => "{$prefix}:unrouted",
+        };
+    }
+
+    private static function ticketDomainFromDepartment(string $departmentId): string
+    {
+        return match ($departmentId) {
+            'dept_delivery', 'delivery' => 'delivery',
+            'dept_admin', 'admin' => 'admin',
+            default => 'support',
         };
     }
 

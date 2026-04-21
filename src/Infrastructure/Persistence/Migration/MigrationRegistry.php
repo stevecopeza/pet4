@@ -43,6 +43,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddKpiTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreatePerformanceTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateQuoteComponentTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\CreateOnceOffServiceTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateCatalogTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateContractBaselineTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateBaselineComponentsTable::class,
@@ -78,6 +79,7 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddFeedIndexes::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateLeaveCapacityTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateDemoSeedRegistryTable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AlterDemoSeedRegistryTableAddColumns::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateAdminAuditLog::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateConversationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddReplyToMessageIdToConversationEvents::class,
@@ -102,8 +104,10 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddContractIdToQuotes::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateRoleTeamsTable::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketSoldArchitectureColumns::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddTicketProvisioningSourceColumns::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateEscalationTables::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationDedupeKey::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationRuleCriteria::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddMissingReferencedFeatureFlags::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddDashboardsFeatureFlag::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddEscalationSummaryAndResolutionNote::class,
@@ -112,6 +116,12 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddStaffTimeCaptureFeatureFlag::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\RepairDualAssignedWorkItems::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreatePerformanceBenchmarkTables::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\UpdateWorkItemsEnforceTicketOnlyDelivery::class,
+            // Sprint: go-live quoting stage
+            \Pet\Infrastructure\Persistence\Migration\Definition\MakeLeadCustomerIdNullable::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddQuoteApprovalStates::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddBaselinePricesToQuoteComponents::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddQuoteApprovalSettings::class,
         ];
     }
 }

@@ -83,7 +83,7 @@ final class ResilienceController implements RestController
 
     public function checkPermission(): bool
     {
-        return is_user_logged_in();
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function listRuns(WP_REST_Request $request): WP_REST_Response
@@ -226,7 +226,7 @@ final class ResilienceController implements RestController
             $runId = $this->generateHandler->handle(new GenerateResilienceAnalysisCommand($teamId, (int)get_current_user_id()));
             return new WP_REST_Response(['analysis_run_id' => $runId], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
             return new WP_REST_Response(['error' => 'Failed to generate resilience analysis'], 500);
         }

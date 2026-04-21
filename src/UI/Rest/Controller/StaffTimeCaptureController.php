@@ -142,9 +142,9 @@ final class StaffTimeCaptureController implements RestController
 
             return new WP_REST_Response(['message' => 'Time logged', 'id' => $entryId], 201);
         } catch (\DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 422);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 422);
         } catch (\Throwable $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

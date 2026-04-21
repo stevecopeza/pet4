@@ -57,13 +57,13 @@ test.describe.serial('Admin > Knowledge Articles CRUD', () => {
   });
 
   test('can archive an article via kebab menu', async ({ page, consoleErrors }) => {
-    page.on('dialog', (dialog) => dialog.accept());
 
     const row = page.locator('tr', { hasText: updatedTitle });
     await expect(row).toBeVisible();
 
     await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
     await page.getByText('Archive', { exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
 
     await page.waitForResponse(
       (resp) => resp.url().includes('/pet/v1/articles/') && resp.request().method() === 'DELETE'

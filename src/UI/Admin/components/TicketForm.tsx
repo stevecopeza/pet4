@@ -40,6 +40,10 @@ const TicketForm: React.FC<TicketFormProps> = ({ initialData, onSuccess, onCance
     if (initialData?.ownerUserId) {
       return `user:${initialData.ownerUserId}`;
     }
+    const currentUserId = (window as any).petSettings?.currentUserId;
+    if (currentUserId) {
+      return `user:${currentUserId}`;
+    }
     return '';
   });
   // @ts-ignore

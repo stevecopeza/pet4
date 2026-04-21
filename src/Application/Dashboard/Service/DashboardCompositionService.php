@@ -287,6 +287,9 @@ class DashboardCompositionService
             if ($key === 'support:unrouted' && $visibilityScope !== 'TEAM') {
                 $queueKeys[] = $key;
             }
+            if ($key === 'delivery:unrouted' && $visibilityScope !== 'TEAM') {
+                $queueKeys[] = $key;
+            }
         }
         $queueKeys = array_values(array_unique($queueKeys));
         if (empty($queueKeys)) {

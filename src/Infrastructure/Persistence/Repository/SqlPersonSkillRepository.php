@@ -41,11 +41,30 @@ class SqlPersonSkillRepository implements PersonSkillRepository
                 ['%d']
             );
         } else {
-            $this->wpdb->insert(
-                $this->tableName,
-                $data,
-                $format
-            );
+            $existingId = (int)$this->wpdb->get_var($this->wpdb->prepare(
+                "SELECT id FROM {$this->tableName} WHERE employee_id = %d AND skill_id = %d ORDER BY id ASC LIMIT 1",
+                $personSkill->employeeId(),
+                $personSkill->skillId()
+            ));
+            if ($existingId > 0) {
+                $this->wpdb->update(
+                    $this->tableName,
+                    $data,
+                    ['id' => $existingId],
+                    $format,
+                    ['%d']
+                );
+                $this->wpdb->query($this->wpdb->prepare(
+                    "DELETE FROM {$this->tableName} WHERE employee_id = %d AND skill_id = %d AND id <> %d",
+                    [$personSkill->employeeId(), $personSkill->skillId(), $existingId]
+                ));
+            } else {
+                $this->wpdb->insert(
+                    $this->tableName,
+                    $data,
+                    $format
+                );
+            }
         }
     }
 

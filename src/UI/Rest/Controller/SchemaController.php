@@ -189,9 +189,9 @@ class SchemaController implements RestController
             return new WP_REST_Response($this->serializeSchema($schemaDef), 200);
 
         } catch (InvalidArgumentException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         } catch (DomainException $e) {
-             return new WP_REST_Response(['error' => $e->getMessage()], 400);
+             return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -216,7 +216,7 @@ class SchemaController implements RestController
             return new WP_REST_Response($this->serializeSchema($schemaDef), 200);
 
         } catch (DomainException $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

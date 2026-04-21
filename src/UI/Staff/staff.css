@@ -1,0 +1,485 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   PET Staff SPAs — mobile-first styles
+   Used by [pet_log_time] and [pet_my_approvals] shortcodes.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Box-sizing reset so all staff elements are predictable */
+#pet-staff-app *,
+#pet-staff-app *::before,
+#pet-staff-app *::after {
+  box-sizing: border-box;
+}
+
+/* ── Layout ── */
+
+.staff-page {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+/* ── Header bar ── */
+
+.staff-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.staff-header__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-header__date {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* ── Badge (count in header) ── */
+
+.staff-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Card ── */
+
+.staff-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Form fields ── */
+
+.staff-field {
+  margin-bottom: 12px;
+}
+
+.staff-field--half {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.staff-input,
+.staff-select,
+.staff-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #1e293b;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+
+.staff-input:focus,
+.staff-select:focus,
+.staff-textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.staff-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.staff-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* ── Row (side-by-side fields) ── */
+
+.staff-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* ── Time row (input + "Now" button) ── */
+
+.staff-time-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.staff-time-row .staff-input {
+  flex: 1;
+}
+
+/* ── Duration badge ── */
+
+.staff-duration-badge {
+  display: inline-block;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+/* ── Billable checkbox row ── */
+
+.staff-billable-row {
+  margin-bottom: 16px;
+}
+
+.staff-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.staff-checkbox-label input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+/* ── Buttons ── */
+
+.staff-btn-primary {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.staff-btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.staff-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.staff-btn-ghost {
+  padding: 8px 14px;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+
+.staff-btn-ghost:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.staff-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Section heading ── */
+
+.staff-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-total-badge {
+  font-size: 12px;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #16a34a;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Entries list ── */
+
+.staff-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.staff-entry {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.staff-entry__ticket {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.staff-entry__subject {
+  font-weight: 400;
+  color: #475569;
+}
+
+.staff-entry__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.staff-entry__dur {
+  font-weight: 700;
+  color: #0369a1;
+}
+
+.staff-entry__desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Pills ── */
+
+.staff-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.staff-pill--blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* ── Approval cards ── */
+
+.staff-approvals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.staff-approval-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.staff-approval-card--low  { border-left-color: #22c55e; }
+.staff-approval-card--medium { border-left-color: #f59e0b; }
+.staff-approval-card--high   { border-left-color: #ef4444; }
+
+.staff-approval-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.staff-approval-card__id {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+
+.staff-approval-card__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.staff-approval-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.staff-approval-card__meta {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.staff-approval-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.staff-approval-card__reject-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.staff-btn-approve {
+  flex: 1;
+  padding: 10px;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.staff-btn-approve:hover:not(:disabled) { background: #15803d; }
+.staff-btn-approve:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.staff-btn-reject {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.staff-btn-reject:hover:not(:disabled) { background: #fef2f2; }
+.staff-btn-reject:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── State messages ── */
+
+.staff-loading {
+  text-align: center;
+  padding: 40px 16px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.staff-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.staff-error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.staff-error-box--inline {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.staff-success-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+/* ── Fallback error (unknown view) ── */
+
+.staff-error {
+  padding: 20px;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+/* ── Responsive: slightly larger on wider screens ── */
+
+@media (min-width: 480px) {
+  .staff-page {
+    padding: 24px 20px;
+  }
+
+  .staff-card {
+    padding: 20px;
+  }
+}

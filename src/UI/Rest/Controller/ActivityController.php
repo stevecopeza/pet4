@@ -41,7 +41,7 @@ class ActivityController implements RestController
 
     public function checkPermission(): bool
     {
-        return is_user_logged_in();
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getActivityLogs(WP_REST_Request $request): WP_REST_Response

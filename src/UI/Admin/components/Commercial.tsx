@@ -18,7 +18,7 @@ const tabs = [
 type TabKey = typeof tabs[number]['key'];
 
 const Commercial = () => {
-  const [activeTab, setActiveTab] = useState<TabKey>('leads');
+  const [activeTab, setActiveTab] = useState<TabKey>('quotes');
   const [pendingQuoteId, setPendingQuoteId] = useState<number | null>(null);
 
   return (

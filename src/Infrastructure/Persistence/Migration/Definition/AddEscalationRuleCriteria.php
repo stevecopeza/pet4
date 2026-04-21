@@ -16,10 +16,12 @@ class AddEscalationRuleCriteria implements Migration
         $charsetCollate = $wpdb->get_charset_collate();
 
         // Check if criteria_json exists
+        // Note: longtext columns cannot have inline DEFAULT values in MySQL 8+,
+        // so we add as NULL and backfill existing rows immediately after.
         $row = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'criteria_json'");
         if (empty($row)) {
-            $sql = "ALTER TABLE {$table} ADD COLUMN criteria_json longtext NOT NULL DEFAULT '{}' AFTER action";
-            $wpdb->query($sql);
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN criteria_json longtext NULL AFTER action");
+            $wpdb->query("UPDATE {$table} SET criteria_json = '{}' WHERE criteria_json IS NULL");
         }
 
         // Check if is_enabled exists

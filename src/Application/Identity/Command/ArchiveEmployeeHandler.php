@@ -7,7 +7,6 @@ namespace Pet\Application\Identity\Command;
 use Pet\Application\System\Service\TransactionManager;
 
 use Pet\Domain\Identity\Repository\EmployeeRepository;
-use Pet\Domain\Identity\Entity\Employee;
 
 class ArchiveEmployeeHandler
 {
@@ -29,20 +28,9 @@ class ArchiveEmployeeHandler
             throw new \RuntimeException('Employee not found');
         }
 
-        // Archive logic: Set archivedAt to now
-        $archivedEmployee = new Employee(
-            $employee->wpUserId(),
-            $employee->firstName(),
-            $employee->lastName(),
-            $employee->email(),
-            $employee->id(),
-            $employee->malleableSchemaVersion(),
-            $employee->malleableData(),
-            $employee->createdAt(),
-            new \DateTimeImmutable() // Set archivedAt
-        );
-
-        $this->employeeRepository->save($archivedEmployee);
+        // Archive logic: set archivedAt via the domain method.
+        $employee->archive();
+        $this->employeeRepository->save($employee);
     
         });
     }

@@ -9,16 +9,15 @@ class CustomerAdvisorySnapshotQuery
     private $wpdb;
     private string $ticketsTable;
     private string $projectsTable;
-    private string $tasksTable;
     private string $workItemsTable;
     private string $signalsTable;
+    private ?array $ticketColumns = null;
 
     public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
         $this->ticketsTable = $wpdb->prefix . 'pet_tickets';
         $this->projectsTable = $wpdb->prefix . 'pet_projects';
-        $this->tasksTable = $wpdb->prefix . 'pet_tasks';
         $this->workItemsTable = $wpdb->prefix . 'pet_work_items';
         $this->signalsTable = $wpdb->prefix . 'pet_advisory_signals';
     }
@@ -27,14 +26,14 @@ class CustomerAdvisorySnapshotQuery
     {
         $tickets = $this->ticketCounts($customerId);
         $projects = $this->projectCounts($customerId);
-        $taskCounts = $this->taskCounts($customerId);
+        $deliveryTicketCounts = $this->deliveryTicketCounts($customerId);
         $signals = $this->activeSignalSummary($customerId);
 
         return [
             'customer_id' => $customerId,
             'tickets' => $tickets,
             'projects' => $projects,
-            'tasks' => $taskCounts,
+            'delivery_tickets' => $deliveryTicketCounts,
             'signals' => $signals,
             'generated_at_utc' => gmdate('c'),
         ];
@@ -87,28 +86,43 @@ class CustomerAdvisorySnapshotQuery
         ];
     }
 
-    private function taskCounts(int $customerId): array
+    private function deliveryTicketCounts(int $customerId): array
     {
+        $where = 'customer_id = %d';
+        $params = [$customerId];
+        if ($this->hasTicketColumn('lifecycle_owner')) {
+            $where .= ' AND lifecycle_owner = %s';
+            $params[] = 'project';
+        } elseif ($this->hasTicketColumn('project_id')) {
+            $where .= ' AND project_id IS NOT NULL';
+        }
+
         $rows = $this->wpdb->get_results($this->wpdb->prepare(
-            "SELECT t.is_completed, COUNT(*) AS c
-             FROM {$this->tasksTable} t
-             INNER JOIN {$this->projectsTable} p ON p.id = t.project_id
-             WHERE p.customer_id = %d AND p.archived_at IS NULL
-             GROUP BY t.is_completed",
-            $customerId
+            "SELECT status, COUNT(*) AS c
+             FROM {$this->ticketsTable}
+             WHERE $where
+             GROUP BY status",
+            ...$params
         ));
-        $completed = 0;
-        $open = 0;
+
+        $byStatus = [];
+        $closed = 0;
+        $total = 0;
         foreach ($rows ?: [] as $r) {
-            if (((int)$r->is_completed) === 1) {
-                $completed = (int)$r->c;
-            } else {
-                $open = (int)$r->c;
+            $status = (string)$r->status;
+            $count = (int)$r->c;
+            $byStatus[$status] = $count;
+            $total += $count;
+            if (in_array($status, ['completed', 'resolved', 'closed'], true)) {
+                $closed += $count;
             }
         }
+
+        ksort($byStatus);
         return [
-            'open' => $open,
-            'completed' => $completed,
+            'by_status' => $byStatus,
+            'open' => max(0, $total - $closed),
+            'closed' => $closed,
         ];
     }
 
@@ -161,19 +175,23 @@ class CustomerAdvisorySnapshotQuery
             $customerId
         ));
 
-        $taskWork = $this->wpdb->get_col($this->wpdb->prepare(
-            "SELECT wi.id
-             FROM {$this->workItemsTable} wi
-             INNER JOIN {$this->tasksTable} task ON task.id = wi.source_id
-             INNER JOIN {$this->projectsTable} p ON p.id = task.project_id
-             WHERE wi.source_type = %s AND p.customer_id = %d",
-            'project_task',
-            $customerId
-        ));
+        return array_values(array_unique(array_map('strval', $ticketWork ?: [])));
+    }
 
-        $ids = array_merge($ticketWork ?: [], $taskWork ?: []);
-        $ids = array_values(array_unique(array_map('strval', $ids)));
-        return $ids;
+    private function hasTicketColumn(string $column): bool
+    {
+        if ($this->ticketColumns === null) {
+            $this->ticketColumns = [];
+            $tableExists = $this->wpdb->get_var("SHOW TABLES LIKE '$this->ticketsTable'") === $this->ticketsTable;
+            if ($tableExists) {
+                $columns = $this->wpdb->get_col("DESCRIBE {$this->ticketsTable}", 0);
+                if (is_array($columns)) {
+                    $this->ticketColumns = array_map('strval', $columns);
+                }
+            }
+        }
+
+        return in_array($column, $this->ticketColumns, true);
     }
 }
 

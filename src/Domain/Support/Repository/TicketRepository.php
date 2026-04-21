@@ -16,4 +16,5 @@ interface TicketRepository
     public function countActiveUnassigned(): int;
     public function delete(int $id): void;
     public function findByQuoteId(int $quoteId): array;
+    public function findByProvisioningKey(int $projectId, int $sourceComponentId, ?int $parentTicketId): ?Ticket;
 }

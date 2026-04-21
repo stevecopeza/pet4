@@ -84,7 +84,7 @@ class CalendarController
             $this->repository->save($calendar);
             return new \WP_REST_Response($this->serializeCalendar($calendar), 201);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -106,7 +106,7 @@ class CalendarController
             $this->repository->save($calendar);
             return new \WP_REST_Response($this->serializeCalendar($calendar), 200);
         } catch (\Exception $e) {
-            return new \WP_REST_Response(['message' => $e->getMessage()], 400);
+            return new \WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

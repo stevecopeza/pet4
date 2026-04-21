@@ -51,15 +51,13 @@ class WorkItemTest extends TestCase
     /** @dataProvider validSourceTypesProvider */
     public function testValidSourceTypes(string $type): void
     {
-        $item = $type === 'project_task'
-            ? $this->makeItem(sourceType: $type, assignedTeamId: 'team-1')
-            : $this->makeItem(sourceType: $type);
+        $item = $this->makeItem(sourceType: $type);
         $this->assertSame($type, $item->getSourceType());
     }
 
     public function validSourceTypesProvider(): array
     {
-        return [['ticket'], ['project_task'], ['escalation'], ['admin']];
+        return [['ticket'], ['escalation'], ['admin']];
     }
 
     public function testInvalidSourceTypeThrows(): void
@@ -123,31 +121,48 @@ class WorkItemTest extends TestCase
         $this->assertSame(WorkItem::ASSIGNMENT_MODE_UNROUTED, $item->getAssignmentMode());
     }
 
-    public function testUnroutedNotAllowedForProjectTask(): void
+
+    public function testCreateAllowsDualAssignment(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->makeItem(sourceType: 'project_task');
+        $item = $this->makeItem(assignedTeamId: 'team-1', assignedUserId: 'user-1');
+        $this->assertSame('team-1', $item->getAssignedTeamId());
+        $this->assertSame('user-1', $item->getAssignedUserId());
+        $this->assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $item->getAssignmentMode());
+        $this->assertSame('support:user:user-1', $item->getQueueKey());
     }
 
-    public function testCreateRejectsDualAssignment(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('both team-queued and user-assigned');
-        $this->makeItem(assignedTeamId: 'team-1', assignedUserId: 'user-1');
-    }
-
-    public function testUpdateAssignmentRejectsDualAssignment(): void
+    public function testUpdateAssignmentAllowsDualAssignment(): void
     {
         $item = $this->makeItem(assignedTeamId: 'team-1');
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('both team-queued and user-assigned');
         $item->updateAssignment('team-1', 'user-1');
+        $this->assertSame('team-1', $item->getAssignedTeamId());
+        $this->assertSame('user-1', $item->getAssignedUserId());
+        $this->assertSame(WorkItem::ASSIGNMENT_MODE_USER_ASSIGNED, $item->getAssignmentMode());
+        $this->assertSame('support:user:user-1', $item->getQueueKey());
     }
 
-    public function testCreateRejectsDualAssignmentBeforeAssignmentModeDerivation(): void
+    public function testTicketInDeliveryDepartmentBuildsDeliveryQueueKey(): void
+    {
+        $item = WorkItem::create(
+            'wi-delivery',
+            'ticket',
+            'src-77',
+            'dept_delivery',
+            10.0,
+            'active',
+            new \DateTimeImmutable('2026-01-15 09:00'),
+            null,
+            '3',
+            null
+        );
+
+        $this->assertSame('delivery:team:3', $item->getQueueKey());
+    }
+
+    public function testCreateStillValidatesSourceTypeWithDualAssignment(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('both team-queued and user-assigned');
+        $this->expectExceptionMessage('Invalid source type');
 
         WorkItem::create(
             'wi-early-reject',

@@ -77,6 +77,7 @@ Overview is role-aware:
 ## Dashboard and Benchmark Flow
 - `PET → Dashboards` opens role/persona dashboard surfaces (read-focused)
 - `PET → Performance` opens performance benchmark diagnostics (admin-only, benchmark run capable)
+- Project Manager cards inside `PET → Dashboards` drill through to Delivery project detail using `PET → Delivery` with `#project=<id>` URL state.
 
 Neither route is used for direct domain-record mutation.
 
@@ -95,7 +96,7 @@ Context continuity is required across Customer, Branch, and Contact interactions
 `Quotes → Acceptance → Sales → Delivery Projects`
 
 ### Delivery
-`Projects → Milestones/Tasks → Time`
+`Projects List → Project Detail Workspace (Tickets) → Time`
 
 ### Support
 `Tickets → Resolution → Knowledge`

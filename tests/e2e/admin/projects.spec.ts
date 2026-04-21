@@ -57,13 +57,13 @@ test.describe.serial('Admin > Projects CRUD', () => {
   });
 
   test('can archive a project via kebab menu', async ({ page, consoleErrors }) => {
-    page.on('dialog', (dialog) => dialog.accept());
 
     const row = page.locator('tr', { hasText: updatedName });
     await expect(row).toBeVisible();
 
     await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
     await page.getByText('Archive', { exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
 
     const archiveResponse = await page.waitForResponse(
       (resp) => resp.url().includes('/pet/v1/projects/') && resp.request().method() === 'DELETE'

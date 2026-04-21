@@ -38,7 +38,7 @@ class AssignmentController implements RestController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getAssignments'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
@@ -59,6 +59,11 @@ class AssignmentController implements RestController
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 
     public function getAssignments(WP_REST_Request $request): WP_REST_Response
@@ -110,7 +115,7 @@ class AssignmentController implements RestController
             $assignmentId = $this->assignRoleToPersonHandler->handle($command);
             return new WP_REST_Response(['id' => $assignmentId, 'message' => 'Assignment created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
@@ -129,7 +134,7 @@ class AssignmentController implements RestController
             $this->endAssignmentHandler->handle($command);
             return new WP_REST_Response(['message' => 'Assignment ended'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 500);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 }

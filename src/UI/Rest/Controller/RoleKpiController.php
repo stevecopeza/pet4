@@ -84,7 +84,7 @@ class RoleKpiController implements RestController
             $this->assignKpiToRoleHandler->handle($command);
             return new WP_REST_Response(['message' => 'KPI assigned to role successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 

@@ -9,16 +9,13 @@ class WorkQueueQueryService
     private $wpdb;
     private string $workItemsTable;
     private string $ticketsTable;
-    private string $tasksTable;
-    private string $projectsTable;
+    private ?array $ticketColumns = null;
 
     public function __construct($wpdb)
     {
         $this->wpdb = $wpdb;
         $this->workItemsTable = $wpdb->prefix . 'pet_work_items';
         $this->ticketsTable = $wpdb->prefix . 'pet_tickets';
-        $this->tasksTable = $wpdb->prefix . 'pet_tasks';
-        $this->projectsTable = $wpdb->prefix . 'pet_projects';
     }
 
     public function countByQueueKeys(array $queueKeys): array
@@ -33,26 +30,27 @@ class WorkQueueQueryService
 
     public function listItemsForQueue(string $queueKey): array
     {
-        [$where, $params] = $this->whereForQueue($queueKey);
+        [$where, $params, $domain] = $this->whereForQueue($queueKey);
         if ($where === null) {
             return [];
         }
+        [$ticketSelectSql, $ticketJoinSql, $lifecycleFilterSql] = $this->ticketJoinFragments($domain, $params);
 
         $sql = $this->wpdb->prepare(
-            "SELECT *
-             FROM {$this->workItemsTable}
+            "SELECT
+                wi.*,
+                $ticketSelectSql
+             FROM {$this->workItemsTable} wi
+             $ticketJoinSql
              WHERE $where
-             AND status IN ('active', 'waiting')
-             ORDER BY priority_score DESC, updated_at DESC",
+               AND wi.status IN ('active', 'waiting')$lifecycleFilterSql
+             ORDER BY wi.priority_score DESC, wi.updated_at DESC",
             ...$params
         );
         $rows = $this->wpdb->get_results($sql);
         if (!$rows) {
             return [];
         }
-
-        $tickets = $this->loadTickets($rows);
-        $delivery = $this->loadDeliveryTasks($rows);
 
         $out = [];
         foreach ($rows as $row) {
@@ -68,22 +66,15 @@ class WorkQueueQueryService
             $dueAt = $row->scheduled_due_utc ? (string)$row->scheduled_due_utc : null;
             $projectId = null;
 
-            if ($sourceType === 'ticket' && isset($tickets[$sourceId])) {
-                $t = $tickets[$sourceId];
+            if ($sourceType === 'ticket') {
                 $reference = 'TICKET-' . $sourceId;
-                $title = $t['subject'];
-                $customerId = $t['customer_id'];
-                $siteId = $t['site_id'];
-                $status = $t['status'];
-                $priority = $t['priority_score'];
-                $dueAt = $t['due_at'];
-            } elseif ($sourceType === 'project_task' && isset($delivery[$sourceId])) {
-                $d = $delivery[$sourceId];
-                $reference = 'TASK-' . $sourceId;
-                $title = $d['name'];
-                $customerId = $d['customer_id'];
-                $status = $d['status'];
-                $projectId = $d['project_id'];
+                $title = isset($row->ticket_subject) ? (string)$row->ticket_subject : null;
+                $customerId = isset($row->ticket_customer_id) && $row->ticket_customer_id !== null ? (int)$row->ticket_customer_id : null;
+                $siteId = isset($row->ticket_site_id) && $row->ticket_site_id !== null ? (int)$row->ticket_site_id : null;
+                $status = isset($row->ticket_status) ? (string)$row->ticket_status : null;
+                $priority = $this->priorityScoreFromTicketPriority(isset($row->ticket_priority) ? (string)$row->ticket_priority : null) ?? (float)$row->priority_score;
+                $dueAt = isset($row->ticket_due_at) && $row->ticket_due_at ? (string)$row->ticket_due_at : $dueAt;
+                $projectId = isset($row->ticket_project_id) && $row->ticket_project_id !== null ? (int)$row->ticket_project_id : null;
             }
 
             $out[] = [
@@ -125,96 +116,35 @@ class WorkQueueQueryService
         return 'UNROUTED';
     }
 
-    private function loadTickets(array $workRows): array
+    private function priorityScoreFromTicketPriority(?string $priority): ?float
     {
-        $ids = [];
-        foreach ($workRows as $row) {
-            if ((string)$row->source_type === 'ticket') {
-                $ids[] = (int)$row->source_id;
-            }
-        }
-        $ids = array_values(array_unique(array_filter($ids)));
-        if (empty($ids)) {
-            return [];
+        if ($priority === null || $priority === '') {
+            return null;
         }
 
-        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
-        $sql = $this->wpdb->prepare(
-            "SELECT id, subject, customer_id, site_id, status, priority, resolution_due_at
-             FROM {$this->ticketsTable}
-             WHERE id IN ($placeholders)",
-            ...$ids
-        );
-        $rows = $this->wpdb->get_results($sql);
-
-        $out = [];
-        foreach ($rows as $r) {
-            $priorityScore = match ((string)$r->priority) {
-                'critical' => 100.0,
-                'high' => 75.0,
-                'medium' => 50.0,
-                'low' => 25.0,
-                default => 50.0,
-            };
-
-            $out[(string)$r->id] = [
-                'subject' => (string)$r->subject,
-                'customer_id' => (int)$r->customer_id,
-                'site_id' => $r->site_id !== null ? (int)$r->site_id : null,
-                'status' => (string)$r->status,
-                'priority_score' => $priorityScore,
-                'due_at' => $r->resolution_due_at ? (string)$r->resolution_due_at : null,
-            ];
-        }
-        return $out;
-    }
-
-    private function loadDeliveryTasks(array $workRows): array
-    {
-        $ids = [];
-        foreach ($workRows as $row) {
-            if ((string)$row->source_type === 'project_task') {
-                $ids[] = (int)$row->source_id;
-            }
-        }
-        $ids = array_values(array_unique(array_filter($ids)));
-        if (empty($ids)) {
-            return [];
-        }
-
-        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
-        $sql = $this->wpdb->prepare(
-            "SELECT t.id, t.project_id, t.name, t.is_completed, p.customer_id
-             FROM {$this->tasksTable} t
-             LEFT JOIN {$this->projectsTable} p ON p.id = t.project_id
-             WHERE t.id IN ($placeholders)",
-            ...$ids
-        );
-        $rows = $this->wpdb->get_results($sql);
-
-        $out = [];
-        foreach ($rows as $r) {
-            $out[(string)$r->id] = [
-                'project_id' => (int)$r->project_id,
-                'name' => (string)$r->name,
-                'status' => ((int)$r->is_completed) === 1 ? 'completed' : 'active',
-                'customer_id' => $r->customer_id !== null ? (int)$r->customer_id : null,
-            ];
-        }
-        return $out;
+        return match ($priority) {
+            'critical' => 100.0,
+            'high' => 75.0,
+            'medium' => 50.0,
+            'low' => 25.0,
+            default => null,
+        };
     }
 
     private function countForQueue(string $queueKey): int
     {
-        [$where, $params] = $this->whereForQueue($queueKey);
+        [$where, $params, $domain] = $this->whereForQueue($queueKey);
         if ($where === null) {
             return 0;
         }
+        [, $ticketJoinSql, $lifecycleFilterSql] = $this->ticketJoinFragments($domain, $params);
 
         $sql = $this->wpdb->prepare(
-            "SELECT COUNT(*) FROM {$this->workItemsTable}
+            "SELECT COUNT(*)
+             FROM {$this->workItemsTable} wi
+             $ticketJoinSql
              WHERE $where
-             AND status IN ('active', 'waiting')",
+               AND wi.status IN ('active', 'waiting')$lifecycleFilterSql",
             ...$params
         );
         return (int)$this->wpdb->get_var($sql);
@@ -224,7 +154,7 @@ class WorkQueueQueryService
     {
         $parts = explode(':', $queueKey);
         if (count($parts) < 2) {
-            return [null, []];
+            return [null, [], null];
         }
 
         $domain = $parts[0];
@@ -232,29 +162,96 @@ class WorkQueueQueryService
         $id = $parts[2] ?? null;
 
         $sourceType = match ($domain) {
-            'support' => 'ticket',
-            'delivery' => 'project_task',
+            'support', 'delivery' => 'ticket',
+            'escalation', 'admin' => $domain,
             default => null,
         };
         if ($sourceType === null) {
-            return [null, []];
+            return [null, [], null];
         }
 
         if ($kind === 'user' && $id !== null) {
-            return ["source_type = %s AND assigned_user_id = %s", [$sourceType, $id]];
+            return ["wi.source_type = %s AND wi.assigned_user_id = %s", [$sourceType, $id], $domain];
         }
 
         if ($kind === 'team' && $id !== null) {
-            return ["source_type = %s AND assigned_team_id = %s AND (assigned_user_id IS NULL OR assigned_user_id = '')", [$sourceType, $id]];
+            return ["wi.source_type = %s AND wi.assigned_team_id = %s AND (wi.assigned_user_id IS NULL OR wi.assigned_user_id = '')", [$sourceType, $id], $domain];
         }
 
         if ($kind === 'unrouted') {
-            if ($sourceType !== 'ticket') {
-                return [null, []];
-            }
-            return ["source_type = %s AND (assigned_user_id IS NULL OR assigned_user_id = '') AND (assigned_team_id IS NULL OR assigned_team_id = '')", [$sourceType]];
+            return ["wi.source_type = %s AND (wi.assigned_user_id IS NULL OR wi.assigned_user_id = '') AND (wi.assigned_team_id IS NULL OR wi.assigned_team_id = '')", [$sourceType], $domain];
         }
 
-        return [null, []];
+        return [null, [], null];
+    }
+
+    private function supportsTicketLifecycleFiltering(): bool
+    {
+        return $this->ticketTableExists() && $this->hasTicketColumn('lifecycle_owner');
+    }
+
+    private function tableHasColumn(string $table, string $column): bool
+    {
+        $tableExists = $this->wpdb->get_var("SHOW TABLES LIKE '$table'");
+        if ($tableExists !== $table) {
+            return false;
+        }
+
+        $columns = $this->wpdb->get_col("DESCRIBE $table", 0);
+        return is_array($columns) && in_array($column, $columns, true);
+    }
+
+    private function ticketTableExists(): bool
+    {
+        return $this->wpdb->get_var("SHOW TABLES LIKE '$this->ticketsTable'") === $this->ticketsTable;
+    }
+
+    private function hasTicketColumn(string $column): bool
+    {
+        if (!$this->ticketTableExists()) {
+            return false;
+        }
+
+        if ($this->ticketColumns === null) {
+            $columns = $this->wpdb->get_col("DESCRIBE {$this->ticketsTable}", 0);
+            $this->ticketColumns = is_array($columns) ? array_map('strval', $columns) : [];
+        }
+
+        return in_array($column, $this->ticketColumns, true);
+    }
+
+    private function ticketSelectExpression(string $column, string $alias): string
+    {
+        if ($this->ticketTableExists() && $this->hasTicketColumn($column)) {
+            return "t.$column AS $alias";
+        }
+
+        return "NULL AS $alias";
+    }
+
+    private function ticketJoinFragments(?string $domain, array &$params): array
+    {
+        $select = implode(",\n                ", [
+            $this->ticketSelectExpression('subject', 'ticket_subject'),
+            $this->ticketSelectExpression('customer_id', 'ticket_customer_id'),
+            $this->ticketSelectExpression('site_id', 'ticket_site_id'),
+            $this->ticketSelectExpression('status', 'ticket_status'),
+            $this->ticketSelectExpression('priority', 'ticket_priority'),
+            $this->ticketSelectExpression('resolution_due_at', 'ticket_due_at'),
+            $this->ticketSelectExpression('project_id', 'ticket_project_id'),
+        ]);
+
+        $join = '';
+        $lifecycleFilter = '';
+        if ($this->ticketTableExists()) {
+            $join = "LEFT JOIN {$this->ticketsTable} t\n               ON wi.source_type = 'ticket'\n              AND wi.source_id = t.id";
+            if ($this->supportsTicketLifecycleFiltering() && in_array($domain, ['support', 'delivery'], true)) {
+                $lifecycleOwner = $domain === 'delivery' ? 'project' : 'support';
+                $lifecycleFilter = ' AND t.lifecycle_owner = %s';
+                $params[] = $lifecycleOwner;
+            }
+        }
+
+        return [$select, $join, $lifecycleFilter];
     }
 }

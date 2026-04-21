@@ -76,9 +76,9 @@ final class SeedRegistryDiagnosticsServiceTest extends TestCase
         $this->wpdb->query("CREATE TABLE {$p}pet_time_entries (id INTEGER PRIMARY KEY AUTOINCREMENT)");
         $this->wpdb->query("CREATE TABLE {$p}pet_person_skills (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER, skill_id INTEGER)");
         $this->wpdb->query("CREATE TABLE {$p}pet_person_certifications (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER, certification_id INTEGER)");
-        $this->wpdb->query("CREATE TABLE {$p}pet_team_members (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INTEGER, employee_id INTEGER)");
-        $this->wpdb->query("CREATE TABLE {$p}pet_employees (id INTEGER PRIMARY KEY AUTOINCREMENT)");
-        $this->wpdb->query("CREATE TABLE {$p}pet_teams (id INTEGER PRIMARY KEY AUTOINCREMENT)");
+        $this->wpdb->query('CREATE TABLE ' . $p . 'pet_team_members (id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INTEGER, employee_id INTEGER)');
+        $this->wpdb->query('CREATE TABLE ' . $p . 'pet_employees (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NULL)');
+        $this->wpdb->query('CREATE TABLE ' . $p . 'pet_teams (id INTEGER PRIMARY KEY AUTOINCREMENT)');
     }
 
     /**

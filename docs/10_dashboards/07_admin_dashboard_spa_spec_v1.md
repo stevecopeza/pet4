@@ -5,7 +5,7 @@ Date: 2026-03-02
 
 ## Purpose
 
-Documents the React SPA admin dashboard that delivers operational visibility across three persona-driven views. This is the primary operational surface within PET's WordPress admin, rendering at `/wp-admin/admin.php?page=pet-dashboards`.
+Documents the React SPA admin dashboard that delivers operational visibility across five persona-driven views. This is the primary operational surface within PET's WordPress admin, rendering at `/wp-admin/admin.php?page=pet-dashboards`.
 
 This document is additive to the high-level dashboard principles in `10_dashboards/01_dashboard_and_kpi_views.md` and the per-persona focus areas in `10_dashboards/02_executive_dashboard.md` through `10_dashboards/06_people_dashboard.md`.
 
@@ -29,9 +29,10 @@ WordPress enqueues the built assets on the `pet-dashboards` admin page. WP admin
 The dashboard is a single React component (`Dashboards`) that:
 
 1. Fetches all data on mount via existing PET REST API endpoints
-2. Renders one of three persona views based on tab selection
+2. Renders one of five persona views based on tab selection
 3. Auto-refreshes every 60 seconds
 4. Supports drill-down from Support view into a Ticket Detail panel
+5. Supports drill-through from Project Manager cards into Delivery project detail workspace
 
 ### Data Flow
 
@@ -110,9 +111,18 @@ All API calls use `window.petSettings.apiUrl` and `window.petSettings.nonce` for
 - Over budget (burn > 100%)
 - At risk (burn > 80%)
 - Overdue (end date past)
+- Card click-through opens Delivery detail route for that project (`?page=pet-delivery#project=<id>`)
 
 **Delivery Activity** stream:
 - Filtered to project-related event types
+
+---
+
+## Implementation Addendum (2026-03-25)
+
+- PM project cards are keyboard and click navigable and route to Delivery via `?page=pet-delivery#project=<id>`.
+- Delivery hash deep-link handling opens detail workspace mode for the selected project and shows `Back to Projects`.
+- Initial loading preserves hash-selected project state so deep-linked project detail is not dropped before project data loads.
 
 ---
 

@@ -11,6 +11,7 @@ use Pet\Application\Commercial\Command\UpdateCatalogProductHandler;
 use Pet\Application\Commercial\Command\ArchiveCatalogProductCommand;
 use Pet\Application\Commercial\Command\ArchiveCatalogProductHandler;
 use Pet\Domain\Commercial\Repository\CatalogProductRepository;
+use Pet\UI\Rest\Support\PortalPermissionHelper;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -40,14 +41,14 @@ class CatalogProductController implements RestController
     public function registerRoutes(): void
     {
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE, [
-            ['methods' => WP_REST_Server::READABLE, 'callback' => [$this, 'list'], 'permission_callback' => [$this, 'checkPermission']],
-            ['methods' => WP_REST_Server::CREATABLE, 'callback' => [$this, 'create'], 'permission_callback' => [$this, 'checkPermission']],
+            ['methods' => WP_REST_Server::READABLE, 'callback' => [$this, 'list'], 'permission_callback' => [$this, 'checkPortalPermission']],
+            ['methods' => WP_REST_Server::CREATABLE, 'callback' => [$this, 'create'], 'permission_callback' => [$this, 'checkPortalPermission']],
         ]);
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)', [
-            ['methods' => 'PUT', 'callback' => [$this, 'update'], 'permission_callback' => [$this, 'checkPermission']],
+            ['methods' => 'PUT', 'callback' => [$this, 'update'], 'permission_callback' => [$this, 'checkPortalPermission']],
         ]);
         register_rest_route(self::NAMESPACE, '/' . self::RESOURCE . '/(?P<id>\d+)/archive', [
-            ['methods' => 'POST', 'callback' => [$this, 'archive'], 'permission_callback' => [$this, 'checkPermission']],
+            ['methods' => 'POST', 'callback' => [$this, 'archive'], 'permission_callback' => [$this, 'checkPortalPermission']],
         ]);
     }
 
@@ -83,7 +84,7 @@ class CatalogProductController implements RestController
             ));
             return new WP_REST_Response(['id' => $id, 'status' => 'created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -101,7 +102,7 @@ class CatalogProductController implements RestController
             ));
             return new WP_REST_Response(['status' => 'updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -111,12 +112,17 @@ class CatalogProductController implements RestController
             $this->archiveHandler->handle(new ArchiveCatalogProductCommand((int)$request->get_param('id')));
             return new WP_REST_Response(['status' => 'archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkPortalPermission(): bool
+    {
+        return PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 }

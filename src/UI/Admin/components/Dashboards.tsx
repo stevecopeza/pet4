@@ -53,6 +53,7 @@ interface TicketItem {
   billingContextType?: string;
   slaSnapshotId?: number | null;
   slaName?: string | null;
+  projectId?: number | null;
 }
 
 interface WorkItem {
@@ -1029,13 +1030,96 @@ const SalesView: React.FC<{
 
 const PMView: React.FC<{
   projects: ProjectItem[];
+  tickets: TicketItem[];
   workItems: WorkItem[];
   activity: ActivityItem[];
   customers: Map<number, string>;
-}> = ({ projects, workItems, activity, customers }) => {
+}> = ({ projects, tickets, workItems, activity, customers }) => {
   const now = new Date();
   const intakeProjects = projects.filter(p => p.state === 'intake');
   const activeProjects = projects.filter(p => p.state === 'active' || p.state === 'planned');
+  const projectTasks = (project: ProjectItem) => Array.isArray(project.tasks) ? project.tasks : [];
+  const openDeliveryProjectDetail = (projectId: number) => {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.search = '?page=pet-delivery';
+    nextUrl.hash = `project=${projectId}`;
+    window.location.assign(nextUrl.toString());
+  };
+  const projectTicketMetrics = useMemo(() => {
+    const statusAwareProgress = (completed: number, inProgress: number, total: number): number => {
+      if (total <= 0) return 0;
+      const weighted = completed + (inProgress * 0.5);
+      return Math.round((weighted / total) * 100);
+    };
+    const completeStates = new Set(['completed', 'done', 'resolved', 'closed']);
+    const inProgressStates = new Set(['in_progress', 'in-progress', 'inprogress', 'started', 'active', 'working']);
+    const byProject = new Map<number, TicketItem[]>();
+
+    for (const ticket of tickets) {
+      const projectId = Number(ticket.projectId || 0);
+      if (projectId <= 0) continue;
+      if (ticket.isRollup) continue;
+      if (ticket.lifecycleOwner && ticket.lifecycleOwner !== 'project') continue;
+      const group = byProject.get(projectId) || [];
+      group.push(ticket);
+      byProject.set(projectId, group);
+    }
+
+    const result = new Map<number, {
+      total: number;
+      completed: number;
+      inProgress: number;
+      planned: number;
+      progress: number;
+      hasTicketData: boolean;
+      healthTasks: { completed: boolean }[];
+    }>();
+
+    for (const project of projects) {
+      const ticketRows = byProject.get(project.id) || [];
+      if (ticketRows.length > 0) {
+        let completed = 0;
+        let inProgress = 0;
+        for (const ticket of ticketRows) {
+          const status = String(ticket.status || '').toLowerCase().trim();
+          if (completeStates.has(status)) {
+            completed += 1;
+          } else if (inProgressStates.has(status)) {
+            inProgress += 1;
+          }
+        }
+        const total = ticketRows.length;
+        const planned = Math.max(total - completed - inProgress, 0);
+        result.set(project.id, {
+          total,
+          completed,
+          inProgress,
+          planned,
+          progress: statusAwareProgress(completed, inProgress, total),
+          hasTicketData: true,
+          healthTasks: [
+            ...Array.from({ length: completed }, () => ({ completed: true })),
+            ...Array.from({ length: Math.max(total - completed, 0) }, () => ({ completed: false })),
+          ],
+        });
+      } else {
+        const fallbackTasks = projectTasks(project);
+        const total = fallbackTasks.length;
+        const completed = fallbackTasks.filter(t => t.completed).length;
+        result.set(project.id, {
+          total,
+          completed,
+          inProgress: 0,
+          planned: Math.max(total - completed, 0),
+          progress: total > 0 ? pct(completed, total) : 0,
+          hasTicketData: false,
+          healthTasks: fallbackTasks.map(t => ({ completed: Boolean(t.completed) })),
+        });
+      }
+    }
+
+    return result;
+  }, [projects, tickets]);
 
   // Fetch journey data for all active projects
   const [journeyMap, setJourneyMap] = useState<Record<number, JourneyData>>({});
@@ -1054,18 +1138,18 @@ const PMView: React.FC<{
   }, [projects.length]); // re-fetch when project count changes
   const totalSold = activeProjects.reduce((sum, p) => sum + (p.soldHours || 0), 0);
   const totalHoursUsed = activeProjects.reduce((sum, p) => sum + (p.malleableData?.hours_used ?? 0), 0);
-  const totalTasks = activeProjects.reduce((sum, p) => sum + p.tasks.length, 0);
-  const totalCompleted = activeProjects.reduce((sum, p) => sum + p.tasks.filter(t => t.completed).length, 0);
+  const totalTasks = activeProjects.reduce((sum, p) => sum + (projectTicketMetrics.get(p.id)?.total || 0), 0);
+  const totalCompleted = activeProjects.reduce((sum, p) => sum + (projectTicketMetrics.get(p.id)?.completed || 0), 0);
   const overdueProjects = activeProjects.filter(p => p.endDate && new Date(p.endDate) < now);
 
   // Projects at risk: overdue, over-budget, or burn-ahead
   const attentionItems = activeProjects
     .map(p => {
-      const health = computeProjectHealth(p);
+      const metrics = projectTicketMetrics.get(p.id);
+      const health = computeProjectHealth({ ...p, tasks: metrics?.healthTasks || projectTasks(p) });
       if (health.state === 'green' || health.state === 'grey') return null;
-
-      const taskCount = p.tasks.length;
-      const completedCount = p.tasks.filter(t => t.completed).length;
+      const taskCount = metrics?.total || 0;
+      const completedCount = metrics?.completed || 0;
       const hoursUsed = p.malleableData?.hours_used ?? 0;
       const soldH = p.soldHours || 0;
       const burnPct = soldH > 0 ? Math.round((hoursUsed / soldH) * 100) : 0;
@@ -1129,9 +1213,10 @@ const PMView: React.FC<{
         </h3>
         <div className="pd-project-grid">
           {activeProjects.map(p => {
-            const taskCount = p.tasks.length;
-            const completedCount = p.tasks.filter(t => t.completed).length;
-            const progress = taskCount > 0 ? pct(completedCount, taskCount) : 0;
+            const metrics = projectTicketMetrics.get(p.id);
+            const taskCount = metrics?.total || 0;
+            const completedCount = metrics?.completed || 0;
+            const progress = metrics?.progress || 0;
             const hoursUsed = p.malleableData?.hours_used ?? 0;
             const soldH = p.soldHours || 0;
             const burnPct = soldH > 0 ? Math.round((hoursUsed / soldH) * 100) : 0;
@@ -1139,7 +1224,7 @@ const PMView: React.FC<{
             const isOverdue = days !== null && days < 0;
             const custName = customers.get(p.customerId) || `Customer #${p.customerId}`;
             const pm = p.malleableData?.pm || '--';
-            const projHealth = computeProjectHealth(p);
+            const projHealth = computeProjectHealth({ ...p, tasks: metrics?.healthTasks || projectTasks(p) });
 
             // Trajectory indicator: compare actual burn rate vs planned burn rate
             let trajLabel = '\u2192'; // → stable
@@ -1164,7 +1249,20 @@ const PMView: React.FC<{
             const lastActivityDays = lastEvent ? Math.floor((Date.now() - new Date(lastEvent.occurred_at).getTime()) / 86400000) : null;
 
             return (
-              <div key={p.id} className={`pd-project-card ${projHealth.className}`}>
+              <div
+                key={p.id}
+                className={`pd-project-card pd-clickable ${projHealth.className}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open project details for ${p.name}`}
+                onClick={() => openDeliveryProjectDetail(p.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openDeliveryProjectDetail(p.id);
+                  }
+                }}
+              >
                 <div className="pd-project-card-header">
                   <div className="pd-project-card-title">{p.name}</div>
                   <span className={`pd-project-state-badge state-${p.state}`}>{p.state.replace('_', ' ')}</span>
@@ -2341,7 +2439,11 @@ const Dashboards: React.FC = () => {
       setDemoWow(dashRes.demoWow);
       setTickets(Array.isArray(ticketsRes) ? ticketsRes : []);
       setWorkItems(Array.isArray(workRes) ? workRes : []);
-      setProjects(Array.isArray(projRes) ? projRes : []);
+      const normalizedProjects = (Array.isArray(projRes) ? projRes : []).map((project: any) => ({
+        ...project,
+        tasks: Array.isArray(project?.tasks) ? project.tasks : [],
+      }));
+      setProjects(normalizedProjects);
       setActivity(Array.isArray(actRes) ? actRes : (actRes?.items || []));
       setCustomers(new Map((Array.isArray(custRes) ? custRes : []).map((c: CustomerItem) => [c.id, c.name])));
       setLeads(Array.isArray(leadsRes) ? leadsRes : []);
@@ -2527,6 +2629,7 @@ const Dashboards: React.FC = () => {
         {persona === 'pm' && (
           <PMView
             projects={projects}
+            tickets={tickets}
             workItems={workItems}
             activity={activity}
             customers={customers}

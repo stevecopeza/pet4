@@ -79,7 +79,7 @@ class RateCardController implements RestController
             ));
             return new WP_REST_Response(['id' => $id, 'status' => 'created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -89,7 +89,7 @@ class RateCardController implements RestController
             $this->archiveHandler->handle(new ArchiveRateCardCommand((int)$request->get_param('id')));
             return new WP_REST_Response(['status' => 'archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -104,7 +104,7 @@ class RateCardController implements RestController
             ));
             return new WP_REST_Response($this->serialize($card), 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], $e instanceof \DomainException ? 404 : 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], $e instanceof \DomainException ? 404 : 400);
         }
     }
 

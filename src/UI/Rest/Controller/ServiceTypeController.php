@@ -73,7 +73,7 @@ class ServiceTypeController implements RestController
             ));
             return new WP_REST_Response(['id' => $id, 'status' => 'created'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -88,7 +88,7 @@ class ServiceTypeController implements RestController
             ));
             return new WP_REST_Response(['status' => 'updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 
@@ -98,7 +98,7 @@ class ServiceTypeController implements RestController
             $this->archiveHandler->handle(new ArchiveServiceTypeCommand((int)$request->get_param('id')));
             return new WP_REST_Response(['status' => 'archived'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 

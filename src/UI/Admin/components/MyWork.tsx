@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Project, Ticket } from '../types';
+import { Customer, Project, Ticket } from '../types';
 import { computeProjectHealth, computeTicketHealth } from '../healthCompute';
 import PageShell from './foundation/PageShell';
 import Panel from './foundation/Panel';
@@ -43,6 +43,7 @@ const MyWork: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [workItems, setWorkItems] = useState<WorkItem[]>([]);
 
   const currentUserId = String(window.petSettings?.currentUserId ?? '');
@@ -58,11 +59,14 @@ const MyWork: React.FC = () => {
           throw new Error('API settings missing');
         }
 
-        const [ticketRes, projectRes, workRes] = await Promise.all([
+        const [ticketRes, projectRes, customerRes, workRes] = await Promise.all([
           fetch(`${apiUrl}/tickets`, {
             headers: { 'X-WP-Nonce': nonce },
           }).catch(() => null),
           fetch(`${apiUrl}/projects`, {
+            headers: { 'X-WP-Nonce': nonce },
+          }).catch(() => null),
+          fetch(`${apiUrl}/customers`, {
             headers: { 'X-WP-Nonce': nonce },
           }).catch(() => null),
           fetch(`${apiUrl}/work/my-items`, {
@@ -81,6 +85,12 @@ const MyWork: React.FC = () => {
         } else {
           setProjects([]);
         }
+        if (customerRes?.ok) {
+          const payload = await customerRes.json();
+          setCustomers(Array.isArray(payload) ? payload : []);
+        } else {
+          setCustomers([]);
+        }
         if (workRes?.ok) {
           const payload = await workRes.json();
           setWorkItems(Array.isArray(payload) ? payload : []);
@@ -96,6 +106,14 @@ const MyWork: React.FC = () => {
 
     load();
   }, [currentUserId]);
+
+  const customerNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const customer of customers) {
+      map.set(Number(customer.id), customer.name);
+    }
+    return map;
+  }, [customers]);
 
   const items = useMemo<MyWorkItem[]>(() => {
     const byTicketId = new Map<number, Ticket>();
@@ -161,7 +179,7 @@ const MyWork: React.FC = () => {
             group,
             sortScore: priorityScore + signalScore + (breached ? 300 : nearBreach ? 120 : 0),
             title: ticket.subject || `Ticket #${ticket.id}`,
-            context: `Ticket #${ticket.id} · Customer #${ticket.customerId}${topSignal}`,
+            context: `Ticket #${ticket.id} · ${customerNameById.get(Number(ticket.customerId)) || `Customer #${ticket.customerId}`}${topSignal}`,
             statusLabel: ticket.status,
             riskLabel,
             onClick: () => {
@@ -184,7 +202,7 @@ const MyWork: React.FC = () => {
             group,
             sortScore: priorityScore + signalScore + (health.state === 'red' ? 220 : health.state === 'amber' ? 120 : 0),
             title: project.name,
-            context: `Project #${project.id} · Customer #${project.customerId}`,
+            context: `Project #${project.id} · ${customerNameById.get(Number(project.customerId)) || `Customer #${project.customerId}`}`,
             statusLabel: project.state,
             riskLabel: group === 'needs-attention' ? 'At Risk' : group === 'stable' ? 'Stable' : 'In Progress',
             onClick: () => {
@@ -208,7 +226,7 @@ const MyWork: React.FC = () => {
           group,
           sortScore: health.state === 'red' ? 400 : health.state === 'amber' ? 280 : 120,
           title: ticket.subject || `Ticket #${ticket.id}`,
-          context: `Ticket #${ticket.id} · Customer #${ticket.customerId}`,
+          context: `Ticket #${ticket.id} · ${customerNameById.get(Number(ticket.customerId)) || `Customer #${ticket.customerId}`}`,
           statusLabel: ticket.status,
           riskLabel: group === 'needs-attention' ? 'At Risk' : group === 'stable' ? 'Stable' : 'In Progress',
           onClick: () => {
@@ -219,7 +237,7 @@ const MyWork: React.FC = () => {
     }
 
     return base.sort((a, b) => b.sortScore - a.sortScore);
-  }, [currentUserId, projects, tickets, workItems]);
+  }, [currentUserId, customerNameById, projects, tickets, workItems]);
 
   const needsAttention = items.filter((item) => item.group === 'needs-attention');
   const inProgress = items.filter((item) => item.group === 'in-progress');

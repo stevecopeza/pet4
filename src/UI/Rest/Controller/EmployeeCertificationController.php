@@ -33,7 +33,7 @@ class EmployeeCertificationController
             [
                 'methods' => WP_REST_Server::READABLE,
                 'callback' => [$this, 'getEmployeeCertifications'],
-                'permission_callback' => [$this, 'checkPermission'],
+                'permission_callback' => [$this, 'checkReadPermission'],
             ],
             [
                 'methods' => WP_REST_Server::CREATABLE,
@@ -99,12 +99,17 @@ class EmployeeCertificationController
             $this->assignCertificationToPersonHandler->handle($command);
             return new WP_REST_Response(['message' => 'Certification assigned successfully'], 201);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['message' => $e->getMessage()], 500);
+            return new WP_REST_Response(['message' => \Pet\UI\Rest\Support\RestError::message($e)], 500);
         }
     }
 
     public function checkPermission(): bool
     {
         return current_user_can('manage_options');
+    }
+
+    public function checkReadPermission(): bool
+    {
+        return \Pet\UI\Rest\Support\PortalPermissionHelper::check('pet_sales', 'pet_hr', 'pet_manager');
     }
 }

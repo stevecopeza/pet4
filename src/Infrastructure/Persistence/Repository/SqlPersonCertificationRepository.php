@@ -34,9 +34,22 @@ class SqlPersonCertificationRepository implements PersonCertificationRepository
         if ($personCertification->id()) {
             $this->db->update($this->table, $data, ['id' => $personCertification->id()], $format, ['%d']);
         } else {
-            $data['created_at'] = $personCertification->createdAt()->format('Y-m-d H:i:s');
-            $format[] = '%s';
-            $this->db->insert($this->table, $data, $format);
+            $existingId = (int)$this->db->get_var($this->db->prepare(
+                "SELECT id FROM {$this->table} WHERE employee_id = %d AND certification_id = %d ORDER BY id ASC LIMIT 1",
+                $personCertification->employeeId(),
+                $personCertification->certificationId()
+            ));
+            if ($existingId > 0) {
+                $this->db->update($this->table, $data, ['id' => $existingId], $format, ['%d']);
+                $this->db->query($this->db->prepare(
+                    "DELETE FROM {$this->table} WHERE employee_id = %d AND certification_id = %d AND id <> %d",
+                    [$personCertification->employeeId(), $personCertification->certificationId(), $existingId]
+                ));
+            } else {
+                $data['created_at'] = $personCertification->createdAt()->format('Y-m-d H:i:s');
+                $format[] = '%s';
+                $this->db->insert($this->table, $data, $format);
+            }
         }
     }
 

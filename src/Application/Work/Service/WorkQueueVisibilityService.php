@@ -23,6 +23,7 @@ class WorkQueueVisibilityService
 
         if ($isAdmin) {
             $queues['support:unrouted'] = 'ADMIN';
+            $queues['delivery:unrouted'] = 'ADMIN';
             foreach ($this->teamRepository->findAll(true) as $team) {
                 if ($team->id() === null) {
                     continue;
@@ -51,6 +52,7 @@ class WorkQueueVisibilityService
 
             if (!empty($employee->teamIds()) || !empty($managed)) {
                 $queues['support:unrouted'] = !empty($managed) ? 'MANAGERIAL' : 'TEAM';
+                $queues['delivery:unrouted'] = !empty($managed) ? 'MANAGERIAL' : 'TEAM';
             }
         }
 

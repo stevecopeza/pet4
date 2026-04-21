@@ -87,7 +87,7 @@ class SettingsController implements RestController
 
             return new WP_REST_Response(['message' => 'Setting updated'], 200);
         } catch (\Exception $e) {
-            return new WP_REST_Response(['error' => $e->getMessage()], 400);
+            return new WP_REST_Response(['error' => \Pet\UI\Rest\Support\RestError::message($e)], 400);
         }
     }
 }

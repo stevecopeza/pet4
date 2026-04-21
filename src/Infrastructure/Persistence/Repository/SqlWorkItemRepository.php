@@ -17,7 +17,6 @@ class SqlWorkItemRepository implements WorkItemRepository
 
     public function save(WorkItem $workItem): void
     {
-        $this->assertAssignmentInvariant($workItem);
         $table = $this->wpdb->prefix . 'pet_work_items';
         $data = [
             'id' => $workItem->getId(),
@@ -55,18 +54,6 @@ class SqlWorkItemRepository implements WorkItemRepository
             $this->wpdb->update($table, $data, ['id' => $workItem->getId()], $formats, ['%s']);
         } else {
             $this->wpdb->insert($table, $data, $formats);
-        }
-    }
-
-    private function assertAssignmentInvariant(WorkItem $workItem): void
-    {
-        $assignedTeamId = $workItem->getAssignedTeamId();
-        $assignedUserId = $workItem->getAssignedUserId();
-        $hasTeam = $assignedTeamId !== null && $assignedTeamId !== '';
-        $hasUser = $assignedUserId !== null && $assignedUserId !== '';
-
-        if ($hasTeam && $hasUser) {
-            throw new \InvalidArgumentException('Invalid work item persistence: both assigned_team_id and assigned_user_id are set.');
         }
     }
 
@@ -144,12 +131,6 @@ class SqlWorkItemRepository implements WorkItemRepository
         $requiredRoleId = isset($row->required_role_id) ? (int)$row->required_role_id : null;
         $assignedUserId = $row->assigned_user_id !== null ? (string)$row->assigned_user_id : null;
         $assignedTeamId = isset($row->assigned_team_id) ? ($row->assigned_team_id !== null ? (string)$row->assigned_team_id : null) : null;
-        if ($assignedUserId !== null && $assignedUserId !== '' && $assignedTeamId !== null && $assignedTeamId !== '') {
-            // Backward-compatibility hardening:
-            // some historical/seeded rows may contain both fields despite invariant.
-            // Prefer explicit user assignment so reads do not fatally fail.
-            $assignedTeamId = null;
-        }
         $assignmentMode = isset($row->assignment_mode) ? ($row->assignment_mode !== null ? (string)$row->assignment_mode : null) : null;
         $queueKey = isset($row->queue_key) ? ($row->queue_key !== null ? (string)$row->queue_key : null) : null;
         $routingReason = isset($row->routing_reason) ? ($row->routing_reason !== null ? (string)$row->routing_reason : null) : null;

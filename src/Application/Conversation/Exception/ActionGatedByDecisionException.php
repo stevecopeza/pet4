@@ -10,7 +10,7 @@ class ActionGatedByDecisionException extends \RuntimeException
     private string $action;
     private array $decisionIds;
 
-    public function __construct(string $action, array $decisionIds, string $message = '', \Throwable $previous = null)
+    public function __construct(string $action, array $decisionIds, string $message = '', ?\Throwable $previous = null)
     {
         $this->action = $action;
         $this->decisionIds = $decisionIds;

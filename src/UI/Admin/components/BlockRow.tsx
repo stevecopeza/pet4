@@ -16,6 +16,8 @@ const blockTypeIcons: Record<string, string> = {
   TextBlock: '📝',
 };
 
+const formatMoney = (value: number): string => `$${value.toFixed(2)}`;
+
 export interface BlockRowCallbacks {
   onEdit: (block: QuoteBlock) => void;
   onDelete: (blockId: number) => void;
@@ -107,6 +109,33 @@ const BlockRow: React.FC<BlockRowProps> = ({
   } else if (typeof payload.sellValue === 'number') {
     total = payload.sellValue;
   }
+
+  const marginAmount =
+    typeof block.marginAmount === 'number'
+      ? block.marginAmount
+      : typeof payload.marginAmount === 'number'
+      ? payload.marginAmount
+      : null;
+
+  const marginPercentage =
+    typeof block.marginPercentage === 'number'
+      ? block.marginPercentage
+      : typeof payload.marginPercentage === 'number'
+      ? payload.marginPercentage
+      : null;
+
+  const hasMarginData =
+    block.hasMarginData === true ||
+    payload.hasMarginData === true ||
+    marginAmount !== null;
+
+  // Discount % vs catalog baseline (only visible when price was reduced)
+  const baselineSellValue =
+    typeof payload.baselineSellValue === 'number' ? payload.baselineSellValue : null;
+  const discountPct =
+    baselineSellValue !== null && baselineSellValue > 0 && unitPrice !== null && unitPrice < baselineSellValue
+      ? ((baselineSellValue - unitPrice) / baselineSellValue) * 100
+      : null;
 
   const icon = blockTypeIcons[block.type] || '';
 
@@ -206,7 +235,25 @@ const BlockRow: React.FC<BlockRowProps> = ({
       {/* Unit Price */}
       <td style={{ padding: '10px', textAlign: 'right' }}>
         {!isText && !isProject && !isAdjustment ? (
-          <PriceCell amount={unitPrice} isOverride={isOverride} />
+          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+            <PriceCell amount={unitPrice} isOverride={isOverride} />
+            {discountPct !== null && (
+              <span
+                title={`Discounted from $${baselineSellValue!.toFixed(2)} (${discountPct.toFixed(1)}% off)`}
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  color: '#dc3545',
+                  background: '#fce8e8',
+                  borderRadius: '3px',
+                  padding: '0 4px',
+                  lineHeight: '16px',
+                }}
+              >
+                -{discountPct.toFixed(1)}%
+              </span>
+            )}
+          </div>
         ) : (
           '–'
         )}
@@ -218,6 +265,31 @@ const BlockRow: React.FC<BlockRowProps> = ({
           <PriceCell amount={total} bold />
         ) : (
           '–'
+        )}
+      </td>
+
+      {/* Margin */}
+      <td style={{ padding: '10px', textAlign: 'right' }}>
+        {hasMarginData && marginAmount !== null ? (
+          <div
+            style={{
+              display: 'inline-flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: '2px',
+              fontWeight: 600,
+              color: marginAmount < 0 ? '#b32d2e' : undefined,
+            }}
+          >
+            <span>{formatMoney(marginAmount)}</span>
+            {typeof marginPercentage === 'number' && Number.isFinite(marginPercentage) && (
+              <span style={{ fontSize: '11px', fontWeight: 400, color: '#666' }}>
+                {marginPercentage.toFixed(1)}%
+              </span>
+            )}
+          </div>
+        ) : (
+          <span style={{ color: '#999' }}>—</span>
         )}
       </td>
 

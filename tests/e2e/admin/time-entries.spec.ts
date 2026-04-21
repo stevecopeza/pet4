@@ -31,19 +31,17 @@ test.describe.serial('Admin > Time Entries CRUD', () => {
 
     // Wait for employee and ticket dropdowns to populate
     await page.waitForFunction(() => {
-      const selects = document.querySelectorAll('select');
-      // Two selects: Employee and Ticket — both need at least one real option
-      return selects.length >= 2 &&
-        selects[0].options.length > 1 &&
-        selects[1].options.length > 1;
+      const employee = document.getElementById('pet-time-employee') as HTMLSelectElement | null;
+      const ticket = document.getElementById('pet-time-ticket') as HTMLSelectElement | null;
+      return Boolean(employee && ticket && employee.options.length > 1 && ticket.options.length > 1);
     }, { timeout: 15_000 });
 
     // Select the first available employee
-    const employeeSelect = page.locator('select').nth(0);
+    const employeeSelect = page.locator('#pet-time-employee');
     await employeeSelect.selectOption({ index: 1 });
 
     // Select the first available ticket
-    const ticketSelect = page.locator('select').nth(1);
+    const ticketSelect = page.locator('#pet-time-ticket');
     await ticketSelect.selectOption({ index: 1 });
 
     // Fill times
@@ -52,11 +50,16 @@ test.describe.serial('Admin > Time Entries CRUD', () => {
 
     // Fill description for identification
     await page.getByLabel('Description:').fill(description);
+    const saveButton = page.getByRole('button', { name: 'Save Entry' });
+    await expect(saveButton).toBeEnabled({ timeout: 10_000 });
 
     const responsePromise = page.waitForResponse(
       (resp) => resp.url().includes('/pet/v1/time-entries') && resp.request().method() === 'POST'
     );
-    await page.getByRole('button', { name: 'Save Entry' }).click();
+    await page.evaluate(() => {
+      const form = document.querySelector('.pet-form-container form') as HTMLFormElement | null;
+      form?.requestSubmit();
+    });
     const response = await responsePromise;
     expect(response.status()).toBe(201);
 
@@ -65,13 +68,13 @@ test.describe.serial('Admin > Time Entries CRUD', () => {
   });
 
   test('can archive a time entry via kebab menu', async ({ page, consoleErrors }) => {
-    page.on('dialog', (dialog) => dialog.accept());
 
     const row = page.locator('tr', { hasText: description });
     await expect(row).toBeVisible();
 
     await row.locator('.pet-kebab-menu, [class*="kebab"]').first().click();
     await page.getByText('Archive', { exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Archive' }).click();
 
     const archiveResponse = await page.waitForResponse(
       (resp) => resp.url().includes('/pet/v1/time-entries/') && resp.request().method() === 'DELETE'

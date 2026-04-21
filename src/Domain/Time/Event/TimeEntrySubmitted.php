@@ -40,6 +40,11 @@ class TimeEntrySubmitted implements DomainEvent, SourcedEvent
         return $this->timeEntryId;
     }
 
+    public function name(): string
+    {
+        return 'time_entry.submitted';
+    }
+
     public function aggregateType(): string
     {
         return 'time_entry';
