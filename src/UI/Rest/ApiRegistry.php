@@ -32,6 +32,7 @@ class ApiRegistry
             \Pet\UI\Rest\Controller\LeadController::class,
             \Pet\UI\Rest\Controller\TimeEntryController::class,
             \Pet\UI\Rest\Controller\StaffTimeCaptureController::class,
+            \Pet\UI\Rest\Controller\StaffProfileController::class,
             \Pet\UI\Rest\Controller\CustomerController::class,
             \Pet\UI\Rest\Controller\ContactController::class,
             \Pet\UI\Rest\Controller\SiteController::class,

@@ -605,6 +605,7 @@ class ContainerFactory
             \Pet\UI\Rest\Controller\LeadController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\TimeEntryController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\StaffTimeCaptureController::class => \DI\autowire(),
+            \Pet\UI\Rest\Controller\StaffProfileController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\CustomerController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\ContactController::class => \DI\autowire(),
             \Pet\UI\Rest\Controller\SiteController::class => \DI\autowire(),

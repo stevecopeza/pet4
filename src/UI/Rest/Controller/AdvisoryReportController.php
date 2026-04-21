@@ -78,7 +78,11 @@ class AdvisoryReportController implements RestController
 
     public function checkPermission(): bool
     {
-        return is_user_logged_in() && current_user_can('edit_posts');
+        return is_user_logged_in() && (
+            current_user_can('edit_posts') ||
+            current_user_can('manage_options') ||
+            current_user_can('pet_manager')
+        );
     }
 
     public function listReports(WP_REST_Request $request): WP_REST_Response

@@ -75,7 +75,7 @@ class EscalationController
 
     public function checkPermission(): bool
     {
-        return current_user_can('manage_options');
+        return current_user_can('manage_options') || current_user_can('pet_manager');
     }
 
     public function listEscalations(WP_REST_Request $request): WP_REST_Response

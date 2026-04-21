@@ -86,6 +86,50 @@ const IconKnowledgeBase = () => (
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
   </svg>
 );
+const IconProfile = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+    <line x1="8" y1="18" x2="16" y2="18"/>
+  </svg>
+);
+const IconPerformance = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="20" x2="18" y2="10"/>
+    <line x1="12" y1="20" x2="12" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+const IconProjects = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+  </svg>
+);
+const IconEscalation = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+const IconAdvisory = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+  </svg>
+);
+const IconSupport = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    <line x1="9" y1="10" x2="15" y2="10"/>
+  </svg>
+);
 const IconSettings = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="3"/>
@@ -153,6 +197,12 @@ const NAV_PEOPLE: NavItem[] = [
 
 const NAV_MY_WORK: NavItem[] = [
   {
+    hash: '#my-profile',
+    label: 'My Profile',
+    icon: <IconProfile />,
+    requiresCap: (u) => u.hasPortalAccess,
+  },
+  {
     hash: '#my-queue',
     label: 'My Queue',
     icon: <IconMyQueue />,
@@ -165,6 +215,12 @@ const NAV_MY_WORK: NavItem[] = [
     requiresCap: (u) => u.hasPortalAccess,
   },
   {
+    hash: '#projects',
+    label: 'My Projects',
+    icon: <IconProjects />,
+    requiresCap: (u) => u.hasPortalAccess,
+  },
+  {
     hash: '#calendar',
     label: 'Calendar',
     icon: <IconCalendar />,
@@ -174,6 +230,18 @@ const NAV_MY_WORK: NavItem[] = [
     hash: '#log-time',
     label: 'Log Time',
     icon: <IconLogTime />,
+    requiresCap: (u) => u.hasPortalAccess,
+  },
+  {
+    hash: '#my-time',
+    label: 'Time History',
+    icon: <IconClock />,
+    requiresCap: (u) => u.hasPortalAccess,
+  },
+  {
+    hash: '#my-performance',
+    label: 'My Performance',
+    icon: <IconPerformance />,
     requiresCap: (u) => u.hasPortalAccess,
   },
   {
@@ -193,6 +261,27 @@ const NAV_MY_WORK: NavItem[] = [
     label: 'Knowledge Base',
     icon: <IconKnowledgeBase />,
     requiresCap: (u) => u.hasPortalAccess,
+  },
+];
+
+const NAV_MANAGEMENT: NavItem[] = [
+  {
+    hash: '#support',
+    label: 'Support Queue',
+    icon: <IconSupport />,
+    requiresCap: (u) => u.isManager || u.isAdmin,
+  },
+  {
+    hash: '#escalations',
+    label: 'Escalations',
+    icon: <IconEscalation />,
+    requiresCap: (u) => u.isManager || u.isAdmin,
+  },
+  {
+    hash: '#advisory',
+    label: 'Advisory',
+    icon: <IconAdvisory />,
+    requiresCap: (u) => u.isManager || u.isAdmin,
   },
 ];
 
@@ -234,7 +323,9 @@ const PortalShell: React.FC<PortalShellProps> = ({
 
   const renderNavItem = (item: NavItem) => {
     if (!item.requiresCap(user)) return null;
-    const isActive = activeHash === item.hash || (item.hash === '#conversations' && activeHash.startsWith('#conversations'));
+    const isActive = activeHash === item.hash
+      || (item.hash === '#conversations' && activeHash.startsWith('#conversations'))
+      || (item.hash === '#projects' && activeHash.startsWith('#projects'));
     const badge =
       item.hash === '#approvals' ? pendingApprovals :
       item.hash === '#conversations' ? unreadConversations :
@@ -289,6 +380,13 @@ const PortalShell: React.FC<PortalShellProps> = ({
           <>
             <div className="portal-nav-section-label">My Work</div>
             {NAV_MY_WORK.map(renderNavItem)}
+          </>
+        )}
+
+        {NAV_MANAGEMENT.some((item) => item.requiresCap(user)) && (
+          <>
+            <div className="portal-nav-section-label">Management</div>
+            {NAV_MANAGEMENT.map(renderNavItem)}
           </>
         )}
 

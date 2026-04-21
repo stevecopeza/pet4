@@ -20,6 +20,14 @@ const LogTimePage        = lazy(() => import('./pages/LogTimePage'));
 const ConversationsPage  = lazy(() => import('./pages/ConversationsPage'));
 const ActivityPage       = lazy(() => import('./pages/ActivityPage'));
 const KnowledgeBasePage  = lazy(() => import('./pages/KnowledgeBasePage'));
+// Gap-fill pages
+const MyProfilePage      = lazy(() => import('./pages/MyProfilePage'));
+const MyTimePage         = lazy(() => import('./pages/MyTimePage'));
+const MyPerformancePage  = lazy(() => import('./pages/MyPerformancePage'));
+const ProjectsPage       = lazy(() => import('./pages/ProjectsPage'));
+const EscalationsPage    = lazy(() => import('./pages/EscalationsPage'));
+const AdvisoryPage       = lazy(() => import('./pages/AdvisoryPage'));
+const SupportQueuePage   = lazy(() => import('./pages/SupportQueuePage'));
 
 /** Minimal hash-based router — avoids needing react-router as a new dep. */
 function useHash(): string {
@@ -95,6 +103,28 @@ const PortalApp: React.FC = () => {
     if (builderId !== null) {
       return (user.isSales || user.isManager || user.isAdmin)
         ? <QuoteBuilderPage quoteId={builderId} />
+        : <AccessDenied />;
+    }
+
+    // ── Gap-fill pages ─────────────────────────────────────────────
+    if (hash === '#my-profile') return <MyProfilePage />;
+    if (hash === '#my-time')    return <MyTimePage />;
+    if (hash === '#my-performance') return <MyPerformancePage />;
+    if (hash === '#projects')   return <ProjectsPage />;
+
+    if (hash === '#escalations') {
+      return (user.isManager || user.isAdmin)
+        ? <EscalationsPage />
+        : <AccessDenied />;
+    }
+    if (hash === '#advisory') {
+      return (user.isManager || user.isAdmin)
+        ? <AdvisoryPage />
+        : <AccessDenied />;
+    }
+    if (hash === '#support') {
+      return (user.isManager || user.isAdmin)
+        ? <SupportQueuePage />
         : <AccessDenied />;
     }
 
