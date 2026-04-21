@@ -76,7 +76,12 @@ class SqlQuoteRepository implements QuoteRepository
             'approved_by_user_id'      => $quote->approvedByUserId(),
         ];
 
-        $format = ['%d', '%d', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'];
+        // Format order must match $data array above exactly.
+        // Fields: customer_id, lead_id, opportunity_id, contract_id, title, description,
+        //         state, version, total_value, total_internal_cost, currency, accepted_at,
+        //         malleable_data, created_at, updated_at, archived_at, rejection_note,
+        //         submitted_for_approval_at, approved_at, approved_by_user_id
+        $format = ['%d', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'];
 
         if ($quote->id()) {
             $this->wpdb->update(
