@@ -23,13 +23,6 @@ class Project
     private ?\DateTimeImmutable $updatedAt;
     private ?\DateTimeImmutable $archivedAt;
 
-    /**
-     * @deprecated Legacy task array — use backbone Tickets via the Support domain instead.
-     *             Retained for backward compatibility in the repository read path only.
-     * @var Task[]
-     */
-    private array $tasks = [];
-
     public function __construct(
         int $customerId,
         string $name,
@@ -44,8 +37,7 @@ class Project
         array $malleableData = [],
         ?\DateTimeImmutable $createdAt = null,
         ?\DateTimeImmutable $updatedAt = null,
-        ?\DateTimeImmutable $archivedAt = null,
-        array $tasks = []
+        ?\DateTimeImmutable $archivedAt = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -61,7 +53,6 @@ class Project
         $this->createdAt = $createdAt ?? new \DateTimeImmutable();
         $this->updatedAt = $updatedAt;
         $this->archivedAt = $archivedAt;
-        $this->tasks = $tasks;
     }
 
     public function id(): ?int
@@ -104,26 +95,6 @@ class Project
         return $this->name;
     }
 
-    /**
-     * @deprecated Use Ticket status transitions instead.
-     */
-    public function completeTask(string $taskName): void
-    {
-        foreach ($this->tasks as $index => $task) {
-            if ($task->name() === $taskName) {
-                $this->tasks[$index] = new Task(
-                    $task->name(),
-                    $task->estimatedHours(),
-                    true,
-                    $task->id(),
-                    $task->roleId()
-                );
-                return;
-            }
-        }
-        throw new \DomainException("Task '$taskName' not found.");
-    }
-
     public function sourceQuoteId(): ?int
     {
         return $this->sourceQuoteId;
@@ -152,23 +123,6 @@ class Project
     public function archivedAt(): ?\DateTimeImmutable
     {
         return $this->archivedAt;
-    }
-
-    /**
-     * @deprecated Use backbone Tickets via the Support domain instead.
-     * @return Task[]
-     */
-    public function tasks(): array
-    {
-        return $this->tasks;
-    }
-
-    /**
-     * @deprecated Use CreateProjectTicketHandler to create backbone Tickets instead.
-     */
-    public function addTask(Task $task): void
-    {
-        $this->tasks[] = $task;
     }
 
     /**

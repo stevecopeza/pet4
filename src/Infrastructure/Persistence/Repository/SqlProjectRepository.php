@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Pet\Infrastructure\Persistence\Repository;
 
 use Pet\Domain\Delivery\Entity\Project;
-use Pet\Domain\Delivery\Entity\Task;
 use Pet\Domain\Delivery\Repository\ProjectRepository;
 use Pet\Domain\Delivery\ValueObject\ProjectState;
 
@@ -13,13 +12,11 @@ class SqlProjectRepository implements ProjectRepository
 {
     private $wpdb;
     private $projectsTable;
-    private $tasksTable;
 
     public function __construct(\wpdb $wpdb)
     {
         $this->wpdb = $wpdb;
         $this->projectsTable = $wpdb->prefix . 'pet_projects';
-        $this->tasksTable = $wpdb->prefix . 'pet_tasks';
     }
 
     public function save(Project $project): void
@@ -58,7 +55,6 @@ class SqlProjectRepository implements ProjectRepository
             );
         }
 
-        // Ticket-only delivery execution: project task rows are legacy/read-only and are not written.
     }
 
     public function findById(int $id): ?Project
@@ -120,8 +116,6 @@ class SqlProjectRepository implements ProjectRepository
 
     private function hydrate(object $row): Project
     {
-        $tasks = $this->findTasksByProjectId((int)$row->id);
-
         return new Project(
             (int) $row->customer_id,
             $row->name,
@@ -136,82 +130,8 @@ class SqlProjectRepository implements ProjectRepository
             isset($row->malleable_data) ? (json_decode($row->malleable_data, true) ?: []) : [],
             new \DateTimeImmutable($row->created_at),
             $row->updated_at ? new \DateTimeImmutable($row->updated_at) : null,
-            $row->archived_at ? new \DateTimeImmutable($row->archived_at) : null,
-            $tasks
+            $row->archived_at ? new \DateTimeImmutable($row->archived_at) : null
         );
-    }
-
-    private function findTasksByProjectId(int $projectId): array
-    {
-        $sql = $this->wpdb->prepare(
-            "SELECT * FROM {$this->tasksTable} WHERE project_id = %d ORDER BY created_at ASC",
-            $projectId
-        );
-        $results = $this->wpdb->get_results($sql);
-
-        return array_map(function ($row) {
-            return new Task(
-                $row->name,
-                (float) $row->estimated_hours,
-                (bool) $row->is_completed,
-                (int) $row->id,
-                isset($row->role_id) ? (int)$row->role_id : null
-            );
-        }, $results);
-    }
-
-    private function saveTasks(int $projectId, array $tasks): void
-    {
-        // 1. Get existing task IDs
-        $sql = $this->wpdb->prepare(
-            "SELECT id FROM {$this->tasksTable} WHERE project_id = %d",
-            $projectId
-        );
-        $existingIds = $this->wpdb->get_col($sql);
-        $currentIds = [];
-
-        // 2. Save (Insert/Update) current tasks
-        foreach ($tasks as $task) {
-            $data = [
-                'project_id' => $projectId,
-                'name' => $task->name(),
-                'estimated_hours' => $task->estimatedHours(),
-                'is_completed' => $task->isCompleted() ? 1 : 0,
-                'role_id' => $task->roleId(),
-            ];
-            $format = ['%d', '%s', '%f', '%d', '%d'];
-
-            if ($task->id()) {
-                $currentIds[] = $task->id();
-                $this->wpdb->update(
-                    $this->tasksTable,
-                    $data,
-                    ['id' => $task->id()],
-                    $format,
-                    ['%d']
-                );
-            } else {
-                $this->wpdb->insert(
-                    $this->tasksTable,
-                    $data,
-                    $format
-                );
-                
-                // Update Task ID via Reflection since Task is immutable
-                $newId = $this->wpdb->insert_id;
-                $refObject = new \ReflectionObject($task);
-                $refProperty = $refObject->getProperty('id');
-                $refProperty->setAccessible(true);
-                $refProperty->setValue($task, (int)$newId);
-            }
-        }
-
-        // 3. Delete removed tasks
-        $toDelete = array_diff($existingIds, $currentIds);
-        if (!empty($toDelete)) {
-            $ids = implode(',', array_map('intval', $toDelete));
-            $this->wpdb->query("DELETE FROM {$this->tasksTable} WHERE id IN ($ids)");
-        }
     }
 
     private function formatDate(?\DateTimeImmutable $date): ?string

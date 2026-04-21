@@ -81,10 +81,11 @@ class SlaCheckService
         }
 
         foreach ($activeTickets as $ticket) {
-            if ($ticket->lifecycleOwner() !== 'support') {
-                continue;
+            if ($ticket->lifecycleOwner() === 'support') {
+                $this->evaluate($ticket);
             }
-            $this->evaluate($ticket);
+            // Delivery (project) tickets: sla_status is computed inline in TicketController
+            // from resolutionDueAt vs now — no clock state required.
         }
     }
 

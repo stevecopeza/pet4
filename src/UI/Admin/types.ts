@@ -104,15 +104,7 @@ export interface Project {
   startDate?: string;
   endDate?: string;
   malleableData?: Record<string, any>;
-  tasks: Task[];
   archivedAt: string | null;
-}
-
-export interface Task {
-  id: number;
-  name: string;
-  estimatedHours: number;
-  completed: boolean;
 }
 
 export interface QuoteApprovalState {

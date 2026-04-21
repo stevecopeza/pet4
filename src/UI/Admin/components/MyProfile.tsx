@@ -142,12 +142,6 @@ const MyProfile: React.FC = () => {
         .map((item) => Number(item.sourceId || item.source_id))
         .filter((id) => !Number.isNaN(id)),
     );
-    const taskSourceIds = new Set(
-      workItems
-        .filter((item) => String(item.sourceType || item.source_type || '').toLowerCase() === 'task')
-        .map((item) => Number(item.sourceId || item.source_id))
-        .filter((id) => !Number.isNaN(id)),
-    );
     const relatedTickets = ticketSourceIds.size > 0
       ? tickets.filter((ticket) => ticketSourceIds.has(Number(ticket.id)))
       : tickets;
@@ -172,7 +166,6 @@ const MyProfile: React.FC = () => {
     return {
       assignedTickets: relatedTickets.length,
       assignedProjects: relatedProjects.length,
-      assignedTasks: taskSourceIds.size,
       openWorkItems: workItems.length,
       topTickets: rankedTickets.slice(0, 3),
       topProjects: relatedProjects.slice(0, 3),
@@ -630,7 +623,7 @@ const MyProfile: React.FC = () => {
         <div className="pet-profile-stats-grid">
           <div className="pd-card pet-profile-stat-card"><strong>{responsibilitySummary.assignedTickets}</strong><div>Assigned Tickets</div></div>
           <div className="pd-card pet-profile-stat-card"><strong>{responsibilitySummary.assignedProjects}</strong><div>Assigned Projects</div></div>
-          <div className="pd-card pet-profile-stat-card"><strong>{responsibilitySummary.assignedTasks}</strong><div>Assigned Tasks</div></div>
+
           <div className="pd-card pet-profile-stat-card"><strong>{responsibilitySummary.openWorkItems}</strong><div>Open Work Items</div></div>
         </div>
         <div className="pet-profile-two-col-grid">

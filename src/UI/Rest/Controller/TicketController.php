@@ -318,11 +318,49 @@ class TicketController implements RestController
             }
         }
 
-        $data = array_map(function ($ticket) use ($ticketAssignments, $snapshotNames) {
+        // Batch-load SLA clock states for support tickets
+        $clockStates = [];
+        $allTicketIds = array_filter(array_map(fn($t) => $t->id(), $tickets));
+        if (!empty($allTicketIds)) {
+            $placeholders = implode(',', array_fill(0, count($allTicketIds), '%d'));
+            $clockTable = $wpdb->prefix . 'pet_sla_clock_state';
+            $clockRows = $wpdb->get_results($wpdb->prepare(
+                "SELECT ticket_id, last_event_dispatched FROM $clockTable WHERE ticket_id IN ($placeholders)",
+                ...array_values($allTicketIds)
+            ));
+            foreach ($clockRows as $r) {
+                $clockStates[(int)$r->ticket_id] = $r->last_event_dispatched;
+            }
+        }
+
+        $now = new \DateTimeImmutable();
+        $warningThreshold = new \DateTimeImmutable('+7 days');
+
+        $data = array_map(function ($ticket) use ($ticketAssignments, $snapshotNames, $clockStates, $now, $warningThreshold) {
             $malleable = $ticket->malleableData();
             $mode = $malleable['ticket_mode'] ?? 'support';
             $assignedUserId = $ticketAssignments[$ticket->id()] ?? null;
             $snapId = $ticket->slaSnapshotId();
+
+            // Compute sla_status: clock state for support tickets; deadline-based for delivery tickets
+            $slaStatus = null;
+            $terminalStatuses = ['closed', 'resolved', 'done', 'completed', 'cancelled'];
+            $isTerminal = in_array($ticket->status(), $terminalStatuses, true);
+            if ($ticket->lifecycleOwner() === 'support') {
+                $rawState = $clockStates[$ticket->id()] ?? null;
+                if ($rawState && $rawState !== 'none' && !$isTerminal) {
+                    $slaStatus = $rawState; // 'warning' | 'breached'
+                }
+            } elseif ($ticket->lifecycleOwner() === 'project' && !$isTerminal) {
+                $due = $ticket->resolutionDueAt();
+                if ($due !== null) {
+                    if ($due < $now) {
+                        $slaStatus = 'breached';
+                    } elseif ($due < $warningThreshold) {
+                        $slaStatus = 'warning';
+                    }
+                }
+            }
 
             return [
                 'id' => $ticket->id(),
@@ -365,6 +403,7 @@ class TicketController implements RestController
                 'soldValueCents' => $ticket->soldValueCents(),
                 'sourceType' => $ticket->sourceType(),
                 'sourceComponentId' => $ticket->sourceComponentId(),
+                'sla_status' => $slaStatus,
             ];
         }, $tickets);
         $this->endBenchmarkWorkloadProfile($profileToken);
