@@ -12,6 +12,19 @@ interface Customer {
   archivedAt: string | null;
 }
 
+interface Snapshot {
+  customer_id?: number;
+  tickets?: { by_status?: Record<string, number>; overdue?: number };
+  projects?: { by_state?: Record<string, number> };
+  delivery_tickets?: { by_status?: Record<string, number>; open?: number; closed?: number };
+  signals?: { total_active?: number; by_severity?: Record<string, number>; by_type?: Record<string, number> };
+  generated_at_utc?: string;
+}
+
+interface ReportContent {
+  snapshot?: Snapshot;
+}
+
 interface Report {
   id: string;
   report_type: string;
@@ -20,7 +33,7 @@ interface Report {
   status: string;
   generated_at: string;
   summary?: string;
-  body?: string;
+  content?: ReportContent;
 }
 
 function timeLabel(iso: string): string {
@@ -30,6 +43,94 @@ function timeLabel(iso: string): string {
 function reportTypeLabel(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
+
+function metricTag(label: string, value: number | string, color?: string): React.ReactNode {
+  return (
+    <span key={label} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      background: '#f1f5f9', borderRadius: 6, padding: '3px 9px', fontSize: 12,
+    }}>
+      <span style={{ color: '#64748b' }}>{label}</span>
+      <strong style={{ color: color ?? '#1e293b' }}>{value}</strong>
+    </span>
+  );
+}
+
+const SnapshotPanel: React.FC<{ snapshot?: Snapshot }> = ({ snapshot }) => {
+  if (!snapshot) return <div style={{ color: '#94a3b8', fontSize: 13 }}>No snapshot data available.</div>;
+
+  const tickets = snapshot.tickets ?? {};
+  const projects = snapshot.projects ?? {};
+  const delivery = snapshot.delivery_tickets ?? {};
+  const signals = snapshot.signals ?? {};
+
+  const ticketStatuses = Object.entries(tickets.by_status ?? {});
+  const projectStates  = Object.entries(projects.by_state ?? {});
+  const signalSeverity = Object.entries(signals.by_severity ?? {});
+  const signalTypes    = Object.entries(signals.by_type ?? {});
+
+  const sectionStyle: React.CSSProperties = { marginBottom: 14 };
+  const sectionHead: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em',
+    color: '#94a3b8', marginBottom: 6,
+  };
+  const tagsRow: React.CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 6 };
+
+  return (
+    <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+
+      {/* Support Tickets */}
+      {(ticketStatuses.length > 0 || tickets.overdue !== undefined) && (
+        <div style={sectionStyle}>
+          <div style={sectionHead}>Support Tickets</div>
+          <div style={tagsRow}>
+            {ticketStatuses.map(([s, c]) => metricTag(reportTypeLabel(s), c))}
+            {(tickets.overdue ?? 0) > 0 && metricTag('Overdue', tickets.overdue!, '#dc2626')}
+          </div>
+        </div>
+      )}
+
+      {/* Projects */}
+      {projectStates.length > 0 && (
+        <div style={sectionStyle}>
+          <div style={sectionHead}>Projects</div>
+          <div style={tagsRow}>
+            {projectStates.map(([s, c]) => metricTag(reportTypeLabel(s), c))}
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Tickets */}
+      {(delivery.open !== undefined || delivery.closed !== undefined) && (
+        <div style={sectionStyle}>
+          <div style={sectionHead}>Delivery Tickets</div>
+          <div style={tagsRow}>
+            {delivery.open !== undefined && metricTag('Open', delivery.open, delivery.open > 0 ? '#c2410c' : undefined)}
+            {delivery.closed !== undefined && metricTag('Closed', delivery.closed, delivery.closed > 0 ? '#16a34a' : undefined)}
+          </div>
+        </div>
+      )}
+
+      {/* Signals */}
+      {(signals.total_active !== undefined || signalSeverity.length > 0) && (
+        <div style={{ ...sectionStyle, marginBottom: 0 }}>
+          <div style={sectionHead}>Advisory Signals</div>
+          <div style={tagsRow}>
+            {signals.total_active !== undefined && metricTag('Active', signals.total_active, signals.total_active > 0 ? '#7c3aed' : undefined)}
+            {signalSeverity.map(([sev, c]) => metricTag(reportTypeLabel(sev), c,
+              sev === 'critical' ? '#dc2626' : sev === 'high' ? '#c2410c' : sev === 'medium' ? '#b45309' : undefined
+            ))}
+            {signalTypes.map(([t, c]) => metricTag(reportTypeLabel(t), c))}
+          </div>
+        </div>
+      )}
+
+      {ticketStatuses.length === 0 && projectStates.length === 0 && signals.total_active === undefined && (
+        <div style={{ color: '#94a3b8', fontSize: 13 }}>No metrics recorded in this snapshot.</div>
+      )}
+    </div>
+  );
+};
 
 const AdvisoryPage: React.FC = () => {
   const [customers, setCustomers]     = useState<Customer[]>([]);
@@ -85,7 +186,7 @@ const AdvisoryPage: React.FC = () => {
       return;
     }
     // Fetch full detail if not already loaded
-    if (!report.body) {
+    if (!report.content) {
       try {
         const res = await fetch(`${apiUrl()}/advisory/reports/${report.id}`, { headers: hdrs() });
         if (res.ok) {
@@ -165,7 +266,7 @@ const AdvisoryPage: React.FC = () => {
                       background: report.status === 'published' ? '#f0fdf4' : '#f1f5f9',
                       color: report.status === 'published' ? '#16a34a' : '#64748b',
                     }}>
-                      {report.status}
+                      {report.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                     </span>
                     <span style={{ fontSize: 11, color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
                   </div>
@@ -174,14 +275,12 @@ const AdvisoryPage: React.FC = () => {
                 {isOpen && (
                   <div style={{ padding: '16px 18px' }}>
                     {report.summary && (
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 10 }}>{report.summary}</div>
+                      <div style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>{report.summary}</div>
                     )}
-                    {report.body ? (
-                      <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                        {report.body}
-                      </div>
-                    ) : (
+                    {!report.content ? (
                       <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading report content…</div>
+                    ) : (
+                      <SnapshotPanel snapshot={report.content.snapshot} />
                     )}
                   </div>
                 )}

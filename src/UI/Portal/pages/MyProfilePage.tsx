@@ -157,13 +157,18 @@ const MyProfilePage: React.FC = () => {
                 background: profile.status === 'active' ? '#f0fdf4' : '#fef2f2',
                 color: profile.status === 'active' ? '#16a34a' : '#dc2626',
               }}>
-                {profile.status}
+                {profile.status.charAt(0).toUpperCase() + profile.status.slice(1)}
               </span>
             </div>
           </div>
 
           {/* Details */}
-          <div style={card}>
+          <div style={{
+            ...card,
+            gridColumn: (profile.malleableData && Object.keys(profile.malleableData).filter(k => !['jobTitle', 'job_title'].includes(k)).length > 0)
+              ? undefined
+              : '1 / -1',
+          }}>
             <div style={sectionLabel}>Details</div>
             <div style={{ ...field, borderTop: '1px solid #f1f5f9' }}>
               <span style={fieldLabel}>Employee ID</span>
@@ -181,11 +186,15 @@ const MyProfilePage: React.FC = () => {
             )}
             <div style={field}>
               <span style={fieldLabel}>Hire Date</span>
-              <span style={fieldValue}>{profile.hireDate ?? '—'}</span>
+              <span style={fieldValue}>
+                {profile.hireDate
+                  ? new Date(profile.hireDate + 'T00:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '—'}
+              </span>
             </div>
             <div style={{ ...field, borderBottom: 'none' }}>
               <span style={fieldLabel}>Status</span>
-              <span style={fieldValue}>{profile.status}</span>
+              <span style={fieldValue}>{profile.status.charAt(0).toUpperCase() + profile.status.slice(1)}</span>
             </div>
           </div>
 

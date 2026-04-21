@@ -141,7 +141,7 @@ const MyPerformancePage: React.FC = () => {
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>{s.skill_name}</div>
                     <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#64748b' }}>
                       <span>Self: <strong style={{ color: ratingColor(s.self_rating) }}>{ratingLabel(s.self_rating)}</strong></span>
-                      <span>Mgr: <strong style={{ color: ratingColor(s.manager_rating) }}>{ratingLabel(s.manager_rating)}</strong></span>
+                      <span>Manager: <strong style={{ color: ratingColor(s.manager_rating) }}>{ratingLabel(s.manager_rating)}</strong></span>
                     </div>
                   </div>
                 ))}

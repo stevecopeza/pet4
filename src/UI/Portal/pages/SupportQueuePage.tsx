@@ -23,6 +23,10 @@ interface Customer {
   name: string;
 }
 
+function formatStatus(s: string): string {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function statusStyle(status: string): React.CSSProperties {
   const s = status.toLowerCase();
   if (s === 'open' || s === 'new') return { background: '#eff6ff', color: '#1d4ed8' };
@@ -75,7 +79,7 @@ const SupportQueuePage: React.FC = () => {
     setError(null);
     try {
       const [tickRes, custRes] = await Promise.all([
-        fetch(`${apiUrl()}/tickets?lifecycle_owner=helpdesk`, { headers: hdrs() }),
+        fetch(`${apiUrl()}/tickets?lifecycle_owner=support`, { headers: hdrs() }),
         fetch(`${apiUrl()}/customers`, { headers: hdrs() }),
       ]);
       if (!tickRes.ok) throw new Error(`HTTP ${tickRes.status}`);
@@ -188,16 +192,16 @@ const SupportQueuePage: React.FC = () => {
                       {customerById.get(t.customerId) ?? `#${t.customerId}`}
                     </td>
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                      <span style={{ ...priorityStyle(t.priority ?? ''), fontSize: 12 }}>{t.priority ?? '—'}</span>
+                      <span style={{ ...priorityStyle(t.priority ?? ''), fontSize: 12 }}>{t.priority ? formatStatus(t.priority) : '—'}</span>
                     </td>
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, ...statusStyle(t.status ?? '') }}>
-                        {t.status}
+                        {formatStatus(t.status ?? '')}
                       </span>
                     </td>
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       {t.sla_status && slaSt ? (
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, ...slaSt }}>{t.sla_status}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, ...slaSt }}>{formatStatus(t.sla_status!)}</span>
                       ) : <span style={{ color: '#cbd5e1', fontSize: 12 }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>

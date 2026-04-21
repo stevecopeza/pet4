@@ -35,6 +35,10 @@ interface Ticket {
   soldValueCents?: number | null;
 }
 
+function formatStatus(s: string): string {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function statusBadgeStyle(status: string): React.CSSProperties {
   const s = status.toLowerCase();
   if (s === 'planned') return { background: '#eff6ff', color: '#2563eb' };
@@ -199,9 +203,9 @@ const ProjectsPage: React.FC = () => {
               {t.isRollup && depth === 0 && <span style={{ color: '#94a3b8', fontSize: 11 }}>▾</span>}
               <span style={{ flex: 1, color: '#1e293b' }}>{t.subject}</span>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>#{t.id}</span>
-              {t.estimatedMinutes && <span style={{ fontSize: 11, color: '#64748b' }}>{minsLabel(t.estimatedMinutes)}</span>}
+              {t.estimatedMinutes ? <span style={{ fontSize: 11, color: '#64748b' }}>{minsLabel(t.estimatedMinutes)}</span> : null}
               <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, ...statusBadgeStyle(t.status ?? '') }}>
-                {t.status}
+                {formatStatus(t.status ?? '')}
               </span>
             </div>
             {childrenOf(Number(t.id)).map(c => renderTicket(c, depth + 1))}
@@ -219,7 +223,7 @@ const ProjectsPage: React.FC = () => {
                 <span style={{ fontSize: 12, color: '#64748b' }}>{custName}</span>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <span style={{ fontSize: 12, ...statusBadgeStyle(project.state), padding: '2px 10px', borderRadius: 10, fontWeight: 600 }}>{project.state}</span>
+                <span style={{ fontSize: 12, ...statusBadgeStyle(project.state), padding: '2px 10px', borderRadius: 10, fontWeight: 600 }}>{formatStatus(project.state)}</span>
                 {projTickets.length > 0 && (
                   <span style={{ fontSize: 12, color: '#64748b' }}>{completed}/{projTickets.length} tickets done</span>
                 )}

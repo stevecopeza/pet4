@@ -40,7 +40,10 @@ function addDays(d: Date, n: number): Date {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatDate(iso: string): string {
@@ -48,7 +51,6 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-ZA', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const MyTimePage: React.FC = () => {
   const [entries, setEntries]   = useState<Entry[]>([]);
@@ -201,7 +203,7 @@ const MyTimePage: React.FC = () => {
                   background: isToday ? '#eff6ff' : dayEntries.length === 0 ? '#fafafa' : '#fff',
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#2563eb' : '#1e293b' }}>
-                    {DAYS[i]} · {formatDate(iso)}
+                    {formatDate(iso)}
                     {isToday && <span style={{ fontSize: 11, marginLeft: 8, color: '#2563eb', fontWeight: 700 }}>TODAY</span>}
                   </span>
                   {dayTotal > 0 && (
