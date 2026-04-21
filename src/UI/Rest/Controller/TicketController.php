@@ -363,6 +363,8 @@ class TicketController implements RestController
                 'quoteId' => $ticket->quoteId(),
                 'ticketKind' => $ticket->ticketKind(),
                 'soldValueCents' => $ticket->soldValueCents(),
+                'sourceType' => $ticket->sourceType(),
+                'sourceComponentId' => $ticket->sourceComponentId(),
             ];
         }, $tickets);
         $this->endBenchmarkWorkloadProfile($profileToken);

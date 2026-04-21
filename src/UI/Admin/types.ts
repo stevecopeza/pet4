@@ -489,6 +489,8 @@ export interface Ticket {
   quoteId?: number | null;
   ticketKind?: string;
   soldValueCents?: number | null;
+  sourceType?: string | null;
+  sourceComponentId?: number | null;
 }
 
 export interface Article {

@@ -4,6 +4,7 @@ import { DataTable, Column } from './DataTable';
 import KebabMenu from './KebabMenu';
 import ProjectForm from './ProjectForm';
 import ProjectDetails from './ProjectDetails';
+import Fulfillments from './Fulfillments';
 import { computeProjectHealth } from '../healthCompute';
 import useConversationStatus from '../hooks/useConversationStatus';
 import useConversation from '../hooks/useConversation';
@@ -81,7 +82,10 @@ const getProjectAttentionSignals = (project: Project): ProjectAttentionSignal[] 
   return signals;
 };
 
+type DeliveryTab = 'projects' | 'fulfillments';
+
 const Projects = () => {
+  const [activeTab, setActiveTab] = useState<DeliveryTab>('projects');
   const [projects, setProjects] = useState<Project[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -522,13 +526,37 @@ const Projects = () => {
       subtitle="Plan, monitor, and maintain delivery execution health from a single operational surface."
       className="pet-projects"
       testId="projects-shell"
-      actions={viewMode === 'list' && !showAddForm ? (
+      actions={activeTab === 'projects' && viewMode === 'list' && !showAddForm ? (
         <button className="button button-primary" onClick={() => setShowAddForm(true)}>
           Add New Project
         </button>
       ) : null}
     >
-      {viewMode === 'list' && (
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #dcdcde', marginBottom: 20 }}>
+        {([
+          { key: 'projects', label: 'Projects' },
+          { key: 'fulfillments', label: 'Fulfillment Deliverables' },
+        ] as { key: DeliveryTab; label: string }[]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              padding: '8px 16px', background: 'none', border: 'none',
+              borderBottom: activeTab === tab.key ? '3px solid #2271b1' : '3px solid transparent',
+              cursor: 'pointer', fontWeight: activeTab === tab.key ? 700 : 400,
+              color: activeTab === tab.key ? '#2271b1' : '#50575e',
+              fontSize: 13, marginBottom: -1,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'fulfillments' && <Fulfillments />}
+
+      {activeTab === 'projects' && viewMode === 'list' && (
         <>
           <Panel className="pet-projects-summary-panel" testId="projects-summary-panel">
             <div className="pet-projects-summary-grid">
@@ -632,7 +660,7 @@ const Projects = () => {
         </>
       )}
 
-      {showAddForm && (
+      {activeTab === 'projects' && showAddForm && (
         <Panel className="pet-projects-form-panel">
           <ProjectForm
             onSuccess={handleFormSuccess}
@@ -642,7 +670,7 @@ const Projects = () => {
         </Panel>
       )}
 
-      {viewMode === 'list' && selectedIds.length > 0 && (
+      {activeTab === 'projects' && viewMode === 'list' && selectedIds.length > 0 && (
         <ActionBar className="pet-projects-bulk-strip" testId="projects-bulk-strip">
           <div className="pet-projects-bulk-text">
             <span className="pet-projects-bulk-eyebrow">Bulk actions</span>
@@ -654,7 +682,7 @@ const Projects = () => {
         </ActionBar>
       )}
 
-      {viewMode === 'list' && (
+      {activeTab === 'projects' && viewMode === 'list' && (
         <Panel className="pet-projects-table-panel pet-projects-list-panel" testId="projects-main-panel">
           <div className="pet-projects-selector-shell">
             <div className="pet-projects-table-header">
@@ -694,7 +722,7 @@ const Projects = () => {
         </Panel>
       )}
 
-      {viewMode === 'detail' && (
+      {activeTab === 'projects' && viewMode === 'detail' && (
         <Panel className="pet-projects-workspace-panel pet-projects-detail-view-panel" testId="projects-detail-panel">
           <div className="pet-projects-detail-back-row">
             <button type="button" className="button pet-projects-back-button" onClick={handleBackToProjects}>
