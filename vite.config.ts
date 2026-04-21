@@ -8,7 +8,11 @@ export default defineConfig({
     outDir: 'dist',
     manifest: true,
     rollupOptions: {
-      input: path.resolve(__dirname, 'src/UI/Admin/main.tsx'),
+      input: {
+        admin:  path.resolve(__dirname, 'src/UI/Admin/main.tsx'),
+        portal: path.resolve(__dirname, 'src/UI/Portal/main.tsx'),
+        staff:  path.resolve(__dirname, 'src/UI/Staff/main.tsx'),
+      },
     },
   },
   resolve: {
