@@ -198,7 +198,17 @@ const Leads: React.FC<LeadsProps> = ({ onNavigateToQuote, onNavigateToPipeline }
           <span style={{ display: 'block', width: 10, height: 10, borderRadius: '50%', background: statusColors[s.status] || 'transparent' }} />
         </button>
       ) : null;
-      return <>{dot}{String(val)}</>;
+      const pipelineBadge = item.opportunityId ? (
+        <button
+          type="button"
+          title={`Linked to pipeline opportunity`}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onNavigateToPipeline?.(); }}
+          style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 6, padding: '1px 6px', fontSize: 11, borderRadius: 4, background: '#ede9fe', color: '#6d28d9', border: 'none', cursor: onNavigateToPipeline ? 'pointer' : 'default', verticalAlign: 'middle', lineHeight: 1.5 }}
+        >
+          Pipeline ↗
+        </button>
+      ) : null;
+      return <>{dot}{String(val)}{pipelineBadge}</>;
     }},
     { key: 'customerName', header: 'Customer', render: (val) => val ? String(val) : <span style={{ color: '#999', fontStyle: 'italic' }}>No customer yet</span> },
     { key: 'status', header: 'Status', render: (val) => {

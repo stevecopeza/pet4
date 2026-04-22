@@ -6,13 +6,15 @@ namespace Pet\Application\Commercial\Command;
 
 use Pet\Domain\Commercial\Entity\Opportunity;
 use Pet\Domain\Commercial\Repository\OpportunityRepository;
+use Pet\Domain\Commercial\Repository\LeadRepository;
 use Pet\Application\System\Service\TransactionManager;
 
 class CreateOpportunityHandler
 {
     public function __construct(
-        private TransactionManager $transactionManager,
-        private OpportunityRepository $opportunityRepository
+        private TransactionManager    $transactionManager,
+        private OpportunityRepository $opportunityRepository,
+        private LeadRepository        $leadRepository
     ) {}
 
     public function handle(CreateOpportunityCommand $command): Opportunity
@@ -36,8 +38,18 @@ class CreateOpportunityHandler
             $command->notes()
         );
 
-        $this->transactionManager->transactional(function () use ($opportunity) {
+        $this->transactionManager->transactional(function () use ($opportunity, $command) {
             $this->opportunityRepository->save($opportunity);
+
+            // Write the back-link onto the originating Lead and advance its status.
+            if ($command->leadId() !== null) {
+                $lead = $this->leadRepository->findById($command->leadId());
+                if ($lead !== null) {
+                    $lead->linkOpportunity($opportunity->id());
+                    $lead->qualify();
+                    $this->leadRepository->save($lead);
+                }
+            }
         });
 
         return $opportunity;

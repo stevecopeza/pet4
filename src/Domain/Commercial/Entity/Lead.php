@@ -13,6 +13,7 @@ class Lead
     private string $status;
     private ?string $source;
     private ?float $estimatedValue;
+    private ?string $opportunityId;
     private ?int $malleableSchemaVersion;
     private array $malleableData;
     private \DateTimeImmutable $createdAt;
@@ -31,7 +32,8 @@ class Lead
         array $malleableData = [],
         ?\DateTimeImmutable $createdAt = null,
         ?\DateTimeImmutable $updatedAt = null,
-        ?\DateTimeImmutable $convertedAt = null
+        ?\DateTimeImmutable $convertedAt = null,
+        ?string $opportunityId = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -40,6 +42,7 @@ class Lead
         $this->status = $status;
         $this->source = $source;
         $this->estimatedValue = $estimatedValue;
+        $this->opportunityId = $opportunityId;
         $this->malleableSchemaVersion = $malleableSchemaVersion;
         $this->malleableData = $malleableData;
         $this->createdAt = $createdAt ?? new \DateTimeImmutable();
@@ -80,6 +83,23 @@ class Lead
     public function estimatedValue(): ?float
     {
         return $this->estimatedValue;
+    }
+
+    public function opportunityId(): ?string
+    {
+        return $this->opportunityId;
+    }
+
+    public function linkOpportunity(string $opportunityId): void
+    {
+        $this->opportunityId = $opportunityId;
+    }
+
+    public function qualify(): void
+    {
+        if ($this->status === 'new') {
+            $this->status = 'qualified';
+        }
     }
 
     public function malleableSchemaVersion(): ?int

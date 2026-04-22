@@ -18,6 +18,7 @@ interface Lead {
   status: string;
   source: string | null;
   estimatedValue: number | null;
+  opportunityId: string | null;
   createdAt: string;
   updatedAt: string | null;
   convertedAt: string | null;
@@ -870,7 +871,18 @@ const LeadsPage: React.FC = () => {
                   style={{ cursor: 'pointer' }}
                 >
                   <td>
-                    <div style={{ fontWeight: 600 }}>{lead.subject}</div>
+                    <div style={{ fontWeight: 600 }}>
+                      {lead.subject}
+                      {lead.opportunityId && (
+                        <span
+                          title="Linked to a pipeline opportunity"
+                          onClick={(e) => { e.stopPropagation(); window.location.hash = '#pipeline'; }}
+                          style={{ display: 'inline-block', marginLeft: 6, padding: '1px 6px', fontSize: 11, borderRadius: 4, background: '#ede9fe', color: '#6d28d9', cursor: 'pointer', verticalAlign: 'middle', lineHeight: 1.5 }}
+                        >
+                          Pipeline ↗
+                        </span>
+                      )}
+                    </div>
                     {lead.convertedAt && (
                       <div style={{ fontSize: 11, color: '#16a34a' }}>
                         Converted {fmtDate(lead.convertedAt)}

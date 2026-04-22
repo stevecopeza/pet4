@@ -193,7 +193,8 @@ const NAV_COMMERCIAL: NavItem[] = [
     hash: '#approvals',
     label: 'Approvals',
     icon: <IconApprovals />,
-    requiresCap: (u) => u.isManager || u.isAdmin,
+    // Sales users can self-approve their own quotes; managers/admins see all.
+    requiresCap: (u) => u.isSales || u.isManager || u.isAdmin,
   },
 ];
 

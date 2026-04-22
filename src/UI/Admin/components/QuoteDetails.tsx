@@ -1977,21 +1977,28 @@ const QuoteDetails: React.FC<QuoteDetailsProps> = ({ quoteId, onBack }) => {
               )}
             </>
           )}
-          {quote.state === 'pending_approval' && (
-            <>
-              <span style={{ color: '#856404', background: '#fff3cd', border: '1px solid #ffc107', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', fontWeight: 500 }}>
-                ⏳ Awaiting Manager Approval
-              </span>
-              <button className="button button-primary" onClick={handleApproveQuote} disabled={loading}>
-                Approve
-              </button>
-              {!showRejectForm && (
-                <button className="button" onClick={() => setShowRejectForm(true)} disabled={loading}>
-                  Reject
+          {quote.state === 'pending_approval' && (() => {
+            const currentUserId = window.petSettings?.currentUserId ?? null;
+            const isCreator = currentUserId !== null && quote.createdByUserId === currentUserId;
+            const statusLabel = isCreator
+              ? '⏳ Awaiting Approval'
+              : '⏳ Awaiting Manager Approval';
+            return (
+              <>
+                <span style={{ color: '#856404', background: '#fff3cd', border: '1px solid #ffc107', padding: '4px 12px', borderRadius: '4px', fontSize: '13px', fontWeight: 500 }}>
+                  {statusLabel}
+                </span>
+                <button className="button button-primary" onClick={handleApproveQuote} disabled={loading}>
+                  Approve
                 </button>
-              )}
-            </>
-          )}
+                {!showRejectForm && (
+                  <button className="button" onClick={() => setShowRejectForm(true)} disabled={loading}>
+                    Reject
+                  </button>
+                )}
+              </>
+            );
+          })()}
           {quote.state === 'approved' && (
             <button
               className="button button-primary"

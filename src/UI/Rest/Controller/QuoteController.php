@@ -422,6 +422,7 @@ class QuoteController implements RestController
             'title' => $quote->title(),
             'description' => $quote->description(),
             'state' => $quote->state()->toString(),
+            'createdByUserId' => $quote->createdByUserId(),
             'version' => $quote->version(),
             'totalValue' => $quote->totalValue(),
             'totalInternalCost' => $quote->totalInternalCost(),
@@ -863,7 +864,9 @@ class QuoteController implements RestController
                 $params['description'] ?? null,
                 (string) ($params['currency'] ?? 'USD'),
                 !empty($params['acceptedAt']) ? new \DateTimeImmutable($params['acceptedAt']) : null,
-                $params['malleableData'] ?? []
+                $params['malleableData'] ?? [],
+                null,                       // leadId — set via separate linkage if needed
+                get_current_user_id() ?: null
             );
 
             $quoteId = $this->createQuoteHandler->handle($command);

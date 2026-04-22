@@ -184,7 +184,9 @@ const PortalApp: React.FC = () => {
           : <AccessDenied />;
 
       case '#approvals':
-        return (user.isManager || user.isAdmin)
+        // Managers/admins see all pending quotes.
+        // Sales users see only their own quotes pending approval (self-approval path).
+        return (user.isManager || user.isAdmin || user.isSales)
           ? <ApprovalsPage />
           : <AccessDenied />;
 

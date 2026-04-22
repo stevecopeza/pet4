@@ -122,6 +122,7 @@ export interface Quote {
   title: string;
   description?: string;
   state: string;
+  createdByUserId: number | null;
   version: number;
   totalValue: number;
   totalInternalCost?: number;
@@ -642,6 +643,7 @@ export interface Lead {
   status: string;
   source: string | null;
   estimatedValue: number | null;
+  opportunityId: string | null;
   malleableData?: Record<string, any>;
   createdAt: string;
   updatedAt: string | null;

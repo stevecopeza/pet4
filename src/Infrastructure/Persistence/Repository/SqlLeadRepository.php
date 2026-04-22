@@ -38,6 +38,7 @@ class SqlLeadRepository implements LeadRepository
             'status'                  => $lead->status(),
             'source'                  => $lead->source(),
             'estimated_value'         => $lead->estimatedValue(),
+            'opportunity_id'          => $lead->opportunityId(),
             'malleable_schema_version'=> $lead->malleableSchemaVersion(),
             'malleable_data'          => !empty($lead->malleableData()) ? json_encode($lead->malleableData()) : null,
             'created_at'              => $lead->createdAt()->format('Y-m-d H:i:s'),
@@ -45,7 +46,7 @@ class SqlLeadRepository implements LeadRepository
             'converted_at'            => $lead->convertedAt() ? $lead->convertedAt()->format('Y-m-d H:i:s') : null,
         ]);
 
-        $formats = array_merge($formats, ['%s', '%s', '%s', '%s', '%f', '%d', '%s', '%s', '%s', '%s']);
+        $formats = array_merge($formats, ['%s', '%s', '%s', '%s', '%f', '%s', '%d', '%s', '%s', '%s', '%s']);
 
         if ($lead->id()) {
             $this->wpdb->update($table, $data, ['id' => $lead->id()], $formats, ['%d']);
@@ -140,7 +141,8 @@ class SqlLeadRepository implements LeadRepository
             isset($row->malleable_data) ? (json_decode($row->malleable_data, true) ?: []) : [],
             new \DateTimeImmutable($row->created_at),
             isset($row->updated_at) && $row->updated_at ? new \DateTimeImmutable($row->updated_at) : null,
-            isset($row->converted_at) && $row->converted_at ? new \DateTimeImmutable($row->converted_at) : null
+            isset($row->converted_at) && $row->converted_at ? new \DateTimeImmutable($row->converted_at) : null,
+            isset($row->opportunity_id) && $row->opportunity_id ? (string) $row->opportunity_id : null
         );
     }
 }

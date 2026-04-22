@@ -1,10 +1,12 @@
 /**
- * ApprovalsPage — Manager-only approval queue
+ * ApprovalsPage — Approval queue
  *
  * Day 7 implementation. Shows quotes in pending_approval state.
- * Managers can approve or reject with a note directly from this queue.
+ * Managers/admins see all pending quotes.
+ * Sales users see only quotes they created (self-approval path).
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import { usePortalUser } from '../hooks/usePortalUser';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,7 @@ interface Quote {
   totalValue: number;
   margin: number;
   currency: string;
+  createdByUserId: number | null;
   approvalState: {
     submittedForApprovalAt: string | null;
     approvedAt: string | null;
@@ -259,10 +262,15 @@ function ApprovalCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const ApprovalsPage: React.FC = () => {
+  const user = usePortalUser();
   const [quotes, setQuotes]       = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
+
+  // Sales-only users see just their own pending quotes (self-approval).
+  // Managers and admins see all pending quotes.
+  const canSeeAll = user.isManager || user.isAdmin;
 
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
 
@@ -274,14 +282,15 @@ const ApprovalsPage: React.FC = () => {
         apiFetch<Quote[]>('/quotes'),
         apiFetch<Customer[]>('/customers'),
       ]);
-      setQuotes(allQuotes.filter(q => q.state === 'pending_approval'));
+      const pending = allQuotes.filter(q => q.state === 'pending_approval');
+      setQuotes(canSeeAll ? pending : pending.filter(q => q.createdByUserId === user.id));
       setCustomers(allCustomers);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canSeeAll, user.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -304,7 +313,11 @@ const ApprovalsPage: React.FC = () => {
       <div className="portal-page-header">
         <div>
           <div className="portal-page-title">Approvals</div>
-          <div className="portal-page-subtitle">Quotes waiting for your review and sign-off</div>
+          <div className="portal-page-subtitle">
+            {canSeeAll
+              ? 'Quotes waiting for your review and sign-off'
+              : 'Your quotes awaiting approval — you can self-approve'}
+          </div>
         </div>
         {!loading && (
           <div style={{ fontSize: 13, color: '#6b7280', alignSelf: 'center' }}>
@@ -339,7 +352,9 @@ const ApprovalsPage: React.FC = () => {
           <div className="portal-empty">
             <div className="portal-empty-title">Nothing pending approval</div>
             <div className="portal-empty-subtitle">
-              All quotes are either approved or still in draft. Check back once the sales team submits a quote.
+              {canSeeAll
+                ? 'All clear — no quotes are waiting for sign-off right now.'
+                : 'None of your quotes are awaiting approval right now.'}
             </div>
           </div>
         </div>
