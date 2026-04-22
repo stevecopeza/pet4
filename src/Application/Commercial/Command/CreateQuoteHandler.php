@@ -40,19 +40,26 @@ class CreateQuoteHandler
             $command->description(),
             QuoteState::draft(),
             1,
-            0.00, // Initial totalValue
-            0.00, // totalInternalCost
+            0.00,                    // Initial totalValue
+            0.00,                    // totalInternalCost
             $command->currency(),
             $command->acceptedAt(),
-            null,
+            null,                    // id — assigned on insert
             new \DateTimeImmutable(),
             new \DateTimeImmutable(),
-            null,
-            [],
+            null,                    // archivedAt
+            [],                      // components
             $command->malleableData(),
-            [],
-            [],
-            $command->leadId()
+            [],                      // costAdjustments
+            [],                      // paymentSchedule
+            $command->leadId(),
+            null,                    // opportunityId
+            null,                    // contractId
+            null,                    // rejectionNote
+            null,                    // submittedForApprovalAt
+            null,                    // approvedAt
+            null,                    // approvedByUserId
+            $command->createdByUserId()
         );
 
         $this->quoteRepository->save($quote);

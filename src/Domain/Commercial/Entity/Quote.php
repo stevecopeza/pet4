@@ -52,6 +52,10 @@ class Quote
     private ?\DateTimeImmutable $approvedAt;
     private ?int $approvedByUserId;
 
+    // --- Ownership ---
+    /** WP user ID of the staff member who created this quote. Used for self-approval. */
+    private ?int $createdByUserId;
+
     public function __construct(
         int $customerId,
         string $title,
@@ -76,7 +80,8 @@ class Quote
         ?string $rejectionNote = null,
         ?\DateTimeImmutable $submittedForApprovalAt = null,
         ?\DateTimeImmutable $approvedAt = null,
-        ?int $approvedByUserId = null
+        ?int $approvedByUserId = null,
+        ?int $createdByUserId = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -102,6 +107,7 @@ class Quote
         $this->submittedForApprovalAt = $submittedForApprovalAt;
         $this->approvedAt = $approvedAt;
         $this->approvedByUserId = $approvedByUserId;
+        $this->createdByUserId = $createdByUserId;
     }
     
     public function costAdjustments(): array
@@ -387,6 +393,10 @@ class Quote
     public function submittedForApprovalAt(): ?\DateTimeImmutable { return $this->submittedForApprovalAt; }
     public function approvedAt(): ?\DateTimeImmutable   { return $this->approvedAt; }
     public function approvedByUserId(): ?int            { return $this->approvedByUserId; }
+
+    // --- Ownership accessor ---
+    /** WP user ID of the staff member who created this quote. */
+    public function createdByUserId(): ?int             { return $this->createdByUserId; }
 
     public function update(
         int $customerId,

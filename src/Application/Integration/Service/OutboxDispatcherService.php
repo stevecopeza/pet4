@@ -56,11 +56,23 @@ final class OutboxDispatcherService
                 $envelope['qb_invoice_id'] = $qbInvoiceId;
                 $envelope['doc_number'] = $docNumber;
                 $this->simulateQuickBooksSend($envelope);
-                $this->qbInvoices->recordInvoiceSnapshot($export->customerId(), $envelope);
-                $this->mappings->upsert('quickbooks', 'invoice', $exportId, $qbInvoiceId, null);
-                $this->outbox->markSent($outboxId);
-                $export->markSent();
-                $this->exports->save($export);
+
+                // Wrap all post-dispatch bookkeeping in a single transaction.
+                // The external call (above) is intentionally outside this transaction —
+                // it cannot be rolled back. What we protect here is truth drift: if the
+                // process crashes after the external call but before marking the row
+                // sent, the next cron run would re-dispatch. The transaction ensures
+                // all internal "I did this" records are written atomically.
+                $exportCapture = $export;
+                $this->transactionManager->transactional(
+                    function () use ($exportCapture, $envelope, $qbInvoiceId, $exportId, $outboxId) {
+                        $this->qbInvoices->recordInvoiceSnapshot($exportCapture->customerId(), $envelope);
+                        $this->mappings->upsert('quickbooks', 'invoice', $exportId, $qbInvoiceId, null);
+                        $this->outbox->markSent($outboxId);
+                        $exportCapture->markSent();
+                        $this->exports->save($exportCapture);
+                    }
+                );
             } catch (\Throwable $e) {
                 $attempt = ((int)$row['attempt_count']) + 1;
                 if ($attempt >= 6) {

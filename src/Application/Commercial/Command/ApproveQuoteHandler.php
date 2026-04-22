@@ -24,27 +24,35 @@ class ApproveQuoteHandler
             throw new \DomainException("Quote #{$command->quoteId} not found.");
         }
 
-        // Resolve the WP user ID to an employee ID — team.manager_id stores employee IDs.
+        // Resolve the WP user ID to an employee record.
+        // An employee record is required to record the approver ID on the quote.
         $employee = $this->employeeRepository->findByWpUserId($command->approverUserId);
         if (!$employee) {
             throw new \DomainException('Approver does not have an employee record.');
         }
         $employeeId = $employee->id();
 
-        // Verify the approver is actually a manager or escalation manager of some team
+        // Check 1: is the approver a team manager or escalation manager?
+        $isManager = false;
         $teams = $this->teamRepository->findAll();
-        $isAuthorised = false;
-
         foreach ($teams as $team) {
             if ($team->managerId() === $employeeId ||
                 $team->escalationManagerId() === $employeeId) {
-                $isAuthorised = true;
+                $isManager = true;
                 break;
             }
         }
 
-        if (!$isAuthorised) {
-            throw new \DomainException('Only a team manager or escalation manager can approve quotes.');
+        // Check 2: is the approver the quote's creator (self-approval)?
+        // A sales person may approve their own quote without requiring a separate manager.
+        // createdByUserId is a WP user ID; $command->approverUserId is also a WP user ID.
+        $isCreator = ($quote->createdByUserId() !== null
+            && $quote->createdByUserId() === $command->approverUserId);
+
+        if (!$isManager && !$isCreator) {
+            throw new \DomainException(
+                'Only the quote creator or a team manager can approve quotes.'
+            );
         }
 
         $quote->approve($employeeId);

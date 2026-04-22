@@ -10,6 +10,7 @@ use Pet\Application\Time\Command\UpdateDraftTimeEntryCommand;
 use Pet\Application\Time\Command\UpdateDraftTimeEntryHandler;
 use Pet\Domain\Time\Entity\TimeEntry;
 use Pet\Domain\Time\Repository\TimeEntryRepository;
+use Pet\Domain\Identity\Repository\EmployeeRepository;
 use Pet\UI\Rest\Validation\InputValidation as V;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -23,6 +24,7 @@ class TimeEntryController implements RestController
     private TimeEntryRepository $timeEntryRepository;
     private LogTimeHandler $logTimeHandler;
     private UpdateDraftTimeEntryHandler $updateDraftHandler;
+    private EmployeeRepository $employeeRepository;
     private \wpdb $wpdb;
     private bool $billingTablesAvailable;
 
@@ -30,11 +32,13 @@ class TimeEntryController implements RestController
         TimeEntryRepository $timeEntryRepository,
         LogTimeHandler $logTimeHandler,
         UpdateDraftTimeEntryHandler $updateDraftHandler,
+        EmployeeRepository $employeeRepository,
         \wpdb $wpdb
     ) {
         $this->timeEntryRepository = $timeEntryRepository;
         $this->logTimeHandler = $logTimeHandler;
         $this->updateDraftHandler = $updateDraftHandler;
+        $this->employeeRepository = $employeeRepository;
         $this->wpdb = $wpdb;
 
         $itemsTable = $this->wpdb->prefix . 'pet_billing_export_items';
@@ -183,6 +187,14 @@ class TimeEntryController implements RestController
             $original = $this->timeEntryRepository->findById($id);
             if (!$original) {
                 return new WP_REST_Response(['error' => 'Time entry not found'], 404);
+            }
+
+            // Ownership check: only the employee who owns the entry may correct it.
+            // If the caller has an employee record, it must match the entry's employee.
+            // Callers with manage_options but no employee record are permitted (pure admins).
+            $callerEmployee = $this->employeeRepository->findByWpUserId(get_current_user_id());
+            if ($callerEmployee !== null && $callerEmployee->id() !== $original->employeeId()) {
+                return new WP_REST_Response(['error' => 'You may only correct your own time entries.'], 403);
             }
 
             $correction = \Pet\Domain\Time\Entity\TimeEntry::createCorrection(

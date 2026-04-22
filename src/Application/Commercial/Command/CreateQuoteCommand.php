@@ -13,6 +13,7 @@ class CreateQuoteCommand
     private ?\DateTimeImmutable $acceptedAt;
     private array $malleableData;
     private ?int $leadId;
+    private ?int $createdByUserId;
 
     public function __construct(
         int $customerId,
@@ -21,7 +22,8 @@ class CreateQuoteCommand
         string $currency = 'USD',
         ?\DateTimeImmutable $acceptedAt = null,
         array $malleableData = [],
-        ?int $leadId = null
+        ?int $leadId = null,
+        ?int $createdByUserId = null
     ) {
         $this->customerId = $customerId;
         $this->title = $title;
@@ -30,6 +32,7 @@ class CreateQuoteCommand
         $this->acceptedAt = $acceptedAt;
         $this->malleableData = $malleableData;
         $this->leadId = $leadId;
+        $this->createdByUserId = $createdByUserId;
     }
 
     public function customerId(): int
@@ -65,5 +68,10 @@ class CreateQuoteCommand
     public function leadId(): ?int
     {
         return $this->leadId;
+    }
+
+    public function createdByUserId(): ?int
+    {
+        return $this->createdByUserId;
     }
 }

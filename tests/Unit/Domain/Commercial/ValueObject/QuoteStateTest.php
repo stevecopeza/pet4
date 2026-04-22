@@ -54,6 +54,8 @@ class QuoteStateTest extends TestCase
     {
         return [
             ['draft'],
+            ['pending_approval'],
+            ['approved'],
             ['sent'],
             ['accepted'],
             ['rejected'],
@@ -69,9 +71,17 @@ class QuoteStateTest extends TestCase
 
     // ── Transitions ──
 
-    public function testDraftCanTransitionToSent(): void
+    // DRAFT transitions
+    public function testDraftCannotTransitionToSentDirectly(): void
     {
-        $this->assertTrue(QuoteState::draft()->canTransitionTo(QuoteState::sent()));
+        // DRAFT → SENT is intentionally blocked — approval is mandatory.
+        // The required path is DRAFT → PENDING_APPROVAL → APPROVED → SENT.
+        $this->assertFalse(QuoteState::draft()->canTransitionTo(QuoteState::sent()));
+    }
+
+    public function testDraftCanTransitionToPendingApproval(): void
+    {
+        $this->assertTrue(QuoteState::draft()->canTransitionTo(QuoteState::pendingApproval()));
     }
 
     public function testDraftCanTransitionToArchived(): void
@@ -87,6 +97,39 @@ class QuoteStateTest extends TestCase
     public function testDraftCannotTransitionToRejected(): void
     {
         $this->assertFalse(QuoteState::draft()->canTransitionTo(QuoteState::rejected()));
+    }
+
+    // PENDING_APPROVAL transitions
+    public function testPendingApprovalCanTransitionToApproved(): void
+    {
+        $this->assertTrue(QuoteState::pendingApproval()->canTransitionTo(QuoteState::approved()));
+    }
+
+    public function testPendingApprovalCanTransitionBackToDraft(): void
+    {
+        // Rejection returns to draft with a note
+        $this->assertTrue(QuoteState::pendingApproval()->canTransitionTo(QuoteState::draft()));
+    }
+
+    public function testPendingApprovalCannotTransitionToSent(): void
+    {
+        $this->assertFalse(QuoteState::pendingApproval()->canTransitionTo(QuoteState::sent()));
+    }
+
+    // APPROVED transitions
+    public function testApprovedCanTransitionToSent(): void
+    {
+        $this->assertTrue(QuoteState::approved()->canTransitionTo(QuoteState::sent()));
+    }
+
+    public function testApprovedCanRevertToDraft(): void
+    {
+        $this->assertTrue(QuoteState::approved()->canTransitionTo(QuoteState::draft()));
+    }
+
+    public function testApprovedCannotTransitionToAccepted(): void
+    {
+        $this->assertFalse(QuoteState::approved()->canTransitionTo(QuoteState::accepted()));
     }
 
     public function testSentCanTransitionToAccepted(): void

@@ -74,14 +74,17 @@ class SqlQuoteRepository implements QuoteRepository
             'submitted_for_approval_at'=> $this->formatDate($quote->submittedForApprovalAt()),
             'approved_at'              => $this->formatDate($quote->approvedAt()),
             'approved_by_user_id'      => $quote->approvedByUserId(),
+            // Ownership
+            'created_by_user_id'       => $quote->createdByUserId(),
         ];
 
         // Format order must match $data array above exactly.
         // Fields: customer_id, lead_id, opportunity_id, contract_id, title, description,
         //         state, version, total_value, total_internal_cost, currency, accepted_at,
         //         malleable_data, created_at, updated_at, archived_at, rejection_note,
-        //         submitted_for_approval_at, approved_at, approved_by_user_id
-        $format = ['%d', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'];
+        //         submitted_for_approval_at, approved_at, approved_by_user_id,
+        //         created_by_user_id
+        $format = ['%d', '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%f', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d'];
 
         if ($quote->id()) {
             $this->wpdb->update(
@@ -579,7 +582,9 @@ class SqlQuoteRepository implements QuoteRepository
             $row->rejection_note ?? null,
             !empty($row->submitted_for_approval_at) ? new \DateTimeImmutable($row->submitted_for_approval_at) : null,
             !empty($row->approved_at) ? new \DateTimeImmutable($row->approved_at) : null,
-            isset($row->approved_by_user_id) && $row->approved_by_user_id ? (int)$row->approved_by_user_id : null
+            isset($row->approved_by_user_id) && $row->approved_by_user_id ? (int)$row->approved_by_user_id : null,
+            // Ownership
+            isset($row->created_by_user_id) && $row->created_by_user_id ? (int)$row->created_by_user_id : null
         );
     }
 

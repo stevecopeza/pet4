@@ -56,10 +56,11 @@ class QuoteState
     public function canTransitionTo(self $newState): bool
     {
         return match ($this->value) {
-            // Draft: submit for approval OR send directly (if no approval required) OR archive
+            // Draft: must go through approval before sending.
+            // SENT is intentionally excluded — a quote cannot go directly from DRAFT to SENT.
+            // The required path is: DRAFT → PENDING_APPROVAL → APPROVED → SENT.
             self::DRAFT => in_array($newState->value, [
                 self::PENDING_APPROVAL,
-                self::SENT,
                 self::ARCHIVED,
             ], true),
 

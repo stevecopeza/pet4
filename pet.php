@@ -220,6 +220,14 @@ if (\defined('WP_CLI') && \constant('WP_CLI')) {
 
     \call_user_func('WP_CLI::add_command', 'pet seed', function () {
         try {
+            // Guard: only run on local/dev environments (mirrors pet migrate guard)
+            $seedEnv = \getenv('PET_ENV') ?: \getenv('WP_ENV') ?: '';
+            $seedEnv = \strtolower((string) $seedEnv);
+            if (!\in_array($seedEnv, ['local', 'development', 'dev'], true)) {
+                \call_user_func('WP_CLI::error', 'PET seed is restricted to local/dev environments (set PET_ENV or WP_ENV).');
+                return;
+            }
+
             // Force a current user so get_current_user_id() returns a valid ID
             if (!\get_current_user_id()) {
                 $adminUsers = \get_users(['role' => 'administrator', 'number' => 1]);
