@@ -139,6 +139,30 @@ Circumvention is treated as a system fault.
 
 ---
 
+## WordPress Admin Capability (`manage_options`)
+
+**Explicit statement: WordPress admins are trusted operators with full system visibility and mutation rights.**
+
+In the current single-tenant deployment, any user with `manage_options` can:
+- Read all data across all customers (quotes, tickets, leads, time entries, opportunities)
+- Create, update, and delete any record
+- Run WP-CLI commands (migrate, seed — with environment guards)
+- Approve quotes (if they have an employee record)
+
+This is a deliberate, documented choice — not an oversight.
+
+**Why this is acceptable now:**
+- Single MSP deployment with trusted staff only
+- No external or untrusted admin users
+- `manage_options` is WordPress’s highest privilege, already tightly controlled
+
+**What this means for future development:**
+Any new REST endpoint or command that reads or mutates data must pass the same `manage_options` check. Do not introduce lower-capability endpoints (e.g., `read` or `edit_posts`) without an explicit security review, as they would expose the same unscoped data to a wider audience.
+
+**Revisit trigger:** if a non-staff user (e.g., a customer portal admin) ever needs WordPress admin access, this model must be revisited before granting it.
+
+---
+
 ## What This Prevents
 
 - ACL sprawl
