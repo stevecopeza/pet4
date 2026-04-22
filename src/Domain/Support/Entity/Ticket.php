@@ -63,6 +63,9 @@ class Ticket
     private ?string $sourceType = null;
     private ?int $sourceComponentId = null;
 
+    // Delivery SLA (Sprint 46) — persisted status for transition detection by cron
+    private ?string $slaStatus = null;
+
     public function __construct(
         int $customerId,
         string $subject,
@@ -112,7 +115,8 @@ class Ticket
         ?int $changeOrderSourceTicketId = null,
         ?int $soldValueCents = null,
         ?string $sourceType = null,
-        ?int $sourceComponentId = null
+        ?int $sourceComponentId = null,
+        ?string $slaStatus = null
     ) {
         $this->id = $id;
         $this->customerId = $customerId;
@@ -163,6 +167,7 @@ class Ticket
         $this->soldValueCents = $soldValueCents;
         $this->sourceType = $sourceType;
         $this->sourceComponentId = $sourceComponentId;
+        $this->slaStatus = $slaStatus;
     }
 
     public function id(): ?int
@@ -371,6 +376,14 @@ class Ticket
     public function soldValueCents(): ?int { return $this->soldValueCents; }
     public function sourceType(): ?string { return $this->sourceType; }
     public function sourceComponentId(): ?int { return $this->sourceComponentId; }
+
+    // Delivery SLA status (Sprint 46)
+    public function slaStatus(): ?string { return $this->slaStatus; }
+
+    public function updateSlaStatus(string $status): void
+    {
+        $this->slaStatus = $status;
+    }
 
     /**
      * Whether this ticket can accept time entries.

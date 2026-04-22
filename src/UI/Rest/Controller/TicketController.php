@@ -334,15 +334,18 @@ class TicketController implements RestController
         }
 
         $now = new \DateTimeImmutable();
-        $warningThreshold = new \DateTimeImmutable('+7 days');
 
-        $data = array_map(function ($ticket) use ($ticketAssignments, $snapshotNames, $clockStates, $now, $warningThreshold) {
+        $data = array_map(function ($ticket) use ($ticketAssignments, $snapshotNames, $clockStates, $now) {
             $malleable = $ticket->malleableData();
             $mode = $malleable['ticket_mode'] ?? 'support';
             $assignedUserId = $ticketAssignments[$ticket->id()] ?? null;
             $snapId = $ticket->slaSnapshotId();
 
-            // Compute sla_status: clock state for support tickets; deadline-based for delivery tickets
+            // Compute sla_status:
+            // - Support tickets: read from SLA clock state (event-driven, transactional).
+            // - Delivery tickets: read stored sla_status column written by SlaCheckService cron.
+            //   The cron uses a 24-hour warning window. Prior to Sprint 46 this was computed
+            //   inline here with a 7-day window; the cron is now authoritative.
             $slaStatus = null;
             $terminalStatuses = ['closed', 'resolved', 'done', 'completed', 'cancelled'];
             $isTerminal = in_array($ticket->status(), $terminalStatuses, true);
@@ -352,13 +355,9 @@ class TicketController implements RestController
                     $slaStatus = $rawState; // 'warning' | 'breached'
                 }
             } elseif ($ticket->lifecycleOwner() === 'project' && !$isTerminal) {
-                $due = $ticket->resolutionDueAt();
-                if ($due !== null) {
-                    if ($due < $now) {
-                        $slaStatus = 'breached';
-                    } elseif ($due < $warningThreshold) {
-                        $slaStatus = 'warning';
-                    }
+                $stored = $ticket->slaStatus();
+                if ($stored && $stored !== 'ok') {
+                    $slaStatus = $stored; // 'warning' | 'breached' as set by cron
                 }
             }
 

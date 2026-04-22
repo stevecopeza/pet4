@@ -123,6 +123,11 @@ class MigrationRegistry
             \Pet\Infrastructure\Persistence\Migration\Definition\AddBaselinePricesToQuoteComponents::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\AddQuoteApprovalSettings::class,
             \Pet\Infrastructure\Persistence\Migration\Definition\CreateOpportunitiesTable::class,
+            // Sprint 47: security hardening
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddOutboxUniqueConstraint::class,
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddCreatedByUserIdToQuotes::class,
+            // Sprint 46: delivery SLA cron events
+            \Pet\Infrastructure\Persistence\Migration\Definition\AddSlaStatusToTickets::class,
         ];
     }
 }

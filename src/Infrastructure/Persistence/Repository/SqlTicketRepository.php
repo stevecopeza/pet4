@@ -94,6 +94,7 @@ class SqlTicketRepository implements TicketRepository
         $this->conditionallyAddColumn($data, $formats, 'sold_value_cents', $ticket->soldValueCents(), '%d');
         $this->conditionallyAddColumn($data, $formats, 'source_type', $ticket->sourceType(), '%s');
         $this->conditionallyAddColumn($data, $formats, 'source_component_id', $ticket->sourceComponentId(), '%d');
+        $this->conditionallyAddColumn($data, $formats, 'sla_status', $ticket->slaStatus(), '%s');
 
         if ($ticket->id()) {
             $this->wpdb->update($table, $data, ['id' => $ticket->id()], $formats, ['%d']);
@@ -297,7 +298,8 @@ class SqlTicketRepository implements TicketRepository
             isset($row->change_order_source_ticket_id) && $row->change_order_source_ticket_id ? (int) $row->change_order_source_ticket_id : null,
             isset($row->sold_value_cents) && $row->sold_value_cents !== null ? (int) $row->sold_value_cents : null,
             isset($row->source_type) ? (string) $row->source_type : null,
-            isset($row->source_component_id) && $row->source_component_id !== null ? (int) $row->source_component_id : null
+            isset($row->source_component_id) && $row->source_component_id !== null ? (int) $row->source_component_id : null,
+            isset($row->sla_status) && $row->sla_status ? (string) $row->sla_status : null
         );
     }
 

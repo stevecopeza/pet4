@@ -13,6 +13,8 @@ use Pet\Domain\Sla\Repository\SlaRepository;
 use Pet\Domain\Sla\Service\TierEvaluator;
 use Pet\Domain\Sla\Service\SlaClockService;
 use Pet\Domain\Event\EventBus;
+use Pet\Domain\Delivery\Event\DeliverySlaWarningEvent;
+use Pet\Domain\Delivery\Event\DeliverySlaBreachedEvent;
 use Pet\Application\System\Service\FeatureFlagService;
 use Pet\Infrastructure\Persistence\Transaction\SqlTransaction;
 use DateTimeImmutable;
@@ -83,9 +85,9 @@ class SlaCheckService
         foreach ($activeTickets as $ticket) {
             if ($ticket->lifecycleOwner() === 'support') {
                 $this->evaluate($ticket);
+            } elseif ($ticket->lifecycleOwner() === 'project') {
+                $this->evaluateDeliverySla($ticket);
             }
-            // Delivery (project) tickets: sla_status is computed inline in TicketController
-            // from resolutionDueAt vs now — no clock state required.
         }
     }
 
@@ -148,6 +150,68 @@ class SlaCheckService
         } catch (\Exception $e) {
             $this->transaction->rollback();
             throw $e;
+        }
+    }
+
+    /**
+     * Evaluates delivery-ticket SLA status and dispatches transition events.
+     *
+     * Status values: 'ok' | 'warning' | 'breached'
+     * Events fire exactly once per status transition — re-running while already
+     * in 'warning' or 'breached' produces no event.
+     *
+     * The warning threshold matches the inline computation in TicketController
+     * (currently +24 hours). If this becomes configurable both must change.
+     */
+    private const DELIVERY_SLA_WARNING_HOURS = 24;
+
+    private function evaluateDeliverySla(Ticket $ticket): void
+    {
+        $due = $ticket->resolutionDueAt();
+        if ($due === null) {
+            return; // No deadline set — nothing to evaluate.
+        }
+
+        $now              = new DateTimeImmutable();
+        $warningThreshold = $now->modify('+' . self::DELIVERY_SLA_WARNING_HOURS . ' hours');
+
+        if ($due < $now) {
+            $newStatus = 'breached';
+        } elseif ($due < $warningThreshold) {
+            $newStatus = 'warning';
+        } else {
+            $newStatus = 'ok';
+        }
+
+        $previous = $ticket->slaStatus() ?? 'ok';
+
+        if ($newStatus === $previous) {
+            return; // No transition — no event, no write.
+        }
+
+        $ticket->updateSlaStatus($newStatus);
+        $this->ticketRepo->save($ticket);
+
+        $dueIso = $due->format(\DateTimeInterface::ATOM);
+
+        if ($newStatus === 'warning') {
+            $this->eventDispatcher->dispatch(
+                new DeliverySlaWarningEvent($ticket->id(), $ticket->projectId(), $dueIso)
+            );
+        } elseif ($newStatus === 'breached') {
+            $this->eventDispatcher->dispatch(
+                new DeliverySlaBreachedEvent($ticket->id(), $ticket->projectId(), $dueIso)
+            );
+        }
+
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log(sprintf(
+                '[PET SlaCheck] Delivery ticket #%d: %s → %s (due %s)',
+                $ticket->id(),
+                $previous,
+                $newStatus,
+                $dueIso
+            ));
         }
     }
 

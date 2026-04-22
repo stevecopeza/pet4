@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Pet\Domain\Delivery\Event;
+
+use Pet\Domain\Event\DomainEvent;
+use Pet\Domain\Event\SourcedEvent;
+
+/**
+ * Dispatched once when a delivery ticket first enters the SLA warning window.
+ *
+ * "Warning" is defined as: resolution_due_at is within the next 24 hours
+ * but has not yet passed. Subsequent cron runs while the ticket remains
+ * in the warning window do NOT re-dispatch this event.
+ *
+ * Consumers: advisory signal generator, notification dispatch, escalation rules.
+ */
+class DeliverySlaWarningEvent implements DomainEvent, SourcedEvent
+{
+    private \DateTimeImmutable $occurredAt;
+
+    public function __construct(
+        private readonly int    $ticketId,
+        private readonly ?int   $projectId,
+        private readonly string $resolutionDueAt
+    ) {
+        $this->occurredAt = new \DateTimeImmutable();
+    }
+
+    public function ticketId(): int
+    {
+        return $this->ticketId;
+    }
+
+    public function projectId(): ?int
+    {
+        return $this->projectId;
+    }
+
+    public function resolutionDueAt(): string
+    {
+        return $this->resolutionDueAt;
+    }
+
+    public function occurredAt(): \DateTimeImmutable
+    {
+        return $this->occurredAt;
+    }
+
+    // ── SourcedEvent ──────────────────────────────────────────────────────────
+
+    public function aggregateId(): int
+    {
+        return $this->ticketId;
+    }
+
+    public function name(): string
+    {
+        return 'ticket.delivery_sla_warning';
+    }
+
+    public function aggregateType(): string
+    {
+        return 'ticket';
+    }
+
+    public function aggregateVersion(): int
+    {
+        return 1;
+    }
+
+    public function toPayload(): array
+    {
+        return [
+            'ticket_id'          => $this->ticketId,
+            'project_id'         => $this->projectId,
+            'resolution_due_at'  => $this->resolutionDueAt,
+        ];
+    }
+}
